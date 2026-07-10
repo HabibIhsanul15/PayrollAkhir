@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { Navigate, useNavigate } from "react-router-dom";
 import { getUser, isAuthed } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -33,9 +34,6 @@ export default function AccountCreatePage() {
   const [form, setForm] = useState(DEFAULT_FORM);
 
   const [submitting, setSubmitting] = useState(false);
-  const [loadingEmp, setLoadingEmp] = useState(true);
-  const [employees, setEmployees] = useState([]);
-
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [createdUser, setCreatedUser] = useState(null);
@@ -96,37 +94,25 @@ export default function AccountCreatePage() {
     }
   }
 
-  // ===== Load employees (yang belum punya akun) =====
-  async function loadEmployeesWithoutUser() {
-    setLoadingEmp(true);
-    setErr("");
+  const { data: rawEmployees, error: errEmp, isLoading: loadEmp, mutate } = useSWR(allowed ? "/employees" : null);
 
-    try {
-      // Paling aman: ambil semua dulu, lalu filter di FE
-      // (kalau backend belum support ?without_user=1)
-      const data = await fetchEmployees();
-
-      const rows = Array.isArray(data) ? data : data?.data ?? [];
-      setEmployees(rows);
-
-      // reset pilihan (biar HCGA sadar memilih)
-      setForm((p) => ({
-        ...p,
-        employee_id: "",
-        name: "",
-      }));
-    } catch (e) {
-      setErr(e?.message || "Gagal memuat daftar employee.");
-    } finally {
-      setLoadingEmp(false);
-    }
-  }
+  const employees = Array.isArray(rawEmployees) ? rawEmployees : rawEmployees?.data ?? [];
+  const loadingEmp = loadEmp;
 
   useEffect(() => {
-    if (!authed || !allowed) return;
-    loadEmployeesWithoutUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed, allowed]);
+    if (errEmp) setErr("Gagal memuat daftar pegawai.");
+  }, [errEmp]);
+
+  useEffect(() => {
+    if (form.employee_id) {
+      const selected = employees.find((e) => String(e.id) === String(form.employee_id));
+      if (selected) {
+        setForm((p) => ({ ...p, name: selected.name }));
+      } else {
+        setForm((p) => ({ ...p, name: "" }));
+      }
+    }
+  }, [form.employee_id, employees]);
 
   // ✅ FILTER: hanya employee yang belum punya akun
   const selectableEmployees = useMemo(() => {

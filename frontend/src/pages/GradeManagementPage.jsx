@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import AlertMessage from "@/components/AlertMessage";
 import {
   Table,
   TableHeader,
@@ -17,10 +19,25 @@ export default function GradeManagementPage() {
   const role = String(user?.role || "").toLowerCase();
   const isHCGA = role === "hcga";
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
+
+  const { data, error, isLoading, mutate } = useSWR(isHCGA ? "/master/grades" : null);
+
+  const loading = isLoading;
+  const err = error?.message;
+
+  const rawData = Array.isArray(data) ? data : data?.data ?? [];
+  const [localRows, setLocalRows] = useState([]);
+
+  useEffect(() => {
+    if (rawData) setLocalRows(rawData);
+  }, [rawData]);
+
+  const rows = localRows;
+
+  function load() {
+    mutate();
+  }
 
   // Form State
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,24 +52,7 @@ export default function GradeManagementPage() {
     default_mandays_rate: "",
   });
 
-  async function load() {
-    setErr("");
-    setLoading(true);
-    try {
-      const data = await api("/master/grades");
-      setRows(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e?.message || "Gagal load data grade");
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  useEffect(() => {
-    if (isHCGA) {
-      load();
-    }
-  }, []); // eslint-disable-line
 
   const openAddModal = () => {
     setForm({
@@ -118,8 +118,8 @@ export default function GradeManagementPage() {
     setSuccess("");
     try {
       await api(`/master/grades/${id}`, { method: "DELETE" });
-      setRows((prev) => prev.filter((x) => x.id !== id));
-      setSuccess("Grade berhasil dihapus");
+      mutate();
+      setSuccess("Grade dihapus.");
     } catch (err) {
       setErr(err?.message || "Gagal menghapus grade");
     }
@@ -127,9 +127,7 @@ export default function GradeManagementPage() {
 
   if (!isHCGA) {
     return (
-      <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-        Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA.
-      </div>
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
     );
   }
 
@@ -170,17 +168,9 @@ export default function GradeManagementPage() {
           </div>
         </div>
 
-        {err && (
-          <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {err}
-          </div>
-        )}
+        <AlertMessage type="error" message={err} />
 
-        {success && (
-          <div className="rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-600 border border-emerald-100">
-            {success}
-          </div>
-        )}
+        <AlertMessage type="success" message={success} />
 
         {/* Grades Table */}
           <div className="bg-white border border-border rounded shadow-sm overflow-hidden">

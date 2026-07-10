@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
+import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export default function JournalEntryListPage() {
-  const [journals, setJournals] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Filter states: Start Month & End Month (YYYY-MM)
@@ -27,7 +27,6 @@ export default function JournalEntryListPage() {
     { account_id: "", debit: 0, credit: 0, description: "" },
     { account_id: "", debit: 0, credit: 0, description: "" },
   ]);
-  const [coas, setCoas] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Calculate start and end dates based on startMonth and endMonth
@@ -39,35 +38,21 @@ export default function JournalEntryListPage() {
     return { startDate: start, endDate: end };
   }, [startMonth, endMonth]);
 
-  const fetchJournals = async () => {
-    try {
-      setLoading(true);
-      const data = await api(`/accounting/journals?start_date=${startDate}&end_date=${endDate}`);
-      setJournals(data.data || []);
-      setError(null);
-    } catch (err) {
-      setError(err.message || "Gagal mengambil data Jurnal Umum");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: rawJournals, error: errJournals, isLoading: loadJournals, mutate: mutateJournals } = useSWR(`/accounting/journals?start_date=${startDate}&end_date=${endDate}`);
+  const { data: rawCoas, error: errCoas, isLoading: loadCoas, mutate: mutateCoas } = useSWR("/accounting/coa");
 
-  const fetchCoas = async () => {
-    try {
-      const data = await api("/accounting/coa");
-      setCoas(data || []);
-    } catch (err) {
-      console.error("Gagal mengambil master COA", err);
-    }
-  };
+  const loading = loadJournals || loadCoas;
+  const journals = Array.isArray(rawJournals?.data) ? rawJournals.data : (Array.isArray(rawJournals) ? rawJournals : []);
+  const coas = Array.isArray(rawCoas) ? rawCoas : [];
 
   useEffect(() => {
-    fetchJournals();
-  }, [startDate, endDate]);
+    if (errJournals) setError(errJournals.message || "Gagal mengambil data Jurnal Umum");
+    else if (errCoas) setError(errCoas.message || "Gagal mengambil data COA");
+    else setError(null);
+  }, [errJournals, errCoas]);
 
-  useEffect(() => {
-    fetchCoas();
-  }, []);
+  const fetchJournals = () => mutateJournals();
+  const fetchCoas = () => mutateCoas();
 
   const openCreate = () => {
     setTransactionDate(new Date().toISOString().split("T")[0]);
@@ -146,10 +131,7 @@ export default function JournalEntryListPage() {
     }
   };
 
-  const formatRupiah = (val) => {
-    if (val === undefined || val === null || val === 0) return "";
-    return "Rp " + val.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const fmtRp = (val) => formatRupiah(val, { decimals: 2 });
 
   const classicRows = useMemo(() => {
     const rows = [];
@@ -299,11 +281,11 @@ export default function JournalEntryListPage() {
                   </td>
                   {/* Debet */}
                   <td className="px-4 py-3 text-right font-mono font-medium text-slate-700">
-                    {row.debit > 0 ? formatRupiah(row.debit) : ""}
+                    {row.debit > 0 ? fmtRp(row.debit) : ""}
                   </td>
                   {/* Kredit */}
                   <td className="px-4 py-3 text-right font-mono font-medium text-slate-700">
-                    {row.credit > 0 ? formatRupiah(row.credit) : ""}
+                    {row.credit > 0 ? fmtRp(row.credit) : ""}
                   </td>
                 </tr>
               ))}
@@ -323,10 +305,10 @@ export default function JournalEntryListPage() {
                     Total
                   </td>
                   <td className="px-4 py-4 text-right font-mono text-sm border-b-4 border-double border-slate-300">
-                    {formatRupiah(classicRows.sumDebit)}
+                    {fmtRp(classicRows.sumDebit)}
                   </td>
                   <td className="px-4 py-4 text-right font-mono text-sm border-b-4 border-double border-slate-300">
-                    {formatRupiah(classicRows.sumCredit)}
+                    {fmtRp(classicRows.sumCredit)}
                   </td>
                 </tr>
               )}

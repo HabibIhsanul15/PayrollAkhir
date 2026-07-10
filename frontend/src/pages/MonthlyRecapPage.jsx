@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { Table } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
 export default function MonthlyRecapPage() {
-  const [recaps, setRecaps] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [period, setPeriod] = useState(new Date().toISOString().substring(0, 7));
   const [showModal, setShowModal] = useState(false);
   const [formRecaps, setFormRecaps] = useState([
@@ -22,28 +21,13 @@ export default function MonthlyRecapPage() {
   const [employeeProfiles, setEmployeeProfiles] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
-  const fetchRecaps = async () => {
-    try {
-      const res = await api(`/monthly-recaps?period_month=${period}`);
-      setRecaps(res);
-    } catch (err) {
-      alert("Gagal mengambil data rekap bulanan.");
-    }
-  };
+  const { data: rawRecaps, mutate: mutateRecaps } = useSWR(`/monthly-recaps?period_month=${period}`);
+  const { data: rawEmployees } = useSWR("/employees");
 
-  const fetchEmployees = async () => {
-    try {
-      const res = await api("/employees");
-      setEmployees(Array.isArray(res) ? res : (res.data || []));
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const recaps = Array.isArray(rawRecaps) ? rawRecaps : [];
+  const employees = Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || []);
 
-  useEffect(() => {
-    fetchRecaps();
-    fetchEmployees();
-  }, [period]);
+  const fetchRecaps = () => mutateRecaps();
 
   const handleEmployeeChange = async (empId) => {
     setSelectedEmployeeId(empId);

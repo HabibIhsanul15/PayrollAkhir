@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser, updateAuthUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import AlertMessage from "@/components/AlertMessage";
 
 export default function EmployeeEditPage() {
   const { id } = useParams();
@@ -14,7 +16,7 @@ export default function EmployeeEditPage() {
   const canManage = role === "hcga";
 
   const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -51,58 +53,52 @@ export default function EmployeeEditPage() {
     if (!canManage) nav("/employees", { replace: true });
   }, [canManage, nav]);
 
-  // 📥 Load employee and master lists
+  const { data: swrData, error: swrErr, isLoading } = useSWR(canManage ? `/employees/${id}/edit-data` : null, async () => {
+    const [data, gradesList, empTypesList, workBasesList, currentProfile] = await Promise.all([
+      api(`/employees/${id}`),
+      api("/master/grades"),
+      api("/master/employment-types"),
+      api("/master/work-bases"),
+      api(`/employees/${id}/salary-profile`).catch(() => null)
+    ]);
+    return { data, gradesList, empTypesList, workBasesList, currentProfile };
+  });
+
+  const loading = isLoading;
+  const error = swrErr?.message || "";
+
   useEffect(() => {
-    (async () => {
-      setErr("");
-      setLoading(true);
-      try {
-        const [data, gradesList, empTypesList, workBasesList, currentProfile] = await Promise.all([
-          api(`/employees/${id}`),
-          api("/master/grades"),
-          api("/master/employment-types"),
-          api("/master/work-bases"),
-          api(`/employees/${id}/salary-profile`).catch(() => null)
-        ]);
+    if (swrData) {
+      setGrades(Array.isArray(swrData.gradesList) ? swrData.gradesList : []);
+      setEmploymentTypes(Array.isArray(swrData.empTypesList) ? swrData.empTypesList : []);
+      setWorkBases(Array.isArray(swrData.workBasesList) ? swrData.workBasesList : []);
 
-        setGrades(Array.isArray(gradesList) ? gradesList : []);
-        setEmploymentTypes(Array.isArray(empTypesList) ? empTypesList : []);
-        setWorkBases(Array.isArray(workBasesList) ? workBasesList : []);
-
-        setForm({
-          employee_code: data.employee_code ?? "",
-          name: data.name ?? "",
-          department: data.department ?? "",
-          position: data.position ?? "",
-          status: data.status ?? "active",
-
-          // Phase 1 fields
-          grade_id: data.grade_id ?? "",
-          position_allowance: currentProfile?.position_allowance ?? "",
-          mandays_rate: currentProfile?.mandays_rate ?? "",
-          
-          employment_type_id: data.employment_type_id ?? "",
-          work_basis_id: data.work_basis_id ?? "",
-          num_toddlers: data.num_toddlers ?? 0,
-          is_trainer: !!data.is_trainer,
-          is_on_probation: !!data.is_on_probation,
-
-          nik: data.nik ?? "",
-          npwp: data.npwp ?? "",
-          phone: data.phone ?? "",
-          address: data.address ?? "",
-
-          bank_name: data.bank_name ?? "",
-          bank_account_name: data.bank_account_name ?? "",
-          bank_account_number: data.bank_account_number ?? "",
-        });
-      } catch (e) {
-        setErr(e.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+      const { data, currentProfile } = swrData;
+      setForm({
+        employee_code: data.employee_code ?? "",
+        name: data.name ?? "",
+        department: data.department ?? "",
+        position: data.position ?? "",
+        status: data.status ?? "active",
+        grade_id: data.grade_id ?? "",
+        position_allowance: currentProfile?.position_allowance ?? "",
+        mandays_rate: currentProfile?.mandays_rate ?? "",
+        employment_type_id: data.employment_type_id ?? "",
+        work_basis_id: data.work_basis_id ?? "",
+        num_toddlers: data.num_toddlers ?? 0,
+        is_trainer: !!data.is_trainer,
+        is_on_probation: !!data.is_on_probation,
+        nik: data.nik ?? "",
+        npwp: data.npwp ?? "",
+        phone: data.phone ?? "",
+        address: data.address ?? "",
+        bank_name: data.bank_name ?? "",
+        bank_account_name: data.bank_account_name ?? "",
+        bank_account_number: data.bank_account_number ?? "",
+      });
+    }
+    if (swrErr) setErr(swrErr.message);
+  }, [swrData, swrErr]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -201,11 +197,7 @@ export default function EmployeeEditPage() {
           </Button>
         </div>
 
-        {err && (
-          <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {err}
-          </div>
-        )}
+        <AlertMessage type="error" message={err} className="mb-4 px-3 py-2" />
 
         {/* Form Card */}
         <Card className="bg-white border border-border rounded shadow-sm">

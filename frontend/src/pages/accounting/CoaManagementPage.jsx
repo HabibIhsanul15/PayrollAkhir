@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function CoaManagementPage() {
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { data: rawAccounts, error: errAccounts, isLoading, mutate } = useSWR("/accounting/coa");
+
+  const loading = isLoading;
+  const accounts = Array.isArray(rawAccounts) ? rawAccounts : [];
+  const error = errAccounts?.message || null;
+
+  const fetchAccounts = () => mutate();
   
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -21,22 +26,7 @@ export default function CoaManagementPage() {
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchAccounts = async () => {
-    try {
-      setLoading(true);
-      const data = await api("/accounting/coa");
-      setAccounts(data || []);
-      setError(null);
-    } catch (err) {
-      setError(err.message || "Gagal mengambil data COA");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchAccounts();
-  }, []);
 
   const openAddModal = () => {
     setIsEdit(false);

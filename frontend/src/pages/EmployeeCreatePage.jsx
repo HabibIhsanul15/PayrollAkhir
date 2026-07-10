@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import AlertMessage from "@/components/AlertMessage";
 
 export default function EmployeeCreatePage() {
   const navigate = useNavigate();
@@ -211,11 +212,7 @@ export default function EmployeeCreatePage() {
           </Button>
         </div>
 
-        {serverError && (
-          <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {serverError}
-          </div>
-        )}
+        <AlertMessage type="error" message={serverError} className="mb-4 px-3 py-2" />
 
         {/* Form card */}
         <div className="bg-white border border-border rounded shadow-sm overflow-hidden">

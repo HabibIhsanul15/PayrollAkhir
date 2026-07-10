@@ -13,11 +13,7 @@ import {
 } from "recharts";
 import { getToken } from "../lib/auth";
 import { api } from "../lib/api";
-
-const formatRupiah = (val) => {
-  if (val === undefined || val === null || val === 0) return "";
-  return "Rp " + Number(val).toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-};
+import { formatRupiah } from "../lib/utils";
 
 export default function EmployeeHistoryHub({ employeeId }) {
   const [loading, setLoading] = useState(true);

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function GeneralLedgerPage() {
-  const [coas, setCoas] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   
   // Date Filters
@@ -16,50 +16,24 @@ export default function GeneralLedgerPage() {
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
   });
 
-  // Ledger state
-  const [ledger, setLedger] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const fetchCoas = async () => {
-    try {
-      const data = await api("/accounting/coa");
-      setCoas(data || []);
-      if (data && data.length > 0) {
-        setSelectedAccountId(data[0].id.toString());
-      }
-    } catch (err) {
-      console.error("Gagal mengambil master COA", err);
-    }
-  };
-
-  const loadLedger = async () => {
-    if (!selectedAccountId) return;
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const query = `?account_id=${selectedAccountId}&start_date=${startDate}&end_date=${endDate}`;
-      const data = await api(`/accounting/general-ledger${query}`);
-      setLedger(data);
-    } catch (err) {
-      setError(err.message || "Gagal mengambil data Buku Besar");
-      setLedger(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const { data: rawCoas, error: coasErr } = useSWR("/accounting/coa");
+  const coas = Array.isArray(rawCoas) ? rawCoas : [];
+  
   useEffect(() => {
-    fetchCoas();
-  }, []);
-
-  // Auto load ledger when selected account changes after coas loaded
-  useEffect(() => {
-    if (selectedAccountId) {
-      loadLedger();
+    if (coas.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(coas[0].id.toString());
     }
-  }, [selectedAccountId]);
+  }, [coas, selectedAccountId]);
+
+  const query = selectedAccountId ? `?account_id=${selectedAccountId}&start_date=${startDate}&end_date=${endDate}` : null;
+  const { data: ledger, error: ledgerErr, isLoading, mutate } = useSWR(query ? `/accounting/general-ledger${query}` : null);
+
+  const loading = isLoading;
+  const error = ledgerErr?.message || coasErr?.message || null;
+
+  const loadLedger = () => {
+    mutate();
+  };
 
   const handleFilterSubmit = (e) => {
     e.preventDefault();

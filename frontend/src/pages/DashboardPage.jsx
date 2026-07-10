@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
+import { monthLabel } from "@/lib/utils";
 
 import {
   DollarSign,
@@ -19,12 +21,7 @@ function todayMonth() {
   return `${yyyy}-${mm}`;
 }
 
-function monthLabel(ym) {
-  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "—";
-  const [y, m] = ym.split("-");
-  const date = new Date(Number(y), Number(m) - 1, 1);
-  return date.toLocaleString("en-US", { month: "long", year: "numeric" });
-}
+
 
 function periodeLabel(isoDate) {
   if (!isoDate) return "—";
@@ -38,37 +35,28 @@ export default function DashboardPage() {
   const role = String(user?.role || "").toLowerCase();
 
   const [month, setMonth] = useState(() => todayMonth());
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [data, setData] = useState(null);
-
   const isHCGA = role === "hcga";
   const isPayrollSummaryRole = role === "fat" || role === "director" || role === "staff";
 
-  async function load() {
-    setErr("");
-    setLoading(true);
-    try {
-      let res;
-      if (isHCGA) {
-        res = await api("/dashboard/hcga");
-      } else if (isPayrollSummaryRole) {
-        res = await api(`/dashboard/summary?month=${encodeURIComponent(month)}`);
-      } else {
-        res = await api(`/dashboard/summary?month=${encodeURIComponent(month)}`);
-      }
-      setData(res);
-    } catch (e) {
-      setErr(e?.message || "Gagal memuat dashboard.");
-    } finally {
-      setLoading(false);
-    }
+  // Determine API URL based on role
+  let apiUrl = "";
+  if (isHCGA) {
+    apiUrl = "/dashboard/hcga";
+  } else if (isPayrollSummaryRole) {
+    apiUrl = `/dashboard/summary?month=${encodeURIComponent(month)}`;
+  } else {
+    apiUrl = `/dashboard/summary?month=${encodeURIComponent(month)}`;
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, role]);
+  // Use SWR for instant caching and revalidation
+  const { data, error, isLoading, mutate } = useSWR(apiUrl);
+
+  const loading = isLoading;
+  const err = error?.message;
+
+  function load() {
+    mutate();
+  }
 
   const hcgaCards = data?.cards || {};
   const hcgaLists = data?.lists || {};

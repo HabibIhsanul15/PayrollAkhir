@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
+import { monthLabel } from "@/lib/utils";
+import StatusBadge from "@/components/StatusBadge";
+import AlertMessage from "@/components/AlertMessage";
 
 import { Button } from "@/components/ui/button";
 import { Download, RefreshCw, ChevronDown, FileText } from "lucide-react";
@@ -18,28 +22,8 @@ function fmtRp(n) {
   return x.toLocaleString("id-ID", { style: "currency", currency: "IDR" });
 }
 
-function StatusBadge({ status }) {
-  const s = String(status || "").toLowerCase();
-  const map = {
-    draft: "text-slate-500",
-    requested: "text-amber-600",
-    approved: "text-sky-600",
-    paid: "text-emerald-600",
-    rejected: "text-rose-600",
-  };
-  const cls = map[s] || "text-slate-500";
-  return (
-    <span className={`text-[10px] font-semibold uppercase tracking-wider ${cls}`}>
-      {s || "—"}
-    </span>
-  );
-}
-
-function monthLabel(ym) {
-  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "—";
-  const [y, m] = ym.split("-");
-  const date = new Date(Number(y), Number(m) - 1, 1);
-  return date.toLocaleString("id-ID", { month: "long", year: "numeric" });
+function StatusBadgeText({ status }) {
+  return <StatusBadge status={status} variant="text" />;
 }
 
 function downloadText(filename, text) {
@@ -110,34 +94,21 @@ export default function PayrollReportPage() {
   const [month, setMonth] = useState(() => todayMonth());
   const [status, setStatus] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [data, setData] = useState(null);
+  const qs = new URLSearchParams();
+  qs.set("month", month);
+  if (status) qs.set("status", status);
+
+  const { data, error, isLoading, mutate } = useSWR(`/reports/payroll?${qs.toString()}`);
+
+  const loading = isLoading;
+  const err = error?.message;
 
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   const summary = data?.summary || {};
 
-  async function load() {
-    setErr("");
-    setLoading(true);
-    try {
-      const qs = new URLSearchParams();
-      qs.set("month", month);
-      if (status) qs.set("status", status);
-
-      const res = await api(`/reports/payroll?${qs.toString()}`);
-      setData(res);
-    } catch (e) {
-      setErr(e?.message || "Gagal memuat laporan payroll.");
-    } finally {
-      setLoading(false);
-    }
+  function load() {
+    mutate();
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, status]);
 
   const title = useMemo(() => {
     const roleLabel = role === "fat" ? "Finance Admin" : "Director";
@@ -313,7 +284,7 @@ export default function PayrollReportPage() {
                     {r.periode ? new Date(r.periode).toLocaleString("id-ID", { month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-4 py-4">
-                    <StatusBadge status={r.status} />
+                    <StatusBadge status={r.status} variant="text" />
                   </td>
                   <td className="px-4 py-4 text-right text-xs font-medium text-slate-700">
                     {fmtRp(r.gaji_pokok)}

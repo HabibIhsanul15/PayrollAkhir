@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import useSWR from "swr";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { fetchPayrollDetail } from "@/lib/payrollsApi";
 import { getToken, getUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -116,9 +117,12 @@ export default function PayrollDetailPage() {
   const user = getUser();
   const isFat = user?.role?.toLowerCase() === "fat";
 
-  const [row, setRow] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const { data: rawRow, error: errRow, isLoading, mutate } = useSWR(`/payrolls/${id}`);
+
+  const row = rawRow?.data ?? rawRow ?? null;
+  const loading = isLoading;
+  const err = errRow?.message || "";
+
   const [activeTab, setActiveTab] = useState("detail");
 
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -219,18 +223,8 @@ export default function PayrollDetailPage() {
   };
 
   const loadDetail = () => {
-    setLoading(true);
-    setErr("");
-    fetchPayrollDetail(id)
-      .then((data) => setRow(data?.data ?? data))
-      .catch((e) => setErr(e?.message || "Gagal memuat detail."))
-      .finally(() => setLoading(false));
+    mutate();
   };
-
-  useEffect(() => {
-    loadDetail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   const periodeLabel = useMemo(
     () => monthLabel(periodKey(row?.periode)),

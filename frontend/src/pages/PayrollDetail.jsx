@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { monthLabel } from "@/lib/utils";
+import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -22,25 +24,7 @@ function periodKey(value) {
   return s.length >= 7 ? s.slice(0, 7) : s;
 }
 
-function monthLabel(yyyyMM) {
-  if (!/^\d{4}-\d{2}$/.test(yyyyMM)) return yyyyMM || "-";
-  const [y, m] = yyyyMM.split("-");
-  const map = {
-    "01": "Jan",
-    "02": "Feb",
-    "03": "Mar",
-    "04": "Apr",
-    "05": "Mei",
-    "06": "Jun",
-    "07": "Jul",
-    "08": "Agu",
-    "09": "Sep",
-    "10": "Okt",
-    "11": "Nov",
-    "12": "Des",
-  };
-  return `${map[m] || m} ${y}`;
-}
+
 
 function Field({ label, value }) {
   return (
@@ -53,20 +37,7 @@ function Field({ label, value }) {
   );
 }
 
-function StatusBadge({ masked }) {
-  if (masked) {
-    return (
-      <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-        MASKED
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
-      OK
-    </Badge>
-  );
-}
+
 
 export default function PayrollDetail() {
   const { id } = useParams();
@@ -140,7 +111,7 @@ export default function PayrollDetail() {
               <h1 className="text-lg font-semibold text-foreground">
                 Payroll Detail
               </h1>
-              {!loading && data && <StatusBadge masked={view.masked} />}
+              {!loading && data && <StatusBadge status={view.masked ? "masked" : "ok"} />}
             </div>
 
             <p className="mt-1 text-sm text-slate-600">

@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
-import { fetchEmployees } from "@/lib/employeesApi";
+import { initials } from "@/lib/utils";
+
+import AvatarInitial from "@/components/AvatarInitial";
+import AlertMessage from "@/components/AlertMessage";
+import Pagination from "@/components/Pagination";
 
 import { Search, ChevronDown, RefreshCw, Plus, Pencil, Trash2, Eye, FileText } from "lucide-react";
-
-function AvatarInitial({ letters }) {
-  return (
-    <div className="w-7 h-7 rounded flex items-center justify-center text-[10px] font-semibold bg-blue-50 text-blue-600 flex-shrink-0 border border-blue-100">
-      {letters}
-    </div>
-  );
-}
 
 export default function EmployeesPage() {
   const nav = useNavigate();
@@ -22,33 +19,30 @@ export default function EmployeesPage() {
   const isHCGA = role === "hcga";
   const canView = ["hcga", "fat", "director"].includes(role);
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
+  const { data, error, isLoading, mutate } = useSWR(canView ? "/employees" : null);
+
+  const loading = isLoading;
+  const err = error?.message;
+
+  // Normalisasi bentuk data dari api()
+  const rawData = Array.isArray(data) ? data : data?.data ?? data?.value ?? [];
+  // Use rows from SWR + internal mutation for instant UI delete
+  const [localRows, setLocalRows] = useState([]);
+  
+  useEffect(() => {
+    if (rawData) setLocalRows(rawData);
+  }, [rawData]);
+
+  const rows = localRows;
+
+  function load() {
+    mutate();
+  }
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
-
-  async function load() {
-    setErr("");
-    setLoading(true);
-    try {
-      const data = await fetchEmployees();
-      setRows(Array.isArray(data) ? data : data?.data ?? []);
-    } catch (e) {
-      setErr(e?.message || "Gagal load employees");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!canView) return;
-    load();
-  }, []); // eslint-disable-line
 
   const onDelete = async (id) => {
     if (!isHCGA) return;
@@ -58,7 +52,8 @@ export default function EmployeesPage() {
 
     try {
       await api(`/employees/${id}`, { method: "DELETE" });
-      setRows((prev) => prev.filter((x) => x.id !== id));
+      setLocalRows((prev) => prev.filter((x) => x.id !== id));
+      mutate(undefined, { revalidate: true }); // tell SWR to update in bg
     } catch (e) {
       alert(e?.message || "Gagal menghapus employee.");
     }
@@ -112,16 +107,9 @@ export default function EmployeesPage() {
 
   if (!canView) {
     return (
-      <div className="rounded bg-rose-50 px-4 py-3 text-xs text-rose-600 border border-rose-100">
-        Forbidden: role kamu tidak boleh mengakses halaman Employees.
-      </div>
+      <AlertMessage type="error" message="Forbidden: role kamu tidak boleh mengakses halaman Employees." className="px-4 py-3" />
     );
   }
-
-  const initials = (name) => {
-    const s = String(name || "").trim();
-    return s ? s.slice(0, 2).toUpperCase() : "N";
-  };
 
   return (
     <div>
@@ -159,11 +147,7 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {err && (
-        <div className="mb-4 rounded bg-rose-50 px-4 py-3 text-xs text-rose-600 border border-rose-100">
-          {err}
-        </div>
-      )}
+      <AlertMessage type="error" message={err} className="mb-4 px-4 py-3" />
 
       {/* Filters */}
       <div className="bg-white border border-border rounded p-4 mb-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
@@ -309,28 +293,7 @@ export default function EmployeesPage() {
           </table>
         </div>
         
-        {/* Pagination Details */}
-        <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-          <div className="text-[10px] text-muted-foreground">
-            Halaman {safePage} dari {totalPages}
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="px-2 py-1 border border-border rounded text-[10px] disabled:opacity-50 hover:bg-slate-50 transition-colors"
-            >
-              Prev
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="px-2 py-1 border border-border rounded text-[10px] disabled:opacity-50 hover:bg-slate-50 transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setPage} />
       </div>
     </div>
   );

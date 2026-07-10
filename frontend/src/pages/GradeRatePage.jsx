@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import AlertMessage from "@/components/AlertMessage";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -12,26 +15,26 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-function formatCurrency(val) {
-  if (val === null || val === undefined) return "-";
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(val);
-}
-
 export default function GradeRatePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
   const isHCGA = role === "hcga";
 
-  const [grades, setGrades] = useState([]);
-  const [allowances, setAllowances] = useState([]);
-  const [rates, setRates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const { data: rawGrades, error: errGrades, isLoading: loadGrades } = useSWR(isHCGA ? "/master/grades" : null);
+  const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(isHCGA ? "/master/allowance-types" : null);
+  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(isHCGA ? "/master/grade-allowance-rates" : null);
+
+  const loading = loadGrades || loadAllowances || loadRates;
+  const err = errGrades?.message || errAllowances?.message || errRates?.message || "";
   const [success, setSuccess] = useState("");
+
+  const grades = Array.isArray(rawGrades) ? rawGrades : [];
+  const allowances = Array.isArray(rawAllowances) ? rawAllowances : [];
+  const rates = Array.isArray(rawRates) ? rawRates : [];
+
+  function loadAll() {
+    mutate();
+  }
 
   // Modal / Form state
   const [modalOpen, setModalOpen] = useState(false);
@@ -49,31 +52,7 @@ export default function GradeRatePage() {
     is_active: true,
   });
 
-  async function loadAll() {
-    setErr("");
-    setLoading(true);
-    try {
-      const [gradesData, allowancesData, ratesData] = await Promise.all([
-        api("/master/grades"),
-        api("/master/allowance-types"),
-        api("/master/grade-allowance-rates"),
-      ]);
 
-      setGrades(Array.isArray(gradesData) ? gradesData : []);
-      setAllowances(Array.isArray(allowancesData) ? allowancesData : []);
-      setRates(Array.isArray(ratesData) ? ratesData : []);
-    } catch (e) {
-      setErr(e?.message || "Gagal load data matrix");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (isHCGA) {
-      loadAll();
-    }
-  }, []); // eslint-disable-line
 
   // Create lookup map: garMap[grade_id][allowance_type_id] = RateObject
   const garMap = {};
@@ -167,8 +146,8 @@ export default function GradeRatePage() {
     setSuccess("");
     try {
       await api(`/master/grade-allowance-rates/${editId}`, { method: "DELETE" });
-      setRates((prev) => prev.filter((x) => x.id !== editId));
-      setSuccess("Rate berhasil dihapus");
+      mutate();
+      setSuccess("Rate dihapus.");
       setModalOpen(false);
     } catch (err) {
       setErr(err?.message || "Gagal menghapus rate");
@@ -177,9 +156,7 @@ export default function GradeRatePage() {
 
   if (!isHCGA) {
     return (
-      <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-        Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA.
-      </div>
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
     );
   }
 
@@ -213,17 +190,9 @@ export default function GradeRatePage() {
           </div>
         </div>
 
-        {err && (
-          <div className="rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {err}
-          </div>
-        )}
+        <AlertMessage type="error" message={err} />
 
-        {success && (
-          <div className="rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-600 border border-emerald-100">
-            {success}
-          </div>
-        )}
+        <AlertMessage type="success" message={success} />
 
         {/* Matrix Table */}
         <div className="bg-white border border-border rounded shadow-sm overflow-hidden">
@@ -302,7 +271,7 @@ export default function GradeRatePage() {
                                 <div className="space-y-1">
                                   {rateObj.rate_amount !== null && (
                                     <div className="text-[13px] text-slate-900">
-                                      {formatCurrency(rateObj.rate_amount)}
+                                      {formatRupiah(rateObj.rate_amount)}
                                     </div>
                                   )}
                                   {rateObj.rate_multiplier !== null && (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { saveAuth } from "@/lib/auth";
+import AlertMessage from "@/components/AlertMessage";
 import { Building2, Users, DollarSign, FolderOpen, BarChart3, Eye, EyeOff, Lock } from "lucide-react";
 
 function getHomePath(user) {
@@ -129,11 +130,7 @@ export default function Login() {
             Gunakan akun yang telah dibuat oleh HR/GA.
           </p>
 
-          {err && (
-            <div className="mt-5 rounded bg-rose-50 px-4 py-3 text-[12px] font-medium text-rose-600 border border-rose-100 flex items-center gap-2">
-              <span>{err}</span>
-            </div>
-          )}
+          <AlertMessage type="error" message={err} className="mt-5 px-4 py-3 text-[12px] font-medium flex items-center gap-2" />
 
           <form onSubmit={onSubmit} className="mt-8 space-y-5">
             <div className="space-y-1.5">

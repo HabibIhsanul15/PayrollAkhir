@@ -1,29 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import useSWR from "swr";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import StatusBadge from "@/components/StatusBadge";
 import EmployeeHistoryHub from "@/components/EmployeeHistoryHub";
 import EmployeeMutationModal from "@/components/EmployeeMutationModal";
 
-function StatusBadge({ status }) {
-  const s = String(status || "").toLowerCase();
-  if (s === "active") {
-    return (
-      <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
-        active
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-      {status || "-"}
-    </Badge>
-  );
-}
 
 function maskValue(v, keep = 4) {
   const s = String(v ?? "").trim();
@@ -65,41 +52,19 @@ export default function EmployeeDetailPage() {
   const isHCGA = role === "hcga";
   const isFAT = role === "fat";
 
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [emp, setEmp] = useState(null);
+  const { data: rawEmp, error: errEmp, isLoading, mutate } = useSWR(`/employees/${id}`);
 
-  // local toggle untuk masking UI
+  const emp = rawEmp;
+  const loading = isLoading;
+  const err = errEmp?.message || "";
+
   const [reveal, setReveal] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
-  
   const [isMutationModalOpen, setIsMutationModalOpen] = useState(false);
 
-  const fetchEmployee = async () => {
-    try {
-      const data = await api(`/employees/${id}`);
-      setEmp(data);
-      setReveal(false);
-    } catch (e) {
-      setErr(e?.message || "Gagal memuat detail employee.");
-    }
+  const fetchEmployee = () => {
+    mutate();
   };
-
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      setErr("");
-      setLoading(true);
-      await fetchEmployee();
-      if (!mounted) return;
-      setLoading(false);
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [id]);
 
   const masked = !!emp?.masked;
 

@@ -1,35 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import { getUser, isAuthed, getToken } from "@/lib/auth";
+import { initials, monthLabel } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import AvatarInitial from "@/components/AvatarInitial";
+import AlertMessage from "@/components/AlertMessage";
+import Pagination from "@/components/Pagination";
 import { Search, ChevronDown, RefreshCw, Plus, Pencil, Trash2, CheckCircle2, XCircle, FileText } from "lucide-react";
 import PayrollCreateModal from "@/components/PayrollCreateModal";
 
-function AvatarInitial({ letters }) {
-  return (
-    <div className="w-7 h-7 rounded flex items-center justify-center text-[10px] font-semibold bg-blue-50 text-blue-600 flex-shrink-0 border border-blue-100">
-      {letters}
-    </div>
-  );
-}
-
 export default function PayrollList() {
-  const [rows, setRows] = useState([]);
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(true);
+  const user = getUser();
+  const role = String(user?.role || "").toLowerCase();
+
+  const isStaff = role === "staff" || role === "employee";
+  const canCreate = !isStaff; 
+  const canApprove = role === "director"; 
+  const canMarkPaid = role === "fat"; 
 
   const [q, setQ] = useState("");
   const [period, setPeriod] = useState("all");
+
+  const { data, error, isLoading, mutate } = useSWR(isAuthed() ? "/payrolls" : null);
+
+  const loading = isLoading;
+  const err = error?.message;
+
+  const rawData = Array.isArray(data) ? data : data?.data ?? [];
+  const [localRows, setLocalRows] = useState([]);
+
+  useEffect(() => {
+    if (rawData) setLocalRows(rawData);
+  }, [rawData]);
+
+  const rows = localRows;
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
 
   const navigate = useNavigate();
-  const user = getUser();
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  const role = String(user?.role || "").toLowerCase();
   const isFAT = role === "fat";
   const isDirector = role === "director";
   const canAction = isFAT || isDirector;
@@ -41,6 +54,10 @@ export default function PayrollList() {
   const [paidRef, setPaidRef] = useState("");
   const [paidNote, setPaidNote] = useState("");
   const [paidSubmitting, setPaidSubmitting] = useState(false);
+
+  const load = () => {
+    mutate();
+  };
 
   const openPaidModal = (row) => {
     setPaidTarget(row);
@@ -67,49 +84,15 @@ export default function PayrollList() {
     return s.length >= 7 ? s.slice(0, 7) : s;
   };
 
-  const monthLabel = (yyyyMM) => {
-    if (!/^\d{4}-\d{2}$/.test(yyyyMM)) return yyyyMM || "-";
-    const [y, m] = yyyyMM.split("-");
-    const map = {
-      "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr", "05": "Mei", "06": "Jun",
-      "07": "Jul", "08": "Agu", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des",
-    };
-    return `${map[m] || m} ${y}`;
-  };
-
-  const initials = (name) => {
-    const s = String(name || "").trim();
-    if (!s) return "N";
-    return s.slice(0, 2).toUpperCase();
-  };
-
   const statusLower = (s) => String(s || "").toLowerCase();
-
-  const load = async () => {
-    setErr("");
-    setLoading(true);
-    try {
-      const data = await api(`/payrolls`);
-      setRows(Array.isArray(data) ? data : data?.data ?? []);
-    } catch (e) {
-      setErr(e?.message || "Gagal memuat data payroll.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isAuthed()) return;
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const onDelete = async (id) => {
     const ok = confirm("Yakin mau hapus payroll ini?");
     if (!ok) return;
     try {
       await api(`/payrolls/${id}`, { method: "DELETE" });
-      setRows((prev) => prev.filter((x) => x.id !== id));
+      setLocalRows((prev) => prev.filter((x) => x.id !== id));
+      mutate(undefined, { revalidate: true });
     } catch (e) {
       alert(e?.message || "Gagal menghapus payroll.");
     }
@@ -119,10 +102,10 @@ export default function PayrollList() {
     const ok = confirm("Kirim payroll ini ke Director untuk approval?");
     if (!ok) return;
     try {
-      await api(`/payrolls/${id}/request-approval`, { method: "POST" });
-      await load();
+      await api(`/payrolls/${id}/request-payment`, { method: "POST" });
+      mutate(undefined, { revalidate: true });
     } catch (e) {
-      alert(e?.message || "Gagal request approval.");
+      alert(e?.message || "Gagal request payment.");
     }
   };
 
@@ -131,9 +114,9 @@ export default function PayrollList() {
     if (!ok) return;
     try {
       await api(`/payrolls/${id}/approve`, { method: "POST" });
-      await load();
+      mutate(undefined, { revalidate: true });
     } catch (e) {
-      alert(e?.message || "Gagal approve payroll.");
+      alert(e?.message || "Gagal approve.");
     }
   };
 
@@ -145,9 +128,9 @@ export default function PayrollList() {
         method: "POST",
         body: { approval_note: note },
       });
-      await load();
+      mutate(undefined, { revalidate: true });
     } catch (e) {
-      alert(e?.message || "Gagal reject payroll.");
+      alert(e?.message || "Gagal reject.");
     }
   };
 
@@ -188,7 +171,7 @@ export default function PayrollList() {
       }
 
       closePaidModal();
-      await load();
+      mutate(undefined, { revalidate: true });
       alert("Berhasil! Payroll sudah PAID + bukti transfer tersimpan.");
     } catch (e) {
       alert(e?.message || "Gagal mark paid payroll.");
@@ -293,11 +276,7 @@ export default function PayrollList() {
         onSuccess={load}
       />
 
-      {err && (
-        <div className="mb-4 rounded bg-rose-50 px-4 py-3 text-xs text-rose-600 border border-rose-100">
-          {err}
-        </div>
-      )}
+      <AlertMessage type="error" message={err} className="mb-4 px-4 py-3" />
 
       {/* Filters */}
       <div className="bg-white border border-border rounded p-4 mb-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
@@ -474,28 +453,7 @@ export default function PayrollList() {
           </table>
         </div>
         
-        {/* Pagination Details */}
-        <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-          <div className="text-[10px] text-muted-foreground">
-            Halaman {safePage} dari {totalPages}
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="px-2 py-1 border border-border rounded text-[10px] disabled:opacity-50 hover:bg-slate-50 transition-colors"
-            >
-              Prev
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="px-2 py-1 border border-border rounded text-[10px] disabled:opacity-50 hover:bg-slate-50 transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
       {/* MODAL MARK PAID */}

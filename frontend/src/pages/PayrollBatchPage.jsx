@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import AlertMessage from "@/components/AlertMessage";
 import { Calendar, Play, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
 
 export default function PayrollBatchPage() {
@@ -73,11 +74,7 @@ export default function PayrollBatchPage() {
             {isLoading ? "Generating..." : "Generate Batch"}
           </button>
         </form>
-        {error && (
-          <div className="mt-4 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100 max-w-2xl">
-            {error}
-          </div>
-        )}
+        <AlertMessage type="error" message={error} className="mt-4 max-w-2xl" />
       </div>
 
       {results && (

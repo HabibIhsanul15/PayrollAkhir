@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import { Button } from "@/components/ui/button";
+import AlertMessage from "@/components/AlertMessage";
 import { getUser, updateAuthUser } from "@/lib/auth";
 import {
-  fetchMe,
-  fetchMeEmployee,
   updateMeEmployee,
   updateMe,
   updatePassword,
@@ -33,7 +33,6 @@ export default function MyProfilePage() {
   const isStaff = role === "staff" || role === "employee";
 
   // ===== ACCOUNT (ALL ROLES) =====
-  const [accLoading, setAccLoading] = useState(true);
   const [accSaving, setAccSaving] = useState(false);
   const [accErr, setAccErr] = useState("");
   const [accOk, setAccOk] = useState("");
@@ -64,7 +63,6 @@ export default function MyProfilePage() {
   });
 
   // ===== EMPLOYEE PROFILE (STAFF ONLY) =====
-  const [empLoading, setEmpLoading] = useState(isStaff);
   const [empSaving, setEmpSaving] = useState(false);
   const [empErr, setEmpErr] = useState("");
   const [empOk, setEmpOk] = useState("");
@@ -80,95 +78,56 @@ export default function MyProfilePage() {
     return JSON.stringify(empInitialForm) !== JSON.stringify(empForm);
   }, [empForm, empInitialForm]);
 
-  // ===== LOAD ME (account) =====
+  const { data: rawMe, error: errMe, isLoading: loadMe } = useSWR("/me");
+  const { data: rawEmp, error: errEmp, isLoading: loadEmp } = useSWR(isStaff ? "/me/employee" : null);
+
+  const accLoading = loadMe;
+  const empLoading = loadEmp;
+
   useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      setAccLoading(true);
-      setAccErr("");
-      setAccOk("");
-
-      try {
-        const me = await fetchMe();
-        if (!mounted) return;
-
-        const mapped = {
-          name: me?.name || "",
-          email: me?.email || "",
-          role: me?.role || "",
-        };
-
-        setAccount(mapped);
-        setAccountInitial({ ...mapped });
-
-        // sync localStorage user header
-        updateAuthUser({ name: mapped.name, email: mapped.email, role: mapped.role });
-      } catch (e) {
-        if (!mounted) return;
-        setAccErr(e?.message || "Gagal memuat akun.");
-      } finally {
-        if (!mounted) return;
-        setAccLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // ===== LOAD EMPLOYEE (staff only) =====
-  useEffect(() => {
-    let mounted = true;
-    if (!isStaff) {
-      setEmpLoading(false);
-      return;
+    if (rawMe) {
+      const mapped = {
+        name: rawMe.name || "",
+        email: rawMe.email || "",
+        role: rawMe.role || "",
+      };
+      setAccount(mapped);
+      setAccountInitial({ ...mapped });
+      updateAuthUser({ name: mapped.name, email: mapped.email, role: mapped.role });
     }
+    if (errMe) {
+      setAccErr(errMe?.message || "Gagal memuat akun.");
+    }
+  }, [rawMe, errMe]);
 
-    (async () => {
-      setEmpLoading(true);
-      setEmpErr("");
-      setEmpOk("");
+  useEffect(() => {
+    if (isStaff && rawEmp) {
+      setMeta({
+        employee_code: rawEmp.employee_code || "",
+        department: rawEmp.department || "",
+        position: rawEmp.position || "",
+        status: rawEmp.status || "",
+      });
 
-      try {
-        const emp = await fetchMeEmployee();
-        if (!mounted) return;
+      const mapped = {
+        name: rawEmp.name || "",
+        phone: rawEmp.phone || "",
+        address: rawEmp.address || "",
+        nik: rawEmp.nik || "",
+        npwp: rawEmp.npwp || "",
+        bank_name: rawEmp.bank_name || "",
+        bank_account_name: rawEmp.bank_account_name || "",
+        bank_account_number: rawEmp.bank_account_number || "",
+      };
 
-        setMeta({
-          employee_code: emp.employee_code || "",
-          department: emp.department || "",
-          position: emp.position || "",
-          status: emp.status || "",
-        });
-
-        const mapped = {
-          name: emp.name || "",
-          phone: emp.phone || "",
-          address: emp.address || "",
-          nik: emp.nik || "",
-          npwp: emp.npwp || "",
-          bank_name: emp.bank_name || "",
-          bank_account_name: emp.bank_account_name || "",
-          bank_account_number: emp.bank_account_number || "",
-        };
-
-        setEmpForm(mapped);
-        setEmpInitialForm({ ...mapped });
-        setIsEditingEmp(false);
-      } catch (e) {
-        if (!mounted) return;
-        setEmpErr(e?.message || "Gagal memuat profil karyawan.");
-      } finally {
-        if (!mounted) return;
-        setEmpLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [isStaff]);
+      setEmpForm(mapped);
+      setEmpInitialForm({ ...mapped });
+      setIsEditingEmp(false);
+    }
+    if (isStaff && errEmp) {
+      setEmpErr(errEmp?.message || "Gagal memuat profil karyawan.");
+    }
+  }, [isStaff, rawEmp, errEmp]);
 
   // ===== HANDLERS =====
   const onChangeAccount = (k) => (e) => setAccount((p) => ({ ...p, [k]: e.target.value }));
@@ -342,16 +301,8 @@ export default function MyProfilePage() {
           )}
         </div>
 
-        {accErr && (
-          <div className="mt-4 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {accErr}
-          </div>
-        )}
-        {accOk && (
-          <div className="mt-4 rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-600 border border-emerald-100">
-            {accOk}
-          </div>
-        )}
+        <AlertMessage type="error" message={accErr} className="mt-4" />
+        <AlertMessage type="success" message={accOk} className="mt-4" />
 
         <div className="mt-5 grid md:grid-cols-3 gap-5">
           <Input label="Nama" value={account.name} onChange={onChangeAccount("name")} disabled={!accEditing} />
@@ -377,16 +328,8 @@ export default function MyProfilePage() {
           </Button>
         </div>
 
-        {pwErr && (
-          <div className="mt-4 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-            {pwErr}
-          </div>
-        )}
-        {pwOk && (
-          <div className="mt-4 rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-600 border border-emerald-100">
-            {pwOk}
-          </div>
-        )}
+        <AlertMessage type="error" message={pwErr} className="mt-4" />
+        <AlertMessage type="success" message={pwOk} className="mt-4" />
 
         <div className="mt-5 grid md:grid-cols-3 gap-5">
           <Input
@@ -463,16 +406,8 @@ export default function MyProfilePage() {
               )}
             </div>
 
-            {empErr && (
-              <div className="mt-4 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-                {empErr}
-              </div>
-            )}
-            {empOk && (
-              <div className="mt-4 rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-600 border border-emerald-100">
-                {empOk}
-              </div>
-            )}
+            <AlertMessage type="error" message={empErr} className="mt-4" />
+            <AlertMessage type="success" message={empOk} className="mt-4" />
 
             <div className="mt-5 grid md:grid-cols-2 gap-5">
               <Input label="Nama" value={empForm.name} onChange={onChangeEmp("name")} disabled={!isEditingEmp} />

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { registerStaff } from "@/lib/authApi";
+import AlertMessage from "@/components/AlertMessage";
 
 export default function Register() {
   const nav = useNavigate();
@@ -159,11 +160,7 @@ export default function Register() {
               Lengkapi data berikut untuk membuat akun staff.
             </p>
 
-            {err && (
-              <div className="mt-4 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600 border border-rose-100">
-                {err}
-              </div>
-            )}
+            <AlertMessage type="error" message={err} className="mt-4" />
 
             <form onSubmit={onSubmit} className="mt-6 space-y-5">
               {/* step line */}
