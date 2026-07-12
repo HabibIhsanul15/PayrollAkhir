@@ -1,7 +1,7 @@
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { getUser, isAuthed, clearAuth } from "@/lib/auth";
 import { useEffect, useMemo, useState } from "react";
-import { Building2, LogOut, ChevronRight } from "lucide-react";
+import { LogOut, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -10,11 +10,6 @@ import {
   BarChart3,
   Users,
   FolderOpen,
-  UserCheck,
-  BookOpen,
-  TrendingUp,
-  BookA,
-  Book,
   User,
 } from "lucide-react";
 
@@ -36,9 +31,6 @@ function menuByRole(role) {
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
       { to: "/employees", label: "Data Karyawan", icon: Users },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
-      { to: "/accounting/coa", label: "Bagan Akun (CoA)", icon: BookA },
-      { to: "/accounting/journals", label: "Jurnal Umum", icon: Book },
-      { to: "/accounting/general-ledger", label: "Buku Besar", icon: BookOpen },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];
   }
@@ -50,8 +42,6 @@ function menuByRole(role) {
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
-      { to: "/accounting/journals", label: "Jurnal Umum", icon: Book },
-      { to: "/accounting/general-ledger", label: "Buku Besar", icon: BookOpen },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];
   }

@@ -36,11 +36,6 @@ import GradeRatePage from "./pages/GradeRatePage";
 // Phase 3 UI
 import MonthlyRecapPage from "./pages/MonthlyRecapPage";
 
-// ACCOUNTING PAGES
-import CoaManagementPage from "./pages/accounting/CoaManagementPage";
-import JournalEntryListPage from "./pages/accounting/JournalEntryListPage";
-import GeneralLedgerPage from "./pages/accounting/GeneralLedgerPage";
-
 function getHomePath(user) {
   const role = String(user?.role || "").toLowerCase();
 
@@ -214,32 +209,6 @@ export default function App() {
             element={
               <RoleRoute allow={["hcga", "fat", "director"]}>
                 <MonthlyRecapPage />
-              </RoleRoute>
-            }
-          />
-
-          {/* MODUL AKUNTANSI */}
-          <Route
-            path="/accounting/coa"
-            element={
-              <RoleRoute allow={["fat"]}>
-                <CoaManagementPage />
-              </RoleRoute>
-            }
-          />
-          <Route
-            path="/accounting/journals"
-            element={
-              <RoleRoute allow={["fat", "director"]}>
-                <JournalEntryListPage />
-              </RoleRoute>
-            }
-          />
-          <Route
-            path="/accounting/general-ledger"
-            element={
-              <RoleRoute allow={["fat", "director"]}>
-                <GeneralLedgerPage />
               </RoleRoute>
             }
           />

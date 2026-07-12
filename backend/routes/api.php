@@ -151,12 +151,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/monthly-recaps/{recap}/finalize', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'finalize']);
     Route::delete('/monthly-recaps/{recap}', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'destroy']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | MODUL AKUNTANSI (Accounting Module)
-    |--------------------------------------------------------------------------
-    */
-    Route::apiResource('accounting/coa', \App\Http\Controllers\Api\ChartOfAccountController::class);
-    Route::apiResource('accounting/journals', \App\Http\Controllers\Api\JournalEntryController::class)->except(['update']);
-    Route::get('accounting/general-ledger', [\App\Http\Controllers\Api\GeneralLedgerController::class, 'index']);
 });

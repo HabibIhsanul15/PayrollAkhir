@@ -1164,16 +1164,6 @@ class PayrollController extends Controller
             'to' => 'approved',
         ]);
 
-        // Cek jika seluruh payroll di periode ini sudah disetujui
-        $periode = $payroll->periode->toDateString();
-        $hasUnapproved = Payroll::whereDate('periode', $periode)
-            ->whereIn('status', ['draft', 'requested', 'rejected'])
-            ->exists();
-
-        if (!$hasUnapproved) {
-            app(\App\Services\AccountingService::class)->createAccrualJournalByPeriod($periode);
-        }
-
         return response()->json([
             'message' => 'Approve berhasil.',
             'payroll' => $payroll->fresh(),
@@ -1222,16 +1212,6 @@ class PayrollController extends Controller
         'paid_ref' => $payroll->paid_ref,
     ]);
 
-    // Cek jika seluruh payroll di periode ini sudah terbayar
-    $periode = $payroll->periode->toDateString();
-    $hasUnpaid = Payroll::whereDate('periode', $periode)
-        ->where('status', '!=', 'paid')
-        ->exists();
-
-    if (!$hasUnpaid) {
-        app(\App\Services\AccountingService::class)->createPaymentJournalByPeriod($periode);
-    }
-
     return response()->json([
         'message' => 'Payroll ditandai PAID + bukti transfer tersimpan.',
         'payroll' => $payroll,
@@ -1262,10 +1242,6 @@ public function rejectPayment(Request $request, Payroll $payroll)
         'from' => $from,
         'to' => 'rejected',
     ]);
-
-    // Hapus jurnal pengakuan beban jika ada reject
-    $periode = $payroll->periode->toDateString();
-    app(\App\Services\AccountingService::class)->removeAccrualJournalByPeriod($periode);
 
     return response()->json([
         'message' => 'Payroll di-reject.',
