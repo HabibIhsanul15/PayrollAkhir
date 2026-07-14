@@ -3,6 +3,7 @@ import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import AlertMessage from "@/components/AlertMessage";
 import { getUser, updateAuthUser } from "@/lib/auth";
+import { digitsOnly } from "@/lib/employeeFormHelpers";
 import {
   updateMeEmployee,
   updateMe,
@@ -22,7 +23,6 @@ const EMPTY_EMP_FORM = {
 
 const EMPTY_META = {
   employee_code: "",
-  department: "",
   position: "",
   status: "",
 };
@@ -104,7 +104,6 @@ export default function MyProfilePage() {
     if (isStaff && rawEmp) {
       setMeta({
         employee_code: rawEmp.employee_code || "",
-        department: rawEmp.department || "",
         position: rawEmp.position || "",
         status: rawEmp.status || "",
       });
@@ -208,6 +207,7 @@ export default function MyProfilePage() {
   };
 
   const onChangeEmp = (k) => (e) => setEmpForm((p) => ({ ...p, [k]: e.target.value }));
+  const onChangeEmpDigits = (k, maxLength) => (e) => setEmpForm((p) => ({ ...p, [k]: digitsOnly(e.target.value, maxLength) }));
 
   const onSaveEmp = async () => {
     if (!isEditingEmp) return;
@@ -361,9 +361,8 @@ export default function MyProfilePage() {
         <>
           <div className="bg-white border border-border rounded shadow-sm p-4">
             <div className="text-sm font-medium text-foreground">Info Karyawan (read-only)</div>
-            <div className="mt-4 grid md:grid-cols-4 gap-4">
+            <div className="mt-4 grid md:grid-cols-3 gap-4">
               <Field label="Employee Code" value={meta.employee_code} />
-              <Field label="Department" value={meta.department} />
               <Field label="Position" value={meta.position} />
               <Field label="Status" value={meta.status || "-"} />
             </div>
@@ -411,9 +410,9 @@ export default function MyProfilePage() {
 
             <div className="mt-5 grid md:grid-cols-2 gap-5">
               <Input label="Nama" value={empForm.name} onChange={onChangeEmp("name")} disabled={!isEditingEmp} />
-              <Input label="Phone" value={empForm.phone} onChange={onChangeEmp("phone")} disabled={!isEditingEmp} />
-              <Input label="NIK" value={empForm.nik} onChange={onChangeEmp("nik")} disabled={!isEditingEmp} />
-              <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmp("npwp")} disabled={!isEditingEmp} />
+              <Input label="Phone" value={empForm.phone} onChange={onChangeEmpDigits("phone", 30)} disabled={!isEditingEmp} inputMode="numeric" maxLength={30} autoComplete="off" />
+              <Input label="NIK" value={empForm.nik} onChange={onChangeEmpDigits("nik", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
+              <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmpDigits("npwp", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
               <Input label="Bank Name" value={empForm.bank_name} onChange={onChangeEmp("bank_name")} disabled={!isEditingEmp} />
               <Input
                 label="Bank Account Name"
@@ -424,8 +423,11 @@ export default function MyProfilePage() {
               <Input
                 label="Bank Account Number"
                 value={empForm.bank_account_number}
-                onChange={onChangeEmp("bank_account_number")}
+                onChange={onChangeEmpDigits("bank_account_number", 50)}
                 disabled={!isEditingEmp}
+                inputMode="numeric"
+                maxLength={50}
+                autoComplete="off"
               />
               <Textarea label="Address" value={empForm.address} onChange={onChangeEmp("address")} disabled={!isEditingEmp} />
             </div>

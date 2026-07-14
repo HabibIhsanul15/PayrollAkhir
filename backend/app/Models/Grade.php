@@ -11,13 +11,16 @@ class Grade extends Model
         'name',
         'level',
         'description',
+        'base_salary_basis',
+        'default_base_salary_amount',
         'is_active',
         'default_mandays_rate',
     ];
 
     protected $casts = [
-        'level'     => 'integer',
+        'level' => 'integer',
         'is_active' => 'boolean',
+        'default_base_salary_amount' => 'float',
         'default_mandays_rate' => 'float',
     ];
 
@@ -29,5 +32,15 @@ class Grade extends Model
     public function allowanceRates()
     {
         return $this->hasMany(GradeAllowanceRate::class, 'grade_id');
+    }
+
+    public function salaryProfiles()
+    {
+        return $this->hasMany(SalaryProfile::class);
+    }
+
+    public function jobHistories()
+    {
+        return $this->hasMany(JobHistory::class);
     }
 }

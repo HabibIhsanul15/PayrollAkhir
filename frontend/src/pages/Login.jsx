@@ -20,8 +20,8 @@ function getHomePath(user) {
 export default function Login() {
   const nav = useNavigate();
 
-  const [email, setEmail] = useState("staff@test.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -139,7 +139,7 @@ export default function Login() {
                 className={input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="staff@tres.com"
+                placeholder="nama@perusahaan.com"
                 type="email"
                 autoComplete="email"
                 disabled={loading}
@@ -148,12 +148,7 @@ export default function Login() {
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className={label}>Password</div>
-                <a href="#" className="text-[11px] text-blue-600 hover:underline font-medium">
-                  Lupa password?
-                </a>
-              </div>
+              <div className={label}>Password</div>
               <div className="relative">
                 <input
                   className={input}

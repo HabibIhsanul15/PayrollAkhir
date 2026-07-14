@@ -39,7 +39,7 @@ export function getUser() {
 
   try {
     return JSON.parse(raw);
-  } catch (e) {
+  } catch {
     console.warn("Invalid payroll_user in localStorage:", raw);
     localStorage.removeItem(USER_KEY);
     return null;

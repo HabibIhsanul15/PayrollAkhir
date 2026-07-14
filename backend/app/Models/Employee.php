@@ -10,6 +10,7 @@ class Employee extends Model
         'user_id',
         'employee_code',
         'name',
+        'join_date',
         'department',
         'position',
         'status',
@@ -44,6 +45,7 @@ class Employee extends Model
     ];
 
     protected $casts = [
+        'join_date' => 'date',
         'num_toddlers' => 'integer',
         'is_trainer' => 'boolean',
         'is_on_probation' => 'boolean',
@@ -84,9 +86,29 @@ class Employee extends Model
         $date = $date ?: now()->toDateString();
 
         return $this->salaryProfiles()
-            ->where('effective_from', '<=', $date)
+            ->whereDate('effective_from', '<=', $date)
             ->orderByDesc('effective_from')
             ->first();
+    }
+
+    public function payrollReadiness($date = null): array
+    {
+        $missing = [];
+
+        if ($this->status !== 'active') {
+            $missing[] = 'Status karyawan tidak aktif';
+        }
+        if (! $this->grade_id) {
+            $missing[] = 'Jabatan belum dipilih';
+        }
+        if (! $this->currentSalaryProfile($date)) {
+            $missing[] = 'Profil gaji efektif belum tersedia';
+        }
+
+        return [
+            'ready' => $missing === [],
+            'missing' => $missing,
+        ];
     }
 
     public function monthlyRecaps()

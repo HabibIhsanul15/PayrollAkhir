@@ -18,6 +18,7 @@ class MonthlyRecap extends Model
         'business_trips' => 'integer',
         'training_days' => 'decimal:2',
         'overtime_hours' => 'decimal:2',
+        'late_count' => 'integer',
         'total_mandays' => 'decimal:2',
         'is_finalized' => 'boolean',
         'finalized_at' => 'datetime',

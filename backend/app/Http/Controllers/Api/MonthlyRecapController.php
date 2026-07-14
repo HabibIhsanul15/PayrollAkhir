@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MonthlyRecap;
 use App\Models\Employee;
+use App\Models\SalaryProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MonthlyRecapController extends Controller
 {
@@ -45,21 +48,53 @@ class MonthlyRecapController extends Controller
             'period_month' => 'required|date_format:Y-m',
             'recaps' => 'required|array|min:1',
             'recaps.*.salary_profile_id' => 'nullable|exists:salary_profiles,id',
-            'recaps.*.wfo_days' => 'numeric|min:0',
-            'recaps.*.wfh_days' => 'numeric|min:0',
-            'recaps.*.out_of_town_days' => 'numeric|min:0',
+            'recaps.*.wfo_days' => 'integer|min:0',
+            'recaps.*.wfh_days' => 'integer|min:0',
+            'recaps.*.out_of_town_days' => 'integer|min:0',
             'recaps.*.business_trips' => 'integer|min:0',
-            'recaps.*.training_days' => 'numeric|min:0',
+            'recaps.*.training_days' => 'integer|min:0',
             'recaps.*.overtime_hours' => 'numeric|min:0',
+            'recaps.*.late_count' => 'integer|min:0',
         ]);
 
         $employeeId = $validated['employee_id'];
         $periodMonth = $validated['period_month'];
+        $maxDays = Carbon::createFromFormat('Y-m-d', "{$periodMonth}-01")->daysInMonth;
+        $totalSubmittedMandays = 0;
+
+        foreach ($validated['recaps'] as $index => $recapData) {
+            $totalSubmittedMandays += $this->recapMandays($recapData);
+
+            $salaryProfileId = $recapData['salary_profile_id'] ?? null;
+            if ($salaryProfileId && ! SalaryProfile::where('id', $salaryProfileId)->where('employee_id', $employeeId)->exists()) {
+                throw ValidationException::withMessages([
+                    "recaps.{$index}.salary_profile_id" => 'Profil gaji tidak sesuai dengan karyawan yang dipilih.',
+                ]);
+            }
+        }
+
+        if ($totalSubmittedMandays > $maxDays) {
+            throw ValidationException::withMessages([
+                'recaps' => "Total hari dibayar ({$totalSubmittedMandays}) tidak boleh melebihi jumlah hari pada {$periodMonth} ({$maxDays} hari).",
+            ]);
+        }
 
         $createdRecaps = [];
 
         foreach ($validated['recaps'] as $recapData) {
-            $totalMandays = ($recapData['wfo_days'] ?? 0) + ($recapData['wfh_days'] ?? 0) + ($recapData['out_of_town_days'] ?? 0) + ($recapData['training_days'] ?? 0);
+            $totalMandays = $this->recapMandays($recapData);
+            $lookup = [
+                'employee_id' => $employeeId,
+                'period_month' => $periodMonth,
+                'salary_profile_id' => $recapData['salary_profile_id'] ?? null,
+            ];
+            $existingRecap = MonthlyRecap::where($lookup)->first();
+
+            if ($existingRecap?->is_finalized) {
+                throw ValidationException::withMessages([
+                    'recaps' => 'Rekap yang sudah dikirim ke Finance tidak dapat diedit.',
+                ]);
+            }
 
             $data = [
                 'employee_id' => $employeeId,
@@ -71,20 +106,25 @@ class MonthlyRecapController extends Controller
                 'business_trips' => $recapData['business_trips'] ?? 0,
                 'training_days' => $recapData['training_days'] ?? 0,
                 'overtime_hours' => $recapData['overtime_hours'] ?? 0,
+                'late_count' => $recapData['late_count'] ?? 0,
                 'total_mandays' => $totalMandays,
             ];
 
             $createdRecaps[] = MonthlyRecap::updateOrCreate(
-                [
-                    'employee_id' => $employeeId,
-                    'period_month' => $periodMonth,
-                    'salary_profile_id' => $recapData['salary_profile_id'] ?? null,
-                ],
+                $lookup,
                 $data
             );
         }
 
         return response()->json($createdRecaps, 201);
+    }
+
+    private function recapMandays(array $recapData): float
+    {
+        return (float) ($recapData['wfo_days'] ?? 0)
+            + (float) ($recapData['wfh_days'] ?? 0)
+            + (float) ($recapData['out_of_town_days'] ?? 0)
+            + (float) ($recapData['training_days'] ?? 0);
     }
 
     /**
@@ -93,7 +133,7 @@ class MonthlyRecapController extends Controller
     public function finalize(Request $request, MonthlyRecap $recap)
     {
         if (strtolower($request->user()->role) !== 'hcga') {
-            abort(403, 'Hanya HCGA yang dapat melakukan finalisasi.');
+            abort(403, 'Hanya HCGA yang dapat mengirim rekap ke Finance.');
         }
 
         $recap->update([
@@ -103,6 +143,49 @@ class MonthlyRecapController extends Controller
         ]);
 
         return response()->json($recap);
+    }
+
+    public function submitToFinance(Request $request)
+    {
+        if (strtolower($request->user()->role) !== 'hcga') {
+            abort(403, 'Hanya HCGA yang dapat mengirim rekap ke Finance.');
+        }
+
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'period_month' => 'required|date_format:Y-m',
+        ]);
+
+        $recaps = MonthlyRecap::query()
+            ->where('employee_id', $validated['employee_id'])
+            ->where('period_month', $validated['period_month'])
+            ->get();
+
+        if ($recaps->isEmpty()) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Belum ada draft rekap untuk karyawan dan periode ini.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $validated) {
+            MonthlyRecap::query()
+                ->where('employee_id', $validated['employee_id'])
+                ->where('period_month', $validated['period_month'])
+                ->where('is_finalized', false)
+                ->update([
+                    'is_finalized' => true,
+                    'finalized_by' => $request->user()->id,
+                    'finalized_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        });
+
+        return response()->json(
+            MonthlyRecap::with('employee')
+                ->where('employee_id', $validated['employee_id'])
+                ->where('period_month', $validated['period_month'])
+                ->get()
+        );
     }
 
     /**
@@ -115,7 +198,7 @@ class MonthlyRecapController extends Controller
         }
 
         if ($recap->is_finalized) {
-            abort(422, 'Tidak dapat menghapus rekap yang sudah difinalisasi.');
+            abort(422, 'Tidak dapat menghapus rekap yang sudah dikirim ke Finance.');
         }
 
         $recap->delete();

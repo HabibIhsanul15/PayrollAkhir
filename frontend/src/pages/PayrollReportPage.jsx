@@ -43,6 +43,8 @@ function toCsv(rows) {
     "No",
     "EmployeeCode",
     "EmployeeName",
+    "BankName",
+    "BankAccountNumber",
     "Periode",
     "Status",
     "GajiPokok",
@@ -69,6 +71,8 @@ function toCsv(rows) {
         i + 1,
         r.employee_code,
         r.employee_name,
+        r.bank_name || "-",
+        r.bank_account_number || "-",
         r.periode,
         r.status,
         r.gaji_pokok,
@@ -132,14 +136,7 @@ export default function PayrollReportPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
+
           <button 
             onClick={exportCsv}
             disabled={loading || rows.length === 0}

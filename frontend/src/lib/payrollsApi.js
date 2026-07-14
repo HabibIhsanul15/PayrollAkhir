@@ -31,7 +31,9 @@ async function readJson(res) {
 function handle401() {
   try {
     clearAuth?.();
-  } catch {}
+  } catch {
+    // Clearing an already empty session is harmless.
+  }
   const err = new Error("Sesi habis. Silakan login ulang.");
   err.code = "UNAUTHORIZED";
   throw err;

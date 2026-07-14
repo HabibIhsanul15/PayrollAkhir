@@ -14,29 +14,111 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
+const calculationLabels = {
+  per_mandays: "Berdasarkan Rekap",
+  per_trip: "Per Perjalanan",
+  flat: "Tetap Bulanan",
+  formula: "Formula Bersyarat",
+};
+
+const inputSourceLabels = {
+  total_mandays: "Total Hari Dibayar",
+  wfo_days: "Hari WFO",
+  wfh_days: "Hari WFH",
+  out_of_town_days: "Hari Luar Kota",
+  training_days: "Hari Training",
+  business_trips: "Jumlah Perjalanan Dinas",
+  overtime_hours: "Jam Lembur",
+};
+
+const recapInputSources = ["total_mandays", "wfo_days", "out_of_town_days", "training_days", "wfh_days", "overtime_hours"];
+
+function sortByDisplayOrder(rows) {
+  return [...rows].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+}
+
+function makeAllowanceCode(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 50);
+}
+
+function calculationText(row) {
+  if (row.calculation_type === "per_mandays") {
+    return `Rekap - ${inputSourceLabels[row.input_source] || "Indikator rekap"}`;
+  }
+
+  if (row.calculation_type === "per_trip") {
+    return "Per perjalanan dinas";
+  }
+
+  if (row.calculation_type === "flat") {
+    return "Tetap bulanan";
+  }
+
+  if (row.calculation_type === "formula") {
+    return row.input_source
+      ? `Formula - ${inputSourceLabels[row.input_source] || row.input_source}`
+      : "Formula bersyarat";
+  }
+
+  return calculationLabels[row.calculation_type] || row.calculation_type;
+}
+
+function normalizeFormByCalculation(form, calculationType) {
+  if (calculationType === "flat") {
+    return { ...form, calculation_type: calculationType, input_source: null };
+  }
+
+  if (calculationType === "per_trip") {
+    return { ...form, calculation_type: calculationType, input_source: "business_trips" };
+  }
+
+  if (calculationType === "per_mandays") {
+    const inputSource = recapInputSources.includes(form.input_source)
+      ? form.input_source
+      : "total_mandays";
+    return { ...form, calculation_type: calculationType, input_source: inputSource };
+  }
+
+  return { ...form, calculation_type: calculationType, input_source: form.input_source || null };
+}
+
 export default function AllowanceTypePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
-  const isHCGA = role === "hcga";
+  const isFinance = role === "fat";
 
   const [success, setSuccess] = useState("");
+  const [localErr, setErr] = useState("");
 
-  const { data, error, isLoading, mutate } = useSWR(isHCGA ? "/master/allowance-types" : null);
+  const { data, error, isLoading, mutate } = useSWR(isFinance ? "/master/allowance-types" : null);
 
   const loading = isLoading;
-  const err = error?.message;
+  const err = localErr || error?.message;
 
-  const rawData = Array.isArray(data) ? data : data?.data ?? [];
   const [localRows, setLocalRows] = useState([]);
 
   useEffect(() => {
-    if (rawData) setLocalRows(rawData);
-  }, [rawData]);
+    setLocalRows(Array.isArray(data) ? data : data?.data ?? []);
+  }, [data]);
 
   const rows = localRows;
 
-  function load() {
-    mutate();
+  async function load() {
+    setErr("");
+    setSuccess("");
+    try {
+      const fresh = await mutate();
+      setLocalRows(sortByDisplayOrder(Array.isArray(fresh) ? fresh : fresh?.data ?? []));
+      setSuccess("Data jenis tunjangan berhasil disegarkan.");
+    } catch (refreshErr) {
+      setErr(refreshErr?.message || "Gagal menyegarkan jenis tunjangan.");
+    }
   }
 
   // Form State
@@ -47,6 +129,7 @@ export default function AllowanceTypePage() {
     code: "",
     name: "",
     calculation_type: "per_mandays",
+    input_source: "total_mandays",
     applies_to: "all",
     display_order: 0,
     description: "",
@@ -60,6 +143,7 @@ export default function AllowanceTypePage() {
       code: "",
       name: "",
       calculation_type: "per_mandays",
+      input_source: "total_mandays",
       applies_to: "all",
       display_order: rows.length,
       description: "",
@@ -74,7 +158,8 @@ export default function AllowanceTypePage() {
       code: r.code,
       name: r.name,
       calculation_type: r.calculation_type,
-      applies_to: r.applies_to,
+      input_source: r.input_source || (r.calculation_type === "per_trip" ? "business_trips" : null),
+      applies_to: "all",
       display_order: r.display_order,
       description: r.description || "",
       is_active: r.is_active,
@@ -88,23 +173,29 @@ export default function AllowanceTypePage() {
     e.preventDefault();
     setErr("");
     setSuccess("");
+    const payload = {
+      ...form,
+      applies_to: "all",
+    };
+
     try {
       if (isEdit) {
         const updated = await api(`/master/allowance-types/${editId}`, {
           method: "PUT",
-          body: form,
+          body: payload,
         });
-        setRows((prev) => prev.map((x) => (x.id === editId ? updated : x)).sort((a, b) => a.display_order - b.display_order));
+        setLocalRows((prev) => sortByDisplayOrder(prev.map((x) => (x.id === editId ? updated : x))));
         setSuccess("Jenis tunjangan berhasil diperbarui");
       } else {
         const created = await api("/master/allowance-types", {
           method: "POST",
-          body: form,
+          body: payload,
         });
-        setRows((prev) => [...prev, created].sort((a, b) => a.display_order - b.display_order));
+        setLocalRows((prev) => sortByDisplayOrder([...prev, created]));
         setSuccess("Jenis tunjangan baru berhasil dibuat");
       }
       setModalOpen(false);
+      mutate();
     } catch (err) {
       setErr(err?.message || "Gagal menyimpan jenis tunjangan");
     }
@@ -117,16 +208,17 @@ export default function AllowanceTypePage() {
     setSuccess("");
     try {
       await api(`/master/allowance-types/${id}`, { method: "DELETE" });
+      setLocalRows((prev) => prev.filter((row) => row.id !== id));
       mutate();
-      setSuccess("Tunjangan dihapus.");
+      setSuccess("Jenis tunjangan dihapus.");
     } catch (err) {
       setErr(err?.message || "Gagal menghapus jenis tunjangan");
     }
   };
 
-  if (!isHCGA) {
+  if (!isFinance) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk Finance." />
     );
   }
 
@@ -144,7 +236,7 @@ export default function AllowanceTypePage() {
               Jenis Tunjangan
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Kelola master jenis tunjangan beserta metode perhitungan dan sub-tipe partner yang berhak menerimanya.
+              Kelola komponen tunjangan dan indikator rekap yang dipakai dalam perhitungan payroll.
             </p>
           </div>
 
@@ -184,11 +276,8 @@ export default function AllowanceTypePage() {
               <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow className="bg-slate-50/80">
-                    <TableHead className="text-slate-700 pl-6 w-[150px]">Kode</TableHead>
-                    <TableHead className="text-slate-700 w-[200px]">Nama</TableHead>
-                    <TableHead className="text-slate-700 w-[150px]">Dasar Perhitungan</TableHead>
-                    <TableHead className="text-slate-700 w-[120px]">Berlaku Untuk</TableHead>
-                    <TableHead className="text-slate-700 w-[80px]">Urutan</TableHead>
+                    <TableHead className="text-slate-700 pl-6 w-[260px]">Jenis Tunjangan</TableHead>
+                    <TableHead className="text-slate-700 w-[220px]">Cara Hitung</TableHead>
                     <TableHead className="text-slate-700 w-[100px]">Status</TableHead>
                     <TableHead className="text-center text-slate-700 w-[160px] pr-6">Aksi</TableHead>
                   </TableRow>
@@ -197,7 +286,7 @@ export default function AllowanceTypePage() {
                 <TableBody>
                   {loading && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-slate-500">
+                      <TableCell colSpan={4} className="py-12 text-center text-slate-500">
                         Memuat data...
                       </TableCell>
                     </TableRow>
@@ -205,7 +294,7 @@ export default function AllowanceTypePage() {
 
                   {!loading && rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-slate-500">
+                      <TableCell colSpan={4} className="py-12 text-center text-slate-500">
                         Belum ada jenis tunjangan yang terdaftar.
                       </TableCell>
                     </TableRow>
@@ -221,34 +310,26 @@ export default function AllowanceTypePage() {
                           "hover:bg-slate-50/80",
                         ].join(" ")}
                       >
-                        <TableCell className="pl-6 py-4 font-bold text-sky-700 uppercase">
-                          {r.code}
-                        </TableCell>
-                        <TableCell className="font-medium text-foreground py-4">
+                        <TableCell className="font-medium text-foreground py-4 pl-6">
                           <div className="font-semibold">{r.name}</div>
+                          <div className="mt-0.5 text-[10px] font-normal uppercase tracking-wide text-slate-400">
+                            Kode sistem: {r.code}
+                          </div>
                           <div className="text-[11px] text-slate-500 font-normal">{r.description || "-"}</div>
                         </TableCell>
                         <TableCell className="py-4">
                           <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">
-                            {r.calculation_type}
+                            {calculationText(r)}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Badge variant="outline" className="text-sky-700 border-sky-200 bg-sky-50">
-                            {r.applies_to}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-semibold text-slate-700 py-4">
-                          {r.display_order}
                         </TableCell>
                         <TableCell className="py-4">
                           {r.is_active ? (
                             <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
-                              Active
+                              Aktif
                             </Badge>
                           ) : (
                             <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-                              Inactive
+                              Nonaktif
                             </Badge>
                           )}
                         </TableCell>
@@ -268,7 +349,7 @@ export default function AllowanceTypePage() {
                               className="rounded-xl"
                               onClick={() => onDelete(r.id)}
                             >
-                              Delete
+                              Hapus
                             </Button>
                           </div>
                         </TableCell>
@@ -285,32 +366,24 @@ export default function AllowanceTypePage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white border border-border rounded shadow-sm p-4 my-4">
               <h2 className="text-xl font-black text-slate-900 mb-4">
-                {isEdit ? "Edit Allowance Type" : "Add Allowance Type"}
+                {isEdit ? "Edit Jenis Tunjangan" : "Tambah Jenis Tunjangan"}
               </h2>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Allowance Code
-                  </label>
-                  <input
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value })}
-                    disabled={isEdit}
-                    placeholder="e.g. meal, transport_trip"
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Name
+                    Nama Jenis Tunjangan
                   </label>
                   <input
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="e.g. Tunjangan Makan"
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        name: e.target.value,
+                        code: isEdit ? form.code : makeAllowanceCode(e.target.value),
+                      })
+                    }
+                    placeholder="Contoh: Tunjangan Makan"
                     required
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   />
@@ -318,52 +391,66 @@ export default function AllowanceTypePage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Calculation Type
+                    Cara Hitung
                   </label>
                   <select
                     value={form.calculation_type}
-                    onChange={(e) => setForm({ ...form, calculation_type: e.target.value })}
+                    onChange={(e) => setForm((prev) => normalizeFormByCalculation(prev, e.target.value))}
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   >
-                    <option value="per_mandays">per_mandays</option>
-                    <option value="per_trip">per_trip</option>
-                    <option value="flat">flat</option>
-                    <option value="formula">formula</option>
+                    <option value="per_mandays">Berdasarkan Rekap</option>
+                    <option value="per_trip">Per Perjalanan Dinas</option>
+                    <option value="flat">Tetap Bulanan</option>
+                    {form.calculation_type === "formula" && (
+                      <option value="formula">Formula Bersyarat</option>
+                    )}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Applies To (Partner Type)
-                  </label>
-                  <select
-                    value={form.applies_to}
-                    onChange={(e) => setForm({ ...form, applies_to: e.target.value })}
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  >
-                    <option value="all">all</option>
-                    <option value="project_only">project_only</option>
-                    <option value="fix_rate_only">fix_rate_only</option>
-                  </select>
-                </div>
+                {form.calculation_type === "per_mandays" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-800 mb-1">
+                      Dasar Pengali dari Rekap
+                    </label>
+                    <select
+                      value={form.input_source || "total_mandays"}
+                      onChange={(e) => setForm({ ...form, input_source: e.target.value })}
+                      className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                    >
+                      <option value="total_mandays">Total Hari Dibayar</option>
+                      <option value="wfo_days">Hari WFO</option>
+                      <option value="out_of_town_days">Hari Luar Kota</option>
+                      <option value="training_days">Hari Training</option>
+                      <option value="wfh_days">Hari WFH</option>
+                      <option value="overtime_hours">Jam Lembur</option>
+                    </select>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Jika tunjangan berlaku untuk semua bentuk kehadiran, pilih Total Hari Dibayar.
+                    </p>
+                  </div>
+                )}
+
+                {form.calculation_type === "per_trip" && (
+                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Dasar perhitungan: <strong>Jumlah Perjalanan Dinas</strong>
+                  </div>
+                )}
+
+                {form.calculation_type === "flat" && (
+                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Dasar perhitungan: <strong>Nominal tetap per bulan</strong>
+                  </div>
+                )}
+
+                {form.calculation_type === "formula" && (
+                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Formula bersyarat dipakai untuk komponen khusus yang sudah ada di data awal.
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Display Order
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.display_order}
-                    onChange={(e) => setForm({ ...form, display_order: parseInt(e.target.value) || 0 })}
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Description
+                    Keterangan
                   </label>
                   <textarea
                     value={form.description}
@@ -383,7 +470,7 @@ export default function AllowanceTypePage() {
                     className="h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
                   />
                   <label htmlFor="is_active" className="text-xs font-semibold text-slate-800 cursor-pointer select-none">
-                    Allowance is Active
+                    Jenis tunjangan aktif
                   </label>
                 </div>
 
@@ -394,13 +481,13 @@ export default function AllowanceTypePage() {
                     onClick={() => setModalOpen(false)}
                     className="px-4 py-1.5 bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Cancel
+                    Batal
                   </Button>
                   <Button
                     type="submit"
                     className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
                   >
-                    Save
+                    Simpan
                   </Button>
                 </div>
               </form>

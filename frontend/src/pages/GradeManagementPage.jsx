@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import useSWR from "swr";
+import { Edit3, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useConfirm } from "@/components/ConfirmProvider";
 import AlertMessage from "@/components/AlertMessage";
 import {
   Table,
@@ -14,382 +18,521 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
+const inputClass =
+  "w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500";
+
+function digitsOnly(value, maxLength = 30) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, maxLength);
+}
+
+function makeJobCode(name) {
+  const words = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) return "";
+  if (words.length > 1) return words.map((word) => word[0]).join("").slice(0, 20);
+  return words[0].slice(0, 30);
+}
+
+function makeUniqueJobCode(name, rows, ignoreId = null) {
+  const base = makeJobCode(name);
+  if (!base) return "";
+
+  const usedCodes = new Set(
+    rows
+      .filter((row) => (ignoreId ? row.id !== ignoreId : true))
+      .map((row) => String(row.code || "").toLowerCase())
+  );
+  if (!usedCodes.has(base)) return base;
+
+  let index = 2;
+  let candidate = `${base}-${index}`;
+  while (usedCodes.has(candidate)) {
+    index += 1;
+    candidate = `${base}-${index}`;
+  }
+  return candidate;
+}
+
+function normalizeName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export default function GradeManagementPage() {
+  const navigate = useNavigate();
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
   const isHCGA = role === "hcga";
+  const isFinance = role === "fat";
+  const canAccessPage = isHCGA || isFinance;
+  const { confirm } = useConfirm();
 
+  const { data, error, isLoading, mutate } = useSWR(canAccessPage ? "/master/grades" : null);
+  const [rows, setRows] = useState([]);
+  const [localErr, setErr] = useState("");
   const [success, setSuccess] = useState("");
-
-  const { data, error, isLoading, mutate } = useSWR(isHCGA ? "/master/grades" : null);
-
-  const loading = isLoading;
-  const err = error?.message;
-
-  const rawData = Array.isArray(data) ? data : data?.data ?? [];
-  const [localRows, setLocalRows] = useState([]);
-
-  useEffect(() => {
-    if (rawData) setLocalRows(rawData);
-  }, [rawData]);
-
-  const rows = localRows;
-
-  function load() {
-    mutate();
-  }
-
-  // Form State
   const [modalOpen, setModalOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({
     code: "",
     name: "",
-    level: 1,
+    level: "",
+    default_base_salary_amount: "",
     description: "",
     is_active: true,
-    default_mandays_rate: "",
   });
 
+  useEffect(() => {
+    setRows(Array.isArray(data) ? data : data?.data ?? []);
+  }, [data]);
 
+  const summary = useMemo(() => {
+    const total = rows.length;
+    const active = rows.filter((row) => row.is_active).length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [rows]);
 
-  const openAddModal = () => {
+  const err = localErr || error?.message || "";
+  const duplicateName = useMemo(() => {
+    const currentName = normalizeName(form.name);
+    if (!currentName) return false;
+
+    return rows.some((row) => {
+      if (isEdit && row.id === editId) return false;
+      return normalizeName(row.name) === currentName;
+    });
+  }, [rows, form.name, isEdit, editId]);
+
+  function clearMessage() {
+    setErr("");
+    setSuccess("");
+  }
+
+  function openAddModal() {
+    clearMessage();
     setForm({
       code: "",
       name: "",
-      level: rows.length > 0 ? Math.max(...rows.map((r) => r.level)) + 1 : 1,
+      level: rows.length > 0 ? String(Math.max(...rows.map((row) => Number(row.level) || 1)) + 1) : "1",
+      default_base_salary_amount: "",
       description: "",
       is_active: true,
-      default_mandays_rate: "",
     });
+    setEditId(null);
     setIsEdit(false);
     setModalOpen(true);
-  };
+  }
 
-  const openEditModal = (r) => {
+  function openEditModal(row) {
+    clearMessage();
     setForm({
-      code: r.code,
-      name: r.name,
-      level: r.level,
-      description: r.description || "",
-      is_active: r.is_active,
-      default_mandays_rate: r.default_mandays_rate !== null && r.default_mandays_rate !== undefined ? String(r.default_mandays_rate) : "",
+      code: row.code || "",
+      name: row.name || "",
+      level: row.level ? String(row.level) : "1",
+      default_base_salary_amount:
+        row.default_base_salary_amount !== null && row.default_base_salary_amount !== undefined
+          ? String(Math.trunc(Number(row.default_base_salary_amount)))
+          : "",
+      description: row.description || "",
+      is_active: !!row.is_active,
     });
-    setEditId(r.id);
+    setEditId(row.id);
     setIsEdit(true);
     setModalOpen(true);
-  };
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErr("");
-    setSuccess("");
-    const payload = {
-      ...form,
-      default_mandays_rate: form.default_mandays_rate !== "" ? Number(form.default_mandays_rate) : null,
-    };
+  function updateName(value) {
+    setForm((current) => ({
+      ...current,
+      name: value,
+      code: makeUniqueJobCode(value, rows, isEdit ? editId : null),
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    clearMessage();
+
+    const level = Number(form.level || 0);
+    const salary = Number(form.default_base_salary_amount || 0);
+
+    if (isHCGA && !form.name.trim()) {
+      setErr("Nama jabatan wajib diisi.");
+      return;
+    }
+    if (isHCGA && duplicateName) {
+      setErr("Nama jabatan sudah ada. Gunakan nama jabatan lain agar data payroll tidak ambigu.");
+      return;
+    }
+    if (isHCGA && (!Number.isInteger(level) || level < 1)) {
+      setErr("Level harus angka bulat minimal 1.");
+      return;
+    }
+    if (isFinance && (!Number.isInteger(salary) || salary < 0)) {
+      setErr("Nominal gaji pokok harian harus angka dan tidak boleh minus.");
+      return;
+    }
+
+    const payload = isFinance
+      ? {
+          default_base_salary_amount: salary,
+        }
+      : {
+          code: form.code || makeUniqueJobCode(form.name, rows, isEdit ? editId : null),
+          name: form.name.trim().replace(/\s+/g, " "),
+          level,
+          description: form.description || null,
+          is_active: form.is_active,
+        };
+
     try {
       if (isEdit) {
-        const updated = await api(`/master/grades/${editId}`, {
-          method: "PUT",
-          body: payload,
-        });
-        setRows((prev) => prev.map((x) => (x.id === editId ? updated : x)));
-        setSuccess("Grade berhasil diperbarui");
+        const updated = await api(`/master/grades/${editId}`, { method: "PUT", body: payload });
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === editId
+              ? { ...row, ...updated, allowance_rates: updated.allowance_rates ?? row.allowance_rates }
+              : row
+          )
+        );
+        setSuccess("Jabatan berhasil diperbarui.");
       } else {
-        const created = await api("/master/grades", {
-          method: "POST",
-          body: payload,
-        });
+        const created = await api("/master/grades", { method: "POST", body: payload });
         setRows((prev) => [...prev, created].sort((a, b) => a.level - b.level));
-        setSuccess("Grade baru berhasil dibuat");
+        setSuccess("Jabatan baru berhasil dibuat.");
       }
       setModalOpen(false);
-    } catch (err) {
-      setErr(err?.message || "Gagal menyimpan grade");
+    } catch (submitErr) {
+      setErr(submitErr?.message || "Gagal menyimpan jabatan.");
     }
-  };
+  }
 
-  const onDelete = async (id) => {
-    const ok = confirm("Apakah Anda yakin ingin menghapus grade ini?");
+  async function onDelete(id) {
+    const ok = await confirm("Apakah Anda yakin ingin menghapus jabatan ini?");
     if (!ok) return;
-    setErr("");
-    setSuccess("");
+
+    clearMessage();
     try {
       await api(`/master/grades/${id}`, { method: "DELETE" });
-      mutate();
-      setSuccess("Grade dihapus.");
-    } catch (err) {
-      setErr(err?.message || "Gagal menghapus grade");
+      await mutate();
+      setSuccess("Jabatan dihapus.");
+    } catch (deleteErr) {
+      setErr(deleteErr?.message || "Gagal menghapus jabatan.");
     }
-  };
+  }
 
-  if (!isHCGA) {
+  if (!canAccessPage) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA dan Finance." />
     );
   }
 
   return (
-    <div>
-      {/* Background gradients */}
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="hidden">
-              <span className="h-2 w-2 rounded-full bg-sky-500" />
-              <span className="text-[10px] font-semibold text-muted-foreground">Master Data</span>
-            </div>
-
-            <h1 className="mt-4 text-lg font-semibold text-foreground">
-              Master Jabatan
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Kelola level jabatan karyawan (BOD, PM, PD, dll) beserta tingkatan level hierarkinya.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={load}
-              disabled={loading}
-              className="bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
-            <Button
-              onClick={openAddModal}
-              className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              + Add Grade
-            </Button>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">
+            {isFinance ? "Gaji Jabatan" : "Master Jabatan"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            {isFinance
+              ? "Tentukan nominal gaji pokok harian untuk jabatan yang sudah dibuat HCGA."
+              : "Kelola nama jabatan, level, status, dan struktur jabatan karyawan."}
+          </p>
+          <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+            <span>Total: <strong className="text-foreground">{summary.total}</strong></span>
+            <span className="text-border">|</span>
+            <span>Aktif: <strong className="text-foreground">{summary.active}</strong></span>
+            <span className="text-border">|</span>
+            <span>Nonaktif: <strong className="text-foreground">{summary.inactive}</strong></span>
           </div>
         </div>
 
-        <AlertMessage type="error" message={err} />
+        <div className="flex flex-wrap items-center gap-2">
+          {isFinance ? (
+            <Button
+              variant="outline"
+              onClick={() => navigate("/master/grade-rates")}
+              className="rounded border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50"
+            >
+              <SlidersHorizontal size={13} />
+              Tarif Tunjangan
+            </Button>
+          ) : null}
+          {isHCGA ? (
+            <Button
+              onClick={openAddModal}
+              className="rounded bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              <Plus size={13} />
+              Tambah Jabatan
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
-        <AlertMessage type="success" message={success} />
+      <AlertMessage type="error" message={err} />
+      <AlertMessage type="success" message={success} />
 
-        {/* Grades Table */}
-          <div className="bg-white border border-border rounded shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200/70 flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Daftar Jabatan</span>
-            <span className="text-xs text-slate-500">
-              {loading ? "Memuat..." : `${rows.length} jabatan`}
-            </span>
-          </div>
+      <div className="overflow-hidden rounded border border-border bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <span className="text-sm font-medium text-foreground">Daftar Jabatan</span>
+          <span className="text-xs text-slate-500">{isLoading ? "Memuat..." : `${rows.length} jabatan`}</span>
+        </div>
 
-          <div className="overflow-x-auto">
-            <div className="px-8">
-              <Table className="min-w-[900px]">
-                <TableHeader>
-                  <TableRow className="bg-slate-50/80">
-                    <TableHead className="text-slate-700 pl-6 w-[120px]">Code</TableHead>
-                    <TableHead className="text-slate-700 w-[180px]">Name</TableHead>
-                    <TableHead className="text-slate-700 w-[90px]">Level</TableHead>
-                    <TableHead className="text-slate-700 w-[130px]">Default Harian</TableHead>
-                    <TableHead className="text-slate-700 w-[200px]">Description</TableHead>
-                    <TableHead className="text-slate-700 w-[100px]">Status</TableHead>
-                    <TableHead className="text-center text-slate-700 w-[160px] pr-6">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
+        <div className="overflow-x-auto">
+          <Table className={isFinance ? "min-w-[760px]" : "min-w-[640px]"}>
+            <TableHeader>
+              <TableRow className="bg-slate-50">
+                <TableHead className="pl-5 text-slate-700">Jabatan</TableHead>
+                <TableHead className="w-[120px] text-slate-700">Level</TableHead>
+                {isFinance ? (
+                  <TableHead className="w-[190px] text-slate-700">Gaji Pokok Harian</TableHead>
+                ) : null}
+                <TableHead className="w-[110px] text-slate-700">Status</TableHead>
+                <TableHead className="w-[180px] pr-5 text-right text-slate-700">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
 
-                <TableBody>
-                  {loading && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-slate-500">
-                        Loading data...
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={isFinance ? 5 : 4} className="py-10 text-center text-slate-500">
+                    Memuat data jabatan...
+                  </TableCell>
+                </TableRow>
+              ) : null}
+
+              {!isLoading && rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={isFinance ? 5 : 4} className="py-10 text-center text-slate-500">
+                    Belum ada jabatan yang terdaftar.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+
+              {!isLoading
+                ? rows.map((row) => (
+                    <TableRow key={row.id} className="align-middle hover:bg-slate-50/70">
+                      <TableCell className="py-4 pl-5">
+                        <div className="font-semibold text-slate-900">{row.name}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          Kode sistem: <span className="font-mono uppercase">{row.code}</span>
+                        </div>
+                        {row.description ? (
+                          <div className="mt-1 max-w-[360px] truncate text-[11px] text-slate-500">
+                            {row.description}
+                          </div>
+                        ) : null}
                       </TableCell>
-                    </TableRow>
-                  )}
 
-                  {!loading && rows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-slate-500">
-                        Belum ada jabatan yang terdaftar.
+                      <TableCell className="py-4">
+                        <Badge className="rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700">
+                          Level {row.level}
+                        </Badge>
                       </TableCell>
-                    </TableRow>
-                  )}
 
-                  {!loading &&
-                    rows.map((r, idx) => (
-                      <TableRow
-                        key={r.id}
-                        className={[
-                          "transition align-middle",
-                          idx % 2 === 0 ? "bg-white/40" : "bg-white/20",
-                          "hover:bg-slate-50/80",
-                        ].join(" ")}
-                      >
-                        <TableCell className="pl-6 py-4 font-bold text-sky-700 uppercase">
-                          {r.code}
+                      {isFinance ? (
+                        <TableCell className="py-4 font-semibold text-slate-900">
+                          {formatRupiah(row.default_base_salary_amount)}
                         </TableCell>
-                        <TableCell className="font-medium text-foreground py-4">
-                          {r.name}
-                        </TableCell>
-                        <TableCell className="font-semibold text-indigo-700 py-4">
-                          Level {r.level}
-                        </TableCell>
-                        <TableCell className="font-semibold text-amber-700 py-4">
-                          {r.default_mandays_rate ? `Rp ${Number(r.default_mandays_rate).toLocaleString("id-ID")}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-slate-600 py-4 max-w-[200px] truncate">
-                          {r.description || "-"}
-                        </TableCell>
-                        <TableCell className="py-4">
-                          {r.is_active ? (
-                            <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-                              Inactive
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-4 pr-6">
-                          <div className="flex justify-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-xl border-slate-200 bg-white hover:bg-slate-50"
-                              onClick={() => openEditModal(r)}
-                            >
-                              Edit
-                            </Button>
+                      ) : null}
+
+                      <TableCell className="py-4">
+                        {row.is_active ? (
+                          <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                            Aktif
+                          </Badge>
+                        ) : (
+                          <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
+                            Nonaktif
+                          </Badge>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="py-4 pr-5">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                            onClick={() => openEditModal(row)}
+                            title={isFinance ? "Atur gaji harian" : "Edit jabatan"}
+                          >
+                            <Edit3 size={13} />
+                            {isFinance ? "Atur Gaji" : "Edit"}
+                          </Button>
+                          {isHCGA ? (
                             <Button
                               size="sm"
                               variant="destructive"
-                              className="rounded-xl"
-                              onClick={() => onDelete(r.id)}
+                              className="rounded px-3 text-xs font-semibold"
+                              onClick={() => onDelete(row.id)}
+                              title="Hapus jabatan"
                             >
-                              Delete
+                              <Trash2 size={13} />
+                              Hapus
                             </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : null}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {isFinance ? "Atur Gaji Harian" : isEdit ? "Edit Jabatan" : "Tambah Jabatan"}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {isFinance
+                  ? "Finance hanya mengisi nominal gaji pokok harian. Struktur jabatan dikelola oleh HCGA."
+                  : "Kode sistem dibuat otomatis dari nama jabatan dan harus unik."}
+              </p>
             </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto p-5">
+              {isHCGA ? (
+                <section className="space-y-4">
+                  <SectionTitle title="Informasi Jabatan" description="Dipakai untuk struktur jabatan dan alur promosi/demosi." />
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Field label="Nama Jabatan" required>
+                      <input
+                        value={form.name}
+                        onChange={(event) => updateName(event.target.value)}
+                        placeholder="Contoh: Staff"
+                        required
+                        className={`${inputClass} ${duplicateName ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
+                      />
+                      {duplicateName ? (
+                        <p className="mt-1 text-[11px] text-rose-600">
+                          Nama jabatan ini sudah ada. Jabatan harus unik.
+                        </p>
+                      ) : null}
+                      {form.code ? (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Kode otomatis: <span className="font-mono uppercase">{form.code}</span>
+                        </p>
+                      ) : null}
+                    </Field>
+
+                    <Field label="Level" helper="Level 1 adalah jabatan tertinggi.">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.level}
+                        onChange={(event) => setForm({ ...form, level: digitsOnly(event.target.value, 3) || "1" })}
+                        required
+                        className={inputClass}
+                      />
+                    </Field>
+
+                    <Field label="Status" full>
+                      <label className="flex min-h-[38px] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={form.is_active}
+                          onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
+                          className="h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
+                        />
+                        Jabatan aktif
+                      </label>
+                    </Field>
+
+                    <Field label="Keterangan" full>
+                      <textarea
+                        value={form.description}
+                        onChange={(event) => setForm({ ...form, description: event.target.value })}
+                        placeholder="Opsional"
+                        rows={3}
+                        className={`${inputClass} min-h-[86px]`}
+                      />
+                    </Field>
+                  </div>
+                </section>
+              ) : (
+                <section className="space-y-4">
+                  <SectionTitle
+                    title="Nominal Gaji Jabatan"
+                    description="Nominal ini dipakai sebagai gaji pokok harian saat payroll dihitung."
+                  />
+                  <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                    <div className="font-semibold text-slate-900">{form.name}</div>
+                    <div className="mt-1">Kode sistem: <span className="font-mono uppercase">{form.code || "-"}</span></div>
+                    <div>Level: {form.level || "-"}</div>
+                  </div>
+                  <Field label="Nominal Gaji Pokok Harian" helper="Hanya angka, tidak boleh minus." required>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.default_base_salary_amount}
+                      onChange={(event) =>
+                        setForm({ ...form, default_base_salary_amount: digitsOnly(event.target.value, 14) })
+                      }
+                      placeholder="Contoh: 75000"
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                </section>
+              )}
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded border-slate-200 bg-white text-xs hover:bg-slate-50"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isHCGA && duplicateName}
+                  className="rounded bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  {isFinance ? "Simpan Gaji" : "Simpan Jabatan"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
 
-        {/* Modal Add/Edit */}
-        {modalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white border border-border rounded shadow-sm p-4 my-4">
-              <h2 className="text-xl font-black text-slate-900 mb-4">
-                {isEdit ? "Edit Grade" : "Add New Grade"}
-              </h2>
+function SectionTitle({ title, description }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+    </div>
+  );
+}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Grade Code
-                  </label>
-                  <input
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value })}
-                    disabled={isEdit}
-                    placeholder="e.g. staff, pm, pd"
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Name
-                  </label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="e.g. Project Manager"
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Hierarchy Level
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.level}
-                    onChange={(e) => setForm({ ...form, level: parseInt(e.target.value) || 1 })}
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Nilai terkecil (1) mewakili tingkatan tertinggi (e.g. BOD).
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Gaji Harian Default
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 150000"
-                    value={form.default_mandays_rate}
-                    onChange={(e) => setForm({ ...form, default_mandays_rate: e.target.value })}
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Keterangan tambahan..."
-                    rows="3"
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 py-2">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={form.is_active}
-                    onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
-                  />
-                  <label htmlFor="is_active" className="text-xs font-semibold text-slate-800 cursor-pointer select-none">
-                    Grade is Active
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setModalOpen(false)}
-                    className="px-4 py-1.5 bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-                  >
-                    Save Grade
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
+function Field({ label, helper, full, required, children }) {
+  return (
+    <div className={full ? "space-y-1.5 md:col-span-2" : "space-y-1.5"}>
+      <label className="text-xs font-medium text-slate-600">
+        {label}
+        {required ? <span className="text-rose-500"> *</span> : null}
+      </label>
+      {children}
+      {helper ? <p className="text-[11px] text-slate-500">{helper}</p> : null}
     </div>
   );
 }

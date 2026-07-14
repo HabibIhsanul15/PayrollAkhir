@@ -3,101 +3,133 @@
 namespace Database\Seeders;
 
 use App\Models\Employee;
+use App\Models\EmploymentType;
+use App\Models\Grade;
 use App\Models\User;
+use App\Models\WorkBasis;
+use App\Services\CryptoService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * TestUserSeeder
- *
- * Membuat akun testing untuk setiap role yang tersedia di project ini:
- *   - staff
- *   - fat
- *   - hcga
- *   - director
- *
- * Catatan penting (AuthController):
- *   Login mensyaratkan user HARUS terhubung ke Employee yang status-nya 'active'.
- *   Oleh karena itu, setiap akun testing juga dibuatkan data employee-nya.
- *
- * Aman dijalankan berkali-kali (menggunakan firstOrCreate / updateOrCreate).
- *
- * Jalankan dengan:
- *   php artisan db:seed --class=TestUserSeeder
+ * Membuat akun testing dasar dan memastikan akun staff sudah payroll-ready.
  */
 class TestUserSeeder extends Seeder
 {
     public function run(): void
     {
         $password = 'Password123!';
+        $effectiveFrom = now()->startOfMonth()->toDateString();
+        $staffGrade = Grade::where('code', 'staff')->first();
+        $projectEmployment = EmploymentType::where('code', 'project')->first();
+        $mandaysBasis = WorkBasis::where('code', 'mandays')->first();
 
         $accounts = [
             [
-                'role'          => 'staff',
-                'name'          => 'Test Staff',
-                'email'         => 'test.staff@payroll.test',
+                'role' => 'staff',
+                'name' => 'Test Staff',
+                'email' => 'test.staff@payroll.test',
                 'employee_code' => 'TST-STAFF-01',
-                'department'    => 'General',
-                'position'      => 'Staff',
+                'department' => 'General',
+                'position' => 'Staff',
             ],
             [
-                'role'          => 'fat',
-                'name'          => 'Test FAT',
-                'email'         => 'test.fat@payroll.test',
+                'role' => 'fat',
+                'name' => 'Test FAT',
+                'email' => 'test.fat@payroll.test',
                 'employee_code' => 'TST-FAT-01',
-                'department'    => 'Finance',
-                'position'      => 'Finance & Accounting Team',
+                'department' => 'Finance',
+                'position' => 'Finance & Accounting Team',
             ],
             [
-                'role'          => 'hcga',
-                'name'          => 'Test HCGA',
-                'email'         => 'test.hcga@payroll.test',
+                'role' => 'hcga',
+                'name' => 'Test HCGA',
+                'email' => 'test.hcga@payroll.test',
                 'employee_code' => 'TST-HCGA-01',
-                'department'    => 'HR',
-                'position'      => 'Human Capital & General Affairs',
+                'department' => 'HR',
+                'position' => 'Human Capital & General Affairs',
             ],
             [
-                'role'          => 'director',
-                'name'          => 'Test Director',
-                'email'         => 'test.director@payroll.test',
+                'role' => 'director',
+                'name' => 'Test Director',
+                'email' => 'test.director@payroll.test',
                 'employee_code' => 'TST-DIR-01',
-                'department'    => 'Management',
-                'position'      => 'Director',
+                'department' => 'Management',
+                'position' => 'Director',
             ],
         ];
 
         foreach ($accounts as $account) {
-            // 1. Buat atau perbarui User
             $user = User::updateOrCreate(
                 ['email' => $account['email']],
                 [
-                    'name'     => $account['name'],
+                    'name' => $account['name'],
                     'password' => Hash::make($password),
-                    'role'     => $account['role'],
+                    'role' => $account['role'],
                 ]
             );
 
-            // 2. Buat atau perbarui Employee yang terhubung ke user ini
-            //    (Hanya untuk STAFF)
             if ($account['role'] === 'staff') {
-                Employee::updateOrCreate(
+                $employee = Employee::updateOrCreate(
                     ['employee_code' => $account['employee_code']],
                     [
-                        'user_id'    => $user->id,
-                        'name'       => $account['name'],
+                        'user_id' => $user->id,
+                        'name' => $account['name'],
                         'department' => $account['department'],
-                        'position'   => $account['position'],
-                        'status'     => 'active',
+                        'position' => $staffGrade?->name ?? $account['position'],
+                        'status' => 'active',
+                        'grade_id' => $staffGrade?->id,
+                        'employment_type_id' => $projectEmployment?->id,
+                        'work_basis_id' => $mandaysBasis?->id,
+                        'is_trainer' => false,
+                        'is_on_probation' => false,
+                        'num_toddlers' => 0,
                     ]
                 );
+
+                if ($staffGrade) {
+                    $employee->salaryProfiles()->updateOrCreate(
+                        ['effective_from' => $effectiveFrom],
+                        [
+                            'grade_id' => $staffGrade->id,
+                            'position' => $staffGrade->name,
+                            'position_allowance' => 0,
+                            'position_allowance_enc' => CryptoService::encryptAESGCM('0'),
+                            'mandays_rate' => null,
+                            'mandays_rate_enc' => CryptoService::encryptAESGCM('100000'),
+                            'allowance_fixed' => 0,
+                            'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
+                            'deduction_fixed' => 0,
+                            'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
+                            'salary_alg' => 'AES',
+                            'salary_key_id' => CryptoService::keyId(),
+                        ]
+                    );
+
+                    $employee->jobHistories()->updateOrCreate(
+                        ['start_date' => $effectiveFrom],
+                        [
+                            'grade_id' => $staffGrade->id,
+                            'position' => $staffGrade->name,
+                            'status' => 'active',
+                            'notes' => 'Seed data akun testing staff',
+                        ]
+                    );
+                }
+            } else {
+                $staleEmployee = Employee::where('employee_code', $account['employee_code'])->first();
+
+                if ($staleEmployee && ! $staleEmployee->payrolls()->exists()) {
+                    $staleEmployee->salaryProfiles()->delete();
+                    $staleEmployee->jobHistories()->delete();
+                    $staleEmployee->delete();
+                }
             }
 
-            $this->command->info(
-                "✅ [{$account['role']}] {$account['email']} → OK"
-            );
+            $this->command->info("[{$account['role']}] {$account['email']} -> OK");
         }
 
         $this->command->newLine();
-        $this->command->info('Password semua akun: ' . $password);
+        $this->command->info('Password semua akun: '.$password);
     }
 }

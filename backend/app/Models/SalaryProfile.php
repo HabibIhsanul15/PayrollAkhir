@@ -10,9 +10,11 @@ class SalaryProfile extends Model
         'employee_id',
         'grade_id',
         'position',
+        'base_salary_basis',
 
         // plaintext (transisi)
-        'base_salary',
+        'base_salary_amount',
+        'position_allowance',
         'allowance_fixed',
         'deduction_fixed',
         'daily_rate',
@@ -21,7 +23,8 @@ class SalaryProfile extends Model
         'mandays_rate',
 
         // ciphertext
-        'base_salary_enc',
+        'base_salary_amount_enc',
+        'position_allowance_enc',
         'allowance_fixed_enc',
         'deduction_fixed_enc',
         'daily_rate_enc',
@@ -39,6 +42,7 @@ class SalaryProfile extends Model
     protected $casts = [
         'effective_from' => 'date',
         'grade_id' => 'integer',
+        'base_salary_amount' => 'float',
     ];
 
     public function employee()

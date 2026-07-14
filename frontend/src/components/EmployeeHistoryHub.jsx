@@ -11,7 +11,6 @@ import {
   Legend,
   ResponsiveContainer
 } from "recharts";
-import { getToken } from "../lib/auth";
 import { api } from "../lib/api";
 import { formatRupiah } from "../lib/utils";
 

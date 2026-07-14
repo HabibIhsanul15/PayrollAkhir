@@ -50,6 +50,12 @@
 
   @php
     $rupiah = fn($n) => number_format((float)($n ?? 0), 0, ',', '.');
+    $unit = function ($n) {
+        if ($n === null || $n === '' || $n === '-') return '-';
+        $num = (float) $n;
+        if (floor($num) == $num) return number_format($num, 0, ',', '.');
+        return rtrim(rtrim(number_format($num, 2, ',', '.'), '0'), ',');
+    };
     
     $periodStr = optional($payroll->periode)->format('F Y');
     if ($payroll->period_from && $payroll->period_to) {
@@ -87,7 +93,7 @@
             
             $incomes[] = [
                 'name' => strtoupper($type->name),
-                'mandays' => (!$hasSegments && $al->mandays > 0) ? (float)$al->mandays : '-',
+                'mandays' => (!$hasSegments && $al->mandays > 0) ? $unit($al->mandays) : '-',
                 'rate' => (!$hasSegments && $al->rate_amount > 0) ? $rupiah($al->rate_amount) : '-',
                 'amount' => $al->amount,
                 'is_subrow' => false
@@ -97,7 +103,7 @@
                 foreach ($calcDetail['segments'] as $seg) {
                     $incomes[] = [
                         'name' => '   - ' . ($seg['grade'] ?? 'Jabatan'),
-                        'mandays' => (isset($seg['mandays']) && $seg['mandays'] > 0) ? (float)$seg['mandays'] : '-',
+                        'mandays' => (isset($seg['mandays']) && $seg['mandays'] > 0) ? $unit($seg['mandays']) : '-',
                         'rate' => (isset($seg['rate']) && $seg['rate'] > 0) ? $rupiah($seg['rate']) : '-',
                         'amount' => $seg['amount'],
                         'is_subrow' => true
@@ -150,6 +156,8 @@
     
     $rowCount = max(count($incomes), count($deductions));
     if ($rowCount == 0) $rowCount = 1;
+
+    $paidAt = $payroll->paid_at ? \Carbon\Carbon::parse($payroll->paid_at)->format('d F Y') : null;
   @endphp
 
   @if(strtolower($payroll->status) === 'paid')
@@ -270,6 +278,12 @@
             <td style="width: 10%;">a.n</td>
             <td style="width: 50%;">{{ strtoupper($emp?->bank_account_name ?: '-') }}</td>
           </tr>
+          <tr>
+            <td class="bold">No. Ref.</td>
+            <td class="bold">{{ $payroll->paid_ref ?: '-' }}</td>
+            <td>Tgl</td>
+            <td>{{ $paidAt ?: '-' }}</td>
+          </tr>
         </table>
       </td>
       <td style="width: 40%; vertical-align: top; text-align: right;">
@@ -278,7 +292,7 @@
             <td style="width: 100%; text-align: right;">Diterima Oleh :</td>
           </tr>
           <tr>
-            <td style="text-align: right;" class="bold">{{ optional($payroll->periode)->format('d F Y') }}</td>
+            <td style="text-align: right;" class="bold">{{ $paidAt ?: optional($payroll->periode)->format('d F Y') }}</td>
           </tr>
           <tr>
             <td style="height: 40px;"></td>
@@ -293,4 +307,3 @@
 
 </body>
 </html>
-

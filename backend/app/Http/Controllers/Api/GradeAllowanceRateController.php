@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\GradeAllowanceRate;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class GradeAllowanceRateController extends Controller
@@ -18,25 +20,32 @@ class GradeAllowanceRateController extends Controller
     {
         $r = strtolower((string) ($user->role ?? ''));
         $roles = array_map(fn ($x) => strtolower((string) $x), $roles);
+
         return in_array($r, $roles, true);
     }
 
     public function index(Request $request)
     {
-        if (!$this->inRoles($request->user(), ['hcga', 'fat'])) {
+        if (! $this->inRoles($request->user(), ['fat'])) {
             return $this->forbid();
         }
 
+        $query = GradeAllowanceRate::query();
+        if ($request->boolean('active_on')) {
+            $query->activeOn($request->query('active_on'));
+        }
+
         return response()->json(
-            GradeAllowanceRate::with(['grade', 'allowanceType'])
+            $query->with(['grade', 'allowanceType'])
                 ->orderBy('grade_id')
+                ->orderByDesc('effective_from')
                 ->get()
         );
     }
 
     public function show(Request $request, GradeAllowanceRate $gradeAllowanceRate)
     {
-        if (!$this->inRoles($request->user(), ['hcga', 'fat'])) {
+        if (! $this->inRoles($request->user(), ['fat'])) {
             return $this->forbid();
         }
 
@@ -45,13 +54,13 @@ class GradeAllowanceRateController extends Controller
 
     public function store(Request $request)
     {
-        if (!$this->inRoles($request->user(), ['hcga'])) {
+        if (! $this->inRoles($request->user(), ['fat'])) {
             return $this->forbid();
         }
 
         $data = $request->validate([
-            'grade_id' => ['required', 'exists:grades,id'],
-            'allowance_type_id' => ['required', 'exists:allowance_types,id'],
+            'grade_id' => ['required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'allowance_type_id' => ['required', Rule::exists('allowance_types', 'id')->where('is_active', true)],
             'rate_amount' => ['nullable', 'numeric', 'min:0'],
             'rate_multiplier' => ['nullable', 'numeric', 'min:0'],
             'rate_formula' => ['nullable', 'string', 'max:200'],
@@ -61,32 +70,41 @@ class GradeAllowanceRateController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        // Unique constraint check
-        $exists = GradeAllowanceRate::where('grade_id', $data['grade_id'])
-            ->where('allowance_type_id', $data['allowance_type_id'])
-            ->where('effective_from', $data['effective_from'])
-            ->exists();
+        $rate = DB::transaction(function () use ($data) {
+            $previous = GradeAllowanceRate::query()
+                ->where('grade_id', $data['grade_id'])
+                ->where('allowance_type_id', $data['allowance_type_id'])
+                ->whereDate('effective_from', '<', $data['effective_from'])
+                ->orderByDesc('effective_from')
+                ->first();
 
-        if ($exists) {
-            return response()->json([
-                'message' => 'A rate with the same grade, allowance type, and effective from date already exists.'
-            ], 422);
-        }
+            if ($previous && ($previous->effective_to === null || $previous->effective_to->gte($data['effective_from']))) {
+                $previous->update([
+                    'effective_to' => Carbon::parse($data['effective_from'])->subDay()->toDateString(),
+                ]);
+            }
 
-        $rate = GradeAllowanceRate::create($data);
+            if ($this->overlaps($data)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'effective_from' => ['Periode tarif bertumpang tindih dengan tarif yang sudah ada.'],
+                ]);
+            }
+
+            return GradeAllowanceRate::create($data);
+        });
 
         return response()->json($rate->load(['grade', 'allowanceType']), 201);
     }
 
     public function update(Request $request, GradeAllowanceRate $gradeAllowanceRate)
     {
-        if (!$this->inRoles($request->user(), ['hcga'])) {
+        if (! $this->inRoles($request->user(), ['fat'])) {
             return $this->forbid();
         }
 
         $data = $request->validate([
-            'grade_id' => ['sometimes', 'required', 'exists:grades,id'],
-            'allowance_type_id' => ['sometimes', 'required', 'exists:allowance_types,id'],
+            'grade_id' => ['sometimes', 'required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'allowance_type_id' => ['sometimes', 'required', Rule::exists('allowance_types', 'id')->where('is_active', true)],
             'rate_amount' => ['nullable', 'numeric', 'min:0'],
             'rate_multiplier' => ['nullable', 'numeric', 'min:0'],
             'rate_formula' => ['nullable', 'string', 'max:200'],
@@ -96,21 +114,18 @@ class GradeAllowanceRateController extends Controller
             'is_active' => ['sometimes', 'required', 'boolean'],
         ]);
 
-        // Unique constraint check if changing unique keys
         $gradeId = $data['grade_id'] ?? $gradeAllowanceRate->grade_id;
         $allowanceTypeId = $data['allowance_type_id'] ?? $gradeAllowanceRate->allowance_type_id;
         $effectiveFrom = $data['effective_from'] ?? ($gradeAllowanceRate->effective_from ? $gradeAllowanceRate->effective_from->toDateString() : null);
 
-        $exists = GradeAllowanceRate::where('grade_id', $gradeId)
-            ->where('allowance_type_id', $allowanceTypeId)
-            ->where('effective_from', $effectiveFrom)
-            ->where('id', '!=', $gradeAllowanceRate->id)
-            ->exists();
+        $candidate = array_merge($gradeAllowanceRate->toArray(), $data, [
+            'grade_id' => $gradeId,
+            'allowance_type_id' => $allowanceTypeId,
+            'effective_from' => $effectiveFrom,
+        ]);
 
-        if ($exists) {
-            return response()->json([
-                'message' => 'A rate with the same grade, allowance type, and effective from date already exists.'
-            ], 422);
+        if ($this->overlaps($candidate, $gradeAllowanceRate->id)) {
+            return response()->json(['message' => 'Periode tarif bertumpang tindih dengan tarif yang sudah ada.'], 422);
         }
 
         $gradeAllowanceRate->update($data);
@@ -120,12 +135,29 @@ class GradeAllowanceRateController extends Controller
 
     public function destroy(Request $request, GradeAllowanceRate $gradeAllowanceRate)
     {
-        if (!$this->inRoles($request->user(), ['hcga'])) {
+        if (! $this->inRoles($request->user(), ['fat'])) {
             return $this->forbid();
         }
 
         $gradeAllowanceRate->delete();
 
         return response()->json(['message' => 'Grade Allowance Rate deleted successfully']);
+    }
+
+    private function overlaps(array $data, ?int $ignoreId = null): bool
+    {
+        $start = $data['effective_from'];
+        $end = $data['effective_to'] ?? null;
+
+        return GradeAllowanceRate::query()
+            ->where('grade_id', $data['grade_id'])
+            ->where('allowance_type_id', $data['allowance_type_id'])
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->where(function ($query) use ($start) {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $start);
+            })
+            ->when($end, fn ($query) => $query->whereDate('effective_from', '<=', $end))
+            ->exists();
     }
 }

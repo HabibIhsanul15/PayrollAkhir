@@ -2,32 +2,43 @@
 
 namespace App\Services;
 
+use App\Models\AllowanceType;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\MonthlyRecap;
 use App\Models\Payroll;
 use App\Models\PayrollAllowance;
-use App\Models\AllowanceType;
-use App\Models\GradeAllowanceRate;
-use App\Models\AuditLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class PayrollCalculationService
 {
     const ENGINE_VERSION = 'v2.0';
 
+    public function __construct(
+        private AllowanceCalculationService $allowanceCalculator,
+        private AllowanceRateResolver $rateResolver,
+        private PayrollCipherService $cipherService
+    ) {}
+
     public function validatePrerequisites($employee, $periodMonth, $ignorePayrollId = null)
     {
-        if ($employee->status !== 'active') return ['status' => false, 'error' => 'Employee tidak aktif.'];
-        if (!$employee->grade_id) return ['status' => false, 'error' => 'Grade ID kosong.'];
-        if (!$employee->employment_type_id) return ['status' => false, 'error' => 'Employment Type kosong.'];
+        if ($employee->status !== 'active') {
+            return ['status' => false, 'error' => 'Employee tidak aktif.'];
+        }
+        if (! $employee->grade_id) {
+            return ['status' => false, 'error' => 'Grade ID kosong.'];
+        }
 
         $recaps = MonthlyRecap::where('employee_id', $employee->id)->where('period_month', $periodMonth)->get();
-        if ($recaps->isEmpty()) return ['status' => false, 'error' => 'Rekap Bulanan (Monthly Recap) belum diinput.'];
-        
+        if ($recaps->isEmpty()) {
+            return ['status' => false, 'error' => 'Rekap Bulanan (Monthly Recap) belum diinput.'];
+        }
+
         foreach ($recaps as $recap) {
-            if (!$recap->is_finalized) return ['status' => false, 'error' => 'Ada Rekap Bulanan yang belum difinalisasi oleh HCGA.'];
+            if (! $recap->is_finalized) {
+                return ['status' => false, 'error' => 'Ada Rekap Bulanan yang belum difinalisasi oleh HCGA.'];
+            }
         }
 
         // Period logic simplified: just first and last day of the month
@@ -37,8 +48,8 @@ class PayrollCalculationService
         // Resolve profiles for each recap
         $profilesData = [];
         $fallbackProfile = $employee->currentSalaryProfile($start->toDateString());
-        
-        if (!$fallbackProfile && $recaps->contains(fn($r) => !$r->salary_profile_id)) {
+
+        if (! $fallbackProfile && $recaps->contains(fn ($r) => ! $r->salary_profile_id)) {
             return ['status' => false, 'error' => 'Salary profile aktif tidak ditemukan untuk sebagian rekap.'];
         }
 
@@ -47,45 +58,31 @@ class PayrollCalculationService
         foreach ($recaps as $recap) {
             $totalRecapsMandays += $recap->total_mandays;
             $profile = $recap->salary_profile_id ? \App\Models\SalaryProfile::find($recap->salary_profile_id) : $fallbackProfile;
-            
-            if (!$profile) return ['status' => false, 'error' => 'Salary profile tidak ditemukan untuk rekap tertentu.'];
+
+            if (! $profile) {
+                return ['status' => false, 'error' => 'Salary profile tidak ditemukan untuk rekap tertentu.'];
+            }
 
             $activeGradeId = $profile->grade_id ?? $employee->grade_id;
             $grade = $activeGradeId ? \App\Models\Grade::find($activeGradeId) : null;
 
             // Profile decrypt and fallback
-            $positionAllowanceDecrypted = $profile->position_allowance_enc ? CryptoService::decryptAESGCM($profile->position_allowance_enc) : null;
-            if ($positionAllowanceDecrypted === null || $positionAllowanceDecrypted === '') {
-                if ($profile->position_allowance > 0) {
-                    $positionAllowanceDecrypted = (string)$profile->position_allowance;
-                } else {
-                    $posRate = $grade ? \App\Models\GradeAllowanceRate::where('grade_id', $grade->id)
-                        ->whereHas('allowanceType', function($q) { $q->where('code', 'position'); })
-                        ->first() : null;
-                    $positionAllowanceDecrypted = $posRate ? (string)$posRate->rate_amount : '0';
-                }
-            }
+            $positionAllowanceDecrypted = $this->resolvePositionAllowance($profile, $grade, $start->toDateString());
+            $baseSalary = $this->resolveBaseSalary($profile, $grade, $employee);
 
-            $mandaysDecrypted = $profile->mandays_rate_enc ? CryptoService::decryptAESGCM($profile->mandays_rate_enc) : null;
-            if ($mandaysDecrypted === null || $mandaysDecrypted === '') {
-                if ($profile->mandays_rate > 0) {
-                    $mandaysDecrypted = (string)$profile->mandays_rate;
-                } else {
-                    $mandaysDecrypted = $grade ? (string)$grade->default_mandays_rate : '0';
-                }
-            }
-            
-            if ($mandaysDecrypted === null || $mandaysDecrypted === '') {
-                return ['status' => false, 'error' => 'Mandays rate kosong pada salah satu profile.'];
+            if ($baseSalary['amount'] === null || $baseSalary['amount'] === '') {
+                return ['status' => false, 'error' => 'Gaji pokok default kosong pada salah satu profile.'];
             }
 
             $profilesData[] = [
                 'recap' => $recap,
                 'profile' => [
                     'position_allowance' => $positionAllowanceDecrypted,
-                    'mandays_rate' => $mandaysDecrypted,
-                    'grade_id' => $activeGradeId
-                ]
+                    'base_salary_amount' => $baseSalary['amount'],
+                    'base_salary_basis' => $baseSalary['basis'],
+                    'grade_id' => $activeGradeId,
+                    'effective_from' => $profile->effective_from->toDateString(),
+                ],
             ];
         }
 
@@ -95,7 +92,9 @@ class PayrollCalculationService
             $existingQ->where('id', '!=', $ignorePayrollId);
         }
         $existing = $existingQ->first();
-        if ($existing) return ['status' => false, 'error' => 'Payroll sudah ada di periode ini.'];
+        if ($existing) {
+            return ['status' => false, 'error' => 'Payroll sudah ada di periode ini.'];
+        }
 
         return [
             'status' => true,
@@ -104,49 +103,46 @@ class PayrollCalculationService
             'total_mandays' => $totalRecapsMandays, // combined total
             'periodFrom' => $start->toDateString(),
             'periodTo' => $end->toDateString(),
-            'periode' => $periodeDate
+            'periode' => $periodeDate,
         ];
     }
 
     public function runEngine($employee, $periodMonth, $ignorePayrollId = null)
     {
         $prereq = $this->validatePrerequisites($employee, $periodMonth, $ignorePayrollId);
-        if (!$prereq['status']) {
+        if (! $prereq['status']) {
             return [
                 'is_calculable' => false,
                 'prerequisite_status' => false,
                 'blocking_warnings' => [$prereq['error']],
-                'non_blocking_warnings' => []
+                'non_blocking_warnings' => [],
             ];
         }
 
         $profilesData = $prereq['profilesData'];
-        // Use the last profile as the "primary" profile for single-value references 
+        // Use the last profile as the "primary" profile for single-value references
         // (like base position allowance rate for display, though we use prorata for math)
         $primaryProfileData = end($profilesData);
         $profile = $primaryProfileData['profile'];
-        
+
         $blocking_warnings = [];
         $non_blocking_warnings = [];
-        
+
         $gaji_pokok = 0;
         $totalPositionAllowance = 0;
-        
-        $isProject = $employee->employmentType->code === 'project';
-        $isFixRate = $employee->employmentType->code === 'fix_rate';
-        
+
         $gaji_pokok = 0;
         $accumulatedAllowances = [];
 
-        $addAllowance = function($typeCode, $typeId, $amount, $mandays, $rate, $detail, $gradeName = null) use (&$accumulatedAllowances, $profilesData) {
-            if (!isset($accumulatedAllowances[$typeCode])) {
+        $addAllowance = function ($typeCode, $typeId, $amount, $mandays, $rate, $detail, $gradeName = null) use (&$accumulatedAllowances, $profilesData) {
+            if (! isset($accumulatedAllowances[$typeCode])) {
                 $accumulatedAllowances[$typeCode] = [
                     'allowance_type_id' => $typeId,
                     'allowance_type' => $typeCode,
                     'amount' => 0,
                     'rate_amount' => count($profilesData) > 1 ? null : $rate, // if prorated, rate is blended
                     'mandays' => 0,
-                    'calculation_detail' => $detail
+                    'calculation_detail' => $detail,
                 ];
                 if (count($profilesData) > 1) {
                     $accumulatedAllowances[$typeCode]['calculation_detail']['is_prorated'] = true;
@@ -156,7 +152,7 @@ class PayrollCalculationService
                 // accumulate numeric details
                 foreach ($detail as $k => $v) {
                     if (is_numeric($v)) {
-                        if (!isset($accumulatedAllowances[$typeCode]['calculation_detail'][$k])) {
+                        if (! isset($accumulatedAllowances[$typeCode]['calculation_detail'][$k])) {
                             $accumulatedAllowances[$typeCode]['calculation_detail'][$k] = 0;
                         }
                         $accumulatedAllowances[$typeCode]['calculation_detail'][$k] += $v;
@@ -172,7 +168,7 @@ class PayrollCalculationService
                     'grade' => $gradeName,
                     'amount' => $amount,
                     'rate' => $rate,
-                    'mandays' => $mandays
+                    'mandays' => $mandays,
                 ];
             }
         };
@@ -181,19 +177,23 @@ class PayrollCalculationService
             $r = $pd['recap'];
             $p = $pd['profile'];
             $segGradeId = $p['grade_id'];
-            
+
             $segGradeName = 'Jabatan';
             if (isset($p['grade_id'])) {
                 $gr = \App\Models\Grade::find($p['grade_id']);
-                if ($gr) $segGradeName = $gr->name;
+                if ($gr) {
+                    $segGradeName = $gr->name;
+                }
             }
-            
+
             // 1. Basic Salary
-            $gaji_pokok += (float)$p['mandays_rate'] * (float)$r->total_mandays;
-            
+            $ratio = $prereq['total_mandays'] > 0 ? ((float) $r->total_mandays / (float) $prereq['total_mandays']) : 0;
+            $gaji_pokok += $p['base_salary_basis'] === 'monthly'
+                ? (float) $p['base_salary_amount'] * $ratio
+                : (float) $p['base_salary_amount'] * (float) $r->total_mandays;
+
             // 2. Position Allowance
-            $ratio = $prereq['total_mandays'] > 0 ? ((float)$r->total_mandays / (float)$prereq['total_mandays']) : 0;
-            $segPosAllow = (float)$p['position_allowance'] * $ratio;
+            $segPosAllow = (float) $p['position_allowance'] * $ratio;
             $trPos = AllowanceType::where('code', 'position')->first();
             if ($trPos && $segPosAllow > 0) {
                 $amt = $segPosAllow;
@@ -203,70 +203,32 @@ class PayrollCalculationService
                 $addAllowance($trPos->code, $trPos->id, $amt, null, $p['position_allowance'], ['is_on_probation' => $employee->is_on_probation], $segGradeName);
             }
 
-            $getSegRate = function($typeCode) use ($segGradeId) {
-                $type = AllowanceType::where('code', $typeCode)->first();
-                if (!$type) return null;
-                $rate = GradeAllowanceRate::where('grade_id', $segGradeId)
-                    ->where('allowance_type_id', $type->id)
-                    ->first();
-                return [
-                    'type_id' => $type->id,
-                    'type_code' => $type->code,
-                    'rate' => $rate ? (float)$rate->rate_amount : null
-                ];
-            };
+            $rateDate = max($prereq['periodFrom'], $p['effective_from']);
+            $calculatedAllowances = $this->allowanceCalculator->calculate(
+                $employee,
+                $r,
+                $segGradeId,
+                $rateDate,
+                (float) $p['base_salary_amount'],
+                $ratio
+            );
 
-            // 3. Transport trip
-            $trTrip = $getSegRate('transport_trip');
-            if ($trTrip && $trTrip['rate'] !== null && $r->business_trips > 0) {
-                $amt = $trTrip['rate'] * $r->business_trips;
-                $addAllowance($trTrip['type_code'], $trTrip['type_id'], $amt, null, $trTrip['rate'], ['num_trips' => $r->business_trips], $segGradeName);
-            }
+            foreach ($calculatedAllowances as $calculated) {
+                $type = $calculated['type'];
+                $rate = $calculated['rate'];
+                $mandays = in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days', 'overtime_hours'], true)
+                    ? $calculated['units']
+                    : null;
 
-            // 4. Meal
-            $trMeal = $getSegRate('meal');
-            if ($trMeal && $trMeal['rate'] !== null && $r->total_mandays > 0) {
-                $amt = $trMeal['rate'] * $r->total_mandays;
-                $addAllowance($trMeal['type_code'], $trMeal['type_id'], $amt, $r->total_mandays, $trMeal['rate'], ['total_mandays' => $r->total_mandays], $segGradeName);
-            }
-
-            // 5. Childcare
-            if ($employee->num_toddlers >= 3) {
-                $trChild = $getSegRate('childcare');
-                if ($trChild && $trChild['rate'] !== null) {
-                    $amt = $trChild['rate'] * $ratio; // prorate childcare by days
-                    $addAllowance($trChild['type_code'], $trChild['type_id'], $amt, null, $trChild['rate'], ['num_toddlers' => $employee->num_toddlers], $segGradeName);
-                } else if ($trChild && $trChild['rate'] === null) {
-                    $non_blocking_warnings[] = 'Childcare allowance rate kosong padahal num_toddlers >= 3.';
-                }
-            }
-
-            // 6. Training
-            if ($employee->is_trainer && $r->training_days > 0) {
-                $trTrain = AllowanceType::where('code', 'training')->first();
-                $amt = (float)$p['mandays_rate'] * 1.5 * $r->training_days;
-                $addAllowance($trTrain->code, $trTrain->id, $amt, $r->training_days, null, ['multiplier' => 1.5, 'mandays_rate' => $p['mandays_rate']], $segGradeName);
-            }
-
-            // 7. Business Trip
-            $trBTrip = $getSegRate('business_trip');
-            if ($trBTrip && $trBTrip['rate'] !== null && $r->out_of_town_days > 0) {
-                $amt = $trBTrip['rate'] * $r->out_of_town_days;
-                $addAllowance($trBTrip['type_code'], $trBTrip['type_id'], $amt, $r->out_of_town_days, $trBTrip['rate'], ['out_of_town_days' => $r->out_of_town_days], $segGradeName);
-            }
-
-            // 8. Transport (WFO)
-            $trHO = $getSegRate('ho_transport_meal');
-            if ($trHO && $trHO['rate'] !== null && $r->wfo_days > 0) {
-                $amt = $trHO['rate'] * $r->wfo_days;
-                $addAllowance($trHO['type_code'], $trHO['type_id'], $amt, $r->wfo_days, $trHO['rate'], ['wfo_days' => $r->wfo_days], $segGradeName);
-            }
-
-            // 9. Transport Insurance
-            $trIns = $getSegRate('transport_insurance');
-            if ($trIns && $trIns['rate'] !== null && $r->wfo_days > 0) {
-                $amt = $trIns['rate'] * $r->wfo_days;
-                $addAllowance($trIns['type_code'], $trIns['type_id'], $amt, $r->wfo_days, $trIns['rate'], ['wfo_days' => $r->wfo_days], $segGradeName);
+                $addAllowance(
+                    $type->code,
+                    $type->id,
+                    $calculated['amount'],
+                    $mandays,
+                    $rate->rate_amount !== null ? (float) $rate->rate_amount : null,
+                    $calculated['detail'],
+                    $segGradeName
+                );
             }
         }
 
@@ -278,6 +240,24 @@ class PayrollCalculationService
         }
 
         $total_deductions = 0;
+        $deductions_list = [];
+
+        // Fetch Special Deductions
+        $specialDeductions = \App\Models\SpecialDeduction::where('employee_id', $employee->id)
+            ->where('period_month', $periodMonth)
+            ->get();
+
+        foreach ($specialDeductions as $sd) {
+            $sdAmount = (float) (CryptoService::readEncryptedOrPlainSafe($sd->amount_enc, $sd->amount, $sd->salary_alg ?? 'AES') ?? 0);
+            $total_deductions += $sdAmount;
+            $deductions_list[] = [
+                'deduction_type' => $sd->type,
+                'deduction_label' => $sd->description ?: ucfirst($sd->type),
+                'amount' => $sdAmount,
+                'calculation_detail' => ['special_deduction_id' => $sd->id],
+            ];
+        }
+
         $total_nett = $gaji_pokok + $total_allowances - $total_deductions;
 
         return [
@@ -293,40 +273,40 @@ class PayrollCalculationService
             'periode' => $prereq['periode'],
             'gaji_pokok' => $gaji_pokok,
             'allowances' => $allowances,
+            'deductions' => $deductions_list,
             'total_allowances' => $total_allowances,
             'total_deductions' => $total_deductions,
             'total_nett' => $total_nett,
             'calculation_mode' => 'auto',
             'engine_version' => self::ENGINE_VERSION,
-            'message' => 'PPh 21 dan BPJS belum dihitung.'
+            'message' => 'PPh 21 dan BPJS belum dihitung.',
         ];
     }
 
-    public function calculatePreview($employeeId, $periodMonth)
+    public function calculatePreview($employeeId, $periodMonth, $ignorePayrollId = null)
     {
         $employee = Employee::with(['employmentType', 'workBasis'])->find($employeeId);
-        if (!$employee) return ['is_calculable' => false, 'prerequisite_status' => false, 'blocking_warnings' => ['Employee not found']];
-        return $this->runEngine($employee, $periodMonth);
+        if (! $employee) {
+            return ['is_calculable' => false, 'prerequisite_status' => false, 'blocking_warnings' => ['Employee not found']];
+        }
+
+        return $this->runEngine($employee, $periodMonth, $ignorePayrollId);
     }
 
     public function calculateAndSave($employeeId, $periodMonth, $recordedBy)
     {
         $employee = Employee::with(['employmentType', 'workBasis'])->find($employeeId);
-        if (!$employee) throw new \Exception("Employee not found");
-        
+        if (! $employee) {
+            throw new \Exception('Employee not found');
+        }
+
         $res = $this->runEngine($employee, $periodMonth);
-        if (!$res['is_calculable']) {
-            throw new \Exception("Cannot calculate: " . implode(', ', $res['blocking_warnings']));
+        if (! $res['is_calculable']) {
+            throw new \Exception('Cannot calculate: '.implode(', ', $res['blocking_warnings']));
         }
 
         DB::beginTransaction();
         try {
-            // Generate encryption string formats
-            $gpEnc = CryptoService::encryptAESGCM((string)round($res['gaji_pokok']));
-            $alEnc = CryptoService::encryptAESGCM((string)round($res['total_allowances']));
-            $dedEnc = CryptoService::encryptAESGCM((string)round($res['total_deductions']));
-            $totEnc = CryptoService::encryptAESGCM((string)round($res['total_nett']));
-
             $payroll = Payroll::create([
                 'user_id' => $recordedBy,
                 'employee_id' => $employee->id,
@@ -334,45 +314,25 @@ class PayrollCalculationService
                 'period_from' => $res['period_from'],
                 'period_to' => $res['period_to'],
                 'status' => 'draft',
-                'gaji_pokok' => $res['gaji_pokok'],
-                'tunjangan' => $res['total_allowances'],
-                'potongan' => $res['total_deductions'],
-                'total' => $res['total_nett'],
-                'gaji_pokok_enc' => $gpEnc,
-                'tunjangan_enc' => $alEnc,
-                'potongan_enc' => $dedEnc,
-                'total_enc' => $totEnc,
-                'total_allowances' => $res['total_allowances'],
-                'total_deductions' => $res['total_deductions'],
-                'total_allowances_enc' => $alEnc,
-                'total_deductions_enc' => $dedEnc,
                 'calculation_mode' => 'auto',
                 'engine_version' => $res['engine_version'],
-                'salary_alg' => 'AES'
+                'calculated_at' => now(),
+                ...$this->encryptedPayrollAttributes($res),
             ]);
 
-            foreach ($res['allowances'] as $al) {
-                PayrollAllowance::create([
-                    'payroll_id' => $payroll->id,
-                    'allowance_type_id' => $al['allowance_type_id'],
-                    'rate_amount' => $al['rate_amount'],
-                    'mandays' => $al['mandays'],
-                    'amount' => $al['amount'],
-                    'amount_enc' => CryptoService::encryptAESGCM((string)round($al['amount'])),
-                    'calculation_detail' => $al['calculation_detail'],
-                    'salary_alg' => 'AES'
-                ]);
-            }
+            $this->createAllowanceRows($payroll, $res['allowances']);
+            $this->createDeductionRows($payroll, $res['deductions'] ?? []);
 
             AuditLog::create([
                 'user_id' => $recordedBy,
                 'action' => 'PAYROLL_AUTO_CALCULATE',
                 'payroll_id' => $payroll->id,
                 'meta' => ['employee_id' => $employee->id, 'period_month' => $periodMonth, 'warnings' => $res['non_blocking_warnings']],
-                'ip_address' => request()->ip()
+                'ip_address' => request()->ip(),
             ]);
 
             DB::commit();
+
             return $payroll;
         } catch (\Exception $e) {
             DB::rollBack();
@@ -391,19 +351,14 @@ class PayrollCalculationService
             DB::beginTransaction();
             try {
                 $prereq = $this->validatePrerequisites($employee, $periodMonth);
-                if (!$prereq['status']) {
+                if (! $prereq['status']) {
                     throw new \Exception($prereq['error']);
                 }
-                
+
                 $res = $this->runEngine($employee, $periodMonth);
-                if (!$res['is_calculable']) {
+                if (! $res['is_calculable']) {
                     throw new \Exception(implode(', ', $res['blocking_warnings']));
                 }
-
-                $gpEnc = CryptoService::encryptAESGCM((string)round($res['gaji_pokok']));
-                $alEnc = CryptoService::encryptAESGCM((string)round($res['total_allowances']));
-                $dedEnc = CryptoService::encryptAESGCM((string)round($res['total_deductions']));
-                $totEnc = CryptoService::encryptAESGCM((string)round($res['total_nett']));
 
                 $payroll = Payroll::create([
                     'user_id' => $recordedBy,
@@ -412,43 +367,32 @@ class PayrollCalculationService
                     'period_from' => $res['period_from'],
                     'period_to' => $res['period_to'],
                     'status' => 'draft',
-                    'gaji_pokok' => $res['gaji_pokok'],
-                    'tunjangan' => $res['total_allowances'],
-                    'potongan' => $res['total_deductions'],
-                    'total' => $res['total_nett'],
-                    'gaji_pokok_enc' => $gpEnc,
-                    'tunjangan_enc' => $alEnc,
-                    'potongan_enc' => $dedEnc,
-                    'total_enc' => $totEnc,
-                    'total_allowances' => $res['total_allowances'],
-                    'total_deductions' => $res['total_deductions'],
-                    'total_allowances_enc' => $alEnc,
-                    'total_deductions_enc' => $dedEnc,
                     'calculation_mode' => 'auto',
                     'engine_version' => $res['engine_version'],
-                    'salary_alg' => 'AES'
+                    'calculated_at' => now(),
+                    ...$this->encryptedPayrollAttributes($res),
                 ]);
 
-                foreach ($res['allowances'] as $al) {
-                    PayrollAllowance::create([
-                        'payroll_id' => $payroll->id,
-                        'allowance_type_id' => $al['allowance_type_id'],
-                        'rate_amount' => $al['rate_amount'],
-                        'mandays' => $al['mandays'],
-                        'amount' => $al['amount'],
-                        'amount_enc' => CryptoService::encryptAESGCM((string)round($al['amount'])),
-                        'calculation_detail' => $al['calculation_detail'],
-                        'salary_alg' => 'AES'
-                    ]);
-                }
-                
+                $this->createAllowanceRows($payroll, $res['allowances']);
+                $this->createDeductionRows($payroll, $res['deductions'] ?? []);
+
                 DB::commit();
                 $success++;
-                $results[] = ['employee_id' => $employee->id, 'status' => 'success', 'payroll_id' => $payroll->id];
+                $results[] = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'status' => 'success',
+                    'payroll_id' => $payroll->id,
+                    'total_mandays' => $prereq['total_mandays'] ?? 0,
+                    'gaji_pokok' => $res['gaji_pokok'] ?? 0,
+                    'total_allowances' => $res['total_allowances'] ?? 0,
+                    'total_deductions' => $res['total_deductions'] ?? 0,
+                    'total_nett' => $res['total_nett'] ?? 0,
+                ];
             } catch (\Exception $e) {
                 DB::rollBack();
                 $failed++;
-                $results[] = ['employee_id' => $employee->id, 'status' => 'failed', 'errors' => [$e->getMessage()]];
+                $results[] = ['employee_id' => $employee->id, 'employee_name' => $employee->name, 'status' => 'failed', 'errors' => [$e->getMessage()]];
             }
         }
 
@@ -457,7 +401,7 @@ class PayrollCalculationService
             'action' => 'PAYROLL_BATCH_GENERATE',
             'payroll_id' => null,
             'meta' => ['period_month' => $periodMonth, 'total_employees' => count($employees), 'success' => $success, 'failed' => $failed],
-            'ip_address' => request()->ip()
+            'ip_address' => request()->ip(),
         ]);
 
         return [
@@ -465,71 +409,195 @@ class PayrollCalculationService
             'total_employees' => count($employees),
             'success_count' => $success,
             'failed_count' => $failed,
-            'results' => $results
+            'results' => $results,
+        ];
+    }
+
+    public function batchPreview($periodMonth)
+    {
+        $employees = Employee::where('status', 'active')->get();
+        $payrolls = Payroll::whereDate('periode', $periodMonth . '-01')->get()->keyBy('employee_id');
+
+        $results = [];
+        $success = 0;
+        $failed = 0;
+        $generated = 0;
+
+        $total_employees = count($employees);
+        $total_gaji_pokok = 0;
+        $total_allowances = 0;
+        $total_deductions = 0;
+        $total_nett = 0;
+
+        foreach ($employees as $employee) {
+            $existing = $payrolls->get($employee->id);
+
+            if ($existing) {
+                // Already generated
+                $alg = strtoupper($existing->salary_alg ?? 'AES');
+                if ($alg === 'HYBRID') {
+                    $dec = CryptoService::decryptHybridPayrollRow([
+                        'dek_enc' => $existing->dek_enc,
+                        'enc_meta' => $existing->enc_meta,
+                        'gaji_pokok_enc' => $existing->gaji_pokok_enc,
+                        'tunjangan_enc' => $existing->tunjangan_enc,
+                        'potongan_enc' => $existing->potongan_enc,
+                        'total_enc' => $existing->total_enc,
+                        'catatan_enc' => $existing->catatan_enc,
+                    ]);
+                    $gaji_pokok = $dec['gaji_pokok'] ?? 0;
+                    $tunjangan = $dec['tunjangan'] ?? 0;
+                    $potongan = $dec['potongan'] ?? 0;
+                    $nett = $dec['total'] ?? 0;
+                } else {
+                    $gaji_pokok = CryptoService::readEncryptedOrPlainSafe($existing->gaji_pokok_enc, $existing->gaji_pokok, $alg);
+                    $tunjangan = CryptoService::readEncryptedOrPlainSafe($existing->tunjangan_enc, $existing->tunjangan, $alg);
+                    $potongan = CryptoService::readEncryptedOrPlainSafe($existing->potongan_enc, $existing->potongan, $alg);
+                    $nett = CryptoService::readEncryptedOrPlainSafe($existing->total_enc, $existing->total, $alg);
+                }
+
+                $gaji_pokok = (float) $gaji_pokok;
+                $tunjangan = (float) $tunjangan;
+                $potongan = (float) $potongan;
+                $nett = (float) $nett;
+
+                $total_gaji_pokok += $gaji_pokok;
+                $total_allowances += $tunjangan;
+                $total_deductions += $potongan;
+                $total_nett += $nett;
+
+                $generated++;
+                
+                $recap = \Illuminate\Support\Facades\DB::table('monthly_recaps')
+                    ->where('employee_id', $employee->id)
+                    ->where('period_month', $periodMonth)
+                    ->first();
+                
+                $results[] = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'bank_name' => $employee->bank_name,
+                    'bank_account_number' => $employee->bank_account_number_enc ? CryptoService::readEncryptedOrPlainSafe($employee->bank_account_number_enc, $employee->bank_account_number, $employee->pii_alg ?? 'AES') : $employee->bank_account_number,
+                    'status' => 'generated',
+                    'payroll_id' => $existing->id,
+                    'payroll_status' => $existing->status,
+                    'total_mandays' => $recap->total_mandays ?? 0,
+                    'gaji_pokok' => $gaji_pokok,
+                    'total_allowances' => $tunjangan,
+                    'total_deductions' => $potongan,
+                    'total_nett' => $nett,
+                ];
+                continue;
+            }
+
+            try {
+                $prereq = $this->validatePrerequisites($employee, $periodMonth);
+                if (! $prereq['status']) {
+                    throw new \Exception($prereq['error']);
+                }
+
+                $res = $this->runEngine($employee, $periodMonth);
+                if (! $res['is_calculable']) {
+                    throw new \Exception(implode(', ', $res['blocking_warnings']));
+                }
+
+                $gaji_pokok = (float)($res['gaji_pokok'] ?? 0);
+                $tunjangan = (float)($res['total_allowances'] ?? 0);
+                $potongan = (float)($res['total_deductions'] ?? 0);
+                $nett = (float)($res['total_nett'] ?? 0);
+
+                $total_gaji_pokok += $gaji_pokok;
+                $total_allowances += $tunjangan;
+                $total_deductions += $potongan;
+                $total_nett += $nett;
+
+                $success++;
+                $results[] = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'bank_name' => $employee->bank_name,
+                    'bank_account_number' => $employee->bank_account_number_enc ? CryptoService::readEncryptedOrPlainSafe($employee->bank_account_number_enc, $employee->bank_account_number, $employee->pii_alg ?? 'AES') : $employee->bank_account_number,
+                    'status' => 'draft', // Simulated, not generated
+                    'total_mandays' => $prereq['total_mandays'] ?? 0,
+                    'gaji_pokok' => $gaji_pokok,
+                    'total_allowances' => $tunjangan,
+                    'total_deductions' => $potongan,
+                    'total_nett' => $nett,
+                ];
+            } catch (\Exception $e) {
+                $failed++;
+                $results[] = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'status' => 'failed',
+                    'errors' => [$e->getMessage()],
+                    'gaji_pokok' => 0,
+                    'total_allowances' => 0,
+                    'total_deductions' => 0,
+                    'total_nett' => 0,
+                ];
+            }
+        }
+
+        return [
+            'period_month' => $periodMonth,
+            'total_employees' => $total_employees,
+            'success_count' => $success,
+            'failed_count' => $failed,
+            'generated_count' => $generated,
+            'results' => $results,
+            'summary' => [
+                'total_gaji_pokok' => $total_gaji_pokok,
+                'total_allowances' => $total_allowances,
+                'total_deductions' => $total_deductions,
+                'total_nett' => $total_nett,
+            ],
         ];
     }
 
     public function recalculate(Payroll $payroll, $force, $recordedBy)
     {
-        if ($payroll->status !== 'draft') throw new \Exception("Hanya payroll draft yang bisa direcalculate.");
-        if ($payroll->calculation_mode !== 'auto') throw new \Exception("Hanya auto payroll yang bisa direcalculate.");
+        if ($payroll->status !== 'draft') {
+            throw new \Exception('Hanya payroll draft yang bisa direcalculate.');
+        }
+        if ($payroll->calculation_mode !== 'auto') {
+            throw new \Exception('Hanya auto payroll yang bisa direcalculate.');
+        }
 
         $hasOverride = $payroll->allowances()->where('is_manual_override', true)->exists();
-        if ($hasOverride && !$force) {
-            throw new \Exception("Terdapat manual override allowance. Recalculate ditolak tanpa force.");
+        if ($hasOverride && ! $force) {
+            throw new \Exception('Terdapat manual override allowance. Recalculate ditolak tanpa force.');
         }
 
         $employee = $payroll->employee;
         $pm = Carbon::parse($payroll->period_from)->format('Y-m');
-        
+
         $res = $this->runEngine($employee, $pm, $payroll->id);
-        if (!$res['is_calculable']) throw new \Exception("Cannot recalculate: " . implode(', ', $res['blocking_warnings']));
+        if (! $res['is_calculable']) {
+            throw new \Exception('Cannot recalculate: '.implode(', ', $res['blocking_warnings']));
+        }
 
         DB::beginTransaction();
         try {
             $payroll->allowances()->delete();
-            $gpEnc = CryptoService::encryptAESGCM((string)round($res['gaji_pokok']));
-            $alEnc = CryptoService::encryptAESGCM((string)round($res['total_allowances']));
-            $dedEnc = CryptoService::encryptAESGCM((string)round($res['total_deductions']));
-            $totEnc = CryptoService::encryptAESGCM((string)round($res['total_nett']));
-
+            $payroll->deductions()->delete();
             $payroll->update([
-                'gaji_pokok' => $res['gaji_pokok'],
-                'tunjangan' => $res['total_allowances'],
-                'potongan' => $res['total_deductions'],
-                'total' => $res['total_nett'],
-                'gaji_pokok_enc' => $gpEnc,
-                'tunjangan_enc' => $alEnc,
-                'potongan_enc' => $dedEnc,
-                'total_enc' => $totEnc,
-                'total_allowances' => $res['total_allowances'],
-                'total_deductions' => $res['total_deductions'],
-                'total_allowances_enc' => $alEnc,
-                'total_deductions_enc' => $dedEnc,
+                'calculated_at' => now(),
+                ...$this->encryptedPayrollAttributes($res),
             ]);
 
-            foreach ($res['allowances'] as $al) {
-                PayrollAllowance::create([
-                    'payroll_id' => $payroll->id,
-                    'allowance_type_id' => $al['allowance_type_id'],
-                    'rate_amount' => $al['rate_amount'],
-                    'mandays' => $al['mandays'],
-                    'amount' => $al['amount'],
-                    'amount_enc' => CryptoService::encryptAESGCM((string)round($al['amount'])),
-                    'calculation_detail' => $al['calculation_detail'],
-                    'salary_alg' => 'AES'
-                ]);
-            }
+            $this->createAllowanceRows($payroll, $res['allowances']);
 
             AuditLog::create([
                 'user_id' => $recordedBy,
                 'action' => 'PAYROLL_RECALCULATE',
                 'payroll_id' => $payroll->id,
                 'meta' => ['force' => $force, 'has_override_overwritten' => $hasOverride],
-                'ip_address' => request()->ip()
+                'ip_address' => request()->ip(),
             ]);
 
             DB::commit();
+
             return $payroll;
         } catch (\Exception $e) {
             DB::rollBack();
@@ -539,46 +607,187 @@ class PayrollCalculationService
 
     public function overrideAllowance(Payroll $payroll, PayrollAllowance $allowance, $amount, $reason, $recordedBy)
     {
-        if ($payroll->status !== 'draft') throw new \Exception("Hanya draft payroll yang dapat di override.");
-        if ($payroll->calculation_mode !== 'auto') throw new \Exception("Hanya auto payroll yang dapat di override.");
-        if ($allowance->payroll_id !== $payroll->id) throw new \Exception("Allowance tidak valid untuk payroll ini.");
+        if ($payroll->status !== 'draft') {
+            throw new \Exception('Hanya draft payroll yang dapat di override.');
+        }
+        if ($payroll->calculation_mode !== 'auto') {
+            throw new \Exception('Hanya auto payroll yang dapat di override.');
+        }
+        if ($allowance->payroll_id !== $payroll->id) {
+            throw new \Exception('Allowance tidak valid untuk payroll ini.');
+        }
 
         DB::beginTransaction();
         try {
             $allowance->update([
-                'amount' => $amount,
-                'amount_enc' => CryptoService::encryptAESGCM((string)round($amount)),
+                'amount' => null,
+                'amount_enc' => CryptoService::encryptAESGCM((string) round($amount)),
+                'salary_alg' => 'AES',
+                'salary_key_id' => CryptoService::keyId(),
                 'is_manual_override' => true,
-                'condition_notes' => $reason
+                'condition_notes' => $reason,
             ]);
 
-            $totalAllowances = $payroll->allowances()->sum('amount');
-            $alEnc = CryptoService::encryptAESGCM((string)round($totalAllowances));
-            $tot = $payroll->gaji_pokok + $totalAllowances - $payroll->total_deductions;
-            $totEnc = CryptoService::encryptAESGCM((string)round($tot));
-
-            $payroll->update([
+            $totalAllowances = $payroll->allowances()->get()->sum(function (PayrollAllowance $row) {
+                return (float) (CryptoService::readEncryptedOrPlainSafe(
+                    $row->amount_enc,
+                    $row->amount,
+                    $row->salary_alg ?? 'AES'
+                ) ?? 0);
+            });
+            $plain = $this->cipherService->decrypt($payroll);
+            $gaji = (float) ($plain['gaji_pokok'] ?? 0);
+            $deductions = (float) ($plain['total_deductions'] ?? $plain['potongan'] ?? 0);
+            $total = $gaji + $totalAllowances - $deductions;
+            $cipher = $this->cipherService->encrypt([
+                'gaji_pokok' => $gaji,
                 'tunjangan' => $totalAllowances,
+                'potongan' => $deductions,
+                'total' => $total,
                 'total_allowances' => $totalAllowances,
-                'total' => $tot,
-                'tunjangan_enc' => $alEnc,
-                'total_allowances_enc' => $alEnc,
-                'total_enc' => $totEnc
+                'total_deductions' => $deductions,
+                'catatan' => (string) ($plain['catatan'] ?? ''),
             ]);
+
+            $payroll->update($this->cipherAttributes($cipher));
 
             AuditLog::create([
                 'user_id' => $recordedBy,
                 'action' => 'PAYROLL_ALLOWANCE_OVERRIDE',
                 'payroll_id' => $payroll->id,
                 'meta' => ['allowance_id' => $allowance->id, 'new_amount' => $amount, 'reason' => $reason],
-                'ip_address' => request()->ip()
+                'ip_address' => request()->ip(),
             ]);
 
             DB::commit();
+
             return $payroll;
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
+        }
+    }
+
+    private function resolvePositionAllowance($profile, $grade, string $periodStart): string
+    {
+        $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
+        $positionAllowanceDecrypted = $profile->position_allowance_enc
+            ? CryptoService::decryptByAlg($profile->position_allowance_enc, $profileAlg)
+            : null;
+
+        if ($positionAllowanceDecrypted === null || $positionAllowanceDecrypted === '') {
+            if ($profile->position_allowance > 0) {
+                return (string) $profile->position_allowance;
+            }
+
+            $rateDate = max($periodStart, $profile->effective_from->toDateString());
+            $posRate = $grade
+                ? $this->rateResolver->resolveByCode($grade->id, 'position', $rateDate)
+                : null;
+
+            return $posRate ? (string) $posRate->rate_amount : '0';
+        }
+
+        return (string) $positionAllowanceDecrypted;
+    }
+
+    private function resolveBaseSalary($profile, $grade, Employee $employee): array
+    {
+        $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
+        $amount = $profile->base_salary_amount_enc
+            ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $profileAlg)
+            : null;
+
+        if ($amount === null || $amount === '') {
+            if ($profile->base_salary_amount !== null && $profile->base_salary_amount !== '') {
+                $amount = (string) $profile->base_salary_amount;
+            } elseif ($profile->mandays_rate_enc) {
+                $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $profileAlg);
+            } elseif ($profile->mandays_rate !== null && $profile->mandays_rate !== '') {
+                $amount = (string) $profile->mandays_rate;
+            } elseif ($grade?->default_base_salary_amount !== null) {
+                $amount = (string) $grade->default_base_salary_amount;
+            } elseif ($grade?->default_mandays_rate !== null) {
+                $amount = (string) $grade->default_mandays_rate;
+            }
+        }
+
+        $basis = $profile->base_salary_basis
+            ?: $grade?->base_salary_basis
+            ?: match ($employee->workBasis?->code) {
+                'monthly' => 'monthly',
+                default => 'daily',
+            };
+
+        return [
+            'basis' => $basis ?: 'daily',
+            'amount' => $amount,
+        ];
+    }
+
+    private function encryptedPayrollAttributes(array $result): array
+    {
+        $cipher = $this->cipherService->encrypt([
+            'gaji_pokok' => $result['gaji_pokok'],
+            'tunjangan' => $result['total_allowances'],
+            'potongan' => $result['total_deductions'],
+            'total' => $result['total_nett'],
+            'total_allowances' => $result['total_allowances'],
+            'total_deductions' => $result['total_deductions'],
+            'catatan' => '',
+        ]);
+
+        return $this->cipherAttributes($cipher);
+    }
+
+    private function cipherAttributes(array $cipher): array
+    {
+        return [
+            'gaji_pokok' => null,
+            'tunjangan' => null,
+            'potongan' => null,
+            'total' => null,
+            'total_allowances' => null,
+            'total_deductions' => null,
+            'catatan' => null,
+            ...$cipher['fields'],
+            'dek_enc' => $cipher['dek_enc'],
+            'enc_meta' => $cipher['enc_meta'],
+            'salary_alg' => $cipher['alg'],
+            'salary_key_id' => $cipher['key_id'],
+        ];
+    }
+
+    private function createAllowanceRows(Payroll $payroll, array $allowances): void
+    {
+        foreach ($allowances as $allowance) {
+            PayrollAllowance::create([
+                'payroll_id' => $payroll->id,
+                'allowance_type_id' => $allowance['allowance_type_id'],
+                'rate_amount' => $allowance['rate_amount'],
+                'mandays' => $allowance['mandays'],
+                'amount' => null,
+                'amount_enc' => CryptoService::encryptAESGCM((string) round($allowance['amount'])),
+                'calculation_detail' => $allowance['calculation_detail'],
+                'salary_alg' => 'AES',
+                'salary_key_id' => CryptoService::keyId(),
+            ]);
+        }
+    }
+
+    private function createDeductionRows(Payroll $payroll, array $deductions): void
+    {
+        foreach ($deductions as $deduction) {
+            \App\Models\PayrollDeduction::create([
+                'payroll_id' => $payroll->id,
+                'deduction_type' => $deduction['deduction_type'],
+                'deduction_label' => $deduction['deduction_label'],
+                'amount' => null,
+                'amount_enc' => CryptoService::encryptAESGCM((string) round($deduction['amount'])),
+                'calculation_detail' => $deduction['calculation_detail'],
+                'salary_alg' => 'AES',
+                'salary_key_id' => CryptoService::keyId(),
+            ]);
         }
     }
 }

@@ -11,6 +11,21 @@ use App\Services\CryptoService;
 
 class MeController extends Controller
 {
+    private function digitStringRules(int $maxLength): array
+    {
+        return ['sometimes', 'nullable', 'string', "max:$maxLength", 'regex:/^[0-9]+$/'];
+    }
+
+    private function digitFieldMessages(): array
+    {
+        return [
+            'nik.regex' => 'NIK hanya boleh berisi angka.',
+            'npwp.regex' => 'NPWP hanya boleh berisi angka.',
+            'phone.regex' => 'Nomor telepon hanya boleh berisi angka.',
+            'bank_account_number.regex' => 'Nomor rekening hanya boleh berisi angka.',
+        ];
+    }
+
     public function me(Request $request)
     {
         $u = $request->user();
@@ -92,19 +107,19 @@ class MeController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'phone' => $this->digitStringRules(30),
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
 
-            'nik' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'npwp' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'nik' => $this->digitStringRules(32),
+            'npwp' => $this->digitStringRules(32),
 
             'bank_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'bank_account_name' => ['sometimes', 'nullable', 'string', 'max:150'],
-            'bank_account_number' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'bank_account_number' => $this->digitStringRules(50),
 
             // optional kalau kamu mau staff bisa pilih alg:
             // 'pii_alg' => ['sometimes', 'in:AES,RSA'],
-        ]);
+        ], $this->digitFieldMessages());
 
         $piiAlg = strtoupper((string) ($emp->pii_alg ?? 'AES'));
 

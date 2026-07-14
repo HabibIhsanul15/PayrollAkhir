@@ -3,7 +3,6 @@ import useSWR from "swr";
 import { Navigate, useNavigate } from "react-router-dom";
 import { getUser, isAuthed } from "@/lib/auth";
 import { api } from "@/lib/api";
-import { fetchEmployees } from "@/lib/employeesApi";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -96,23 +95,15 @@ export default function AccountCreatePage() {
 
   const { data: rawEmployees, error: errEmp, isLoading: loadEmp, mutate } = useSWR(allowed ? "/employees" : null);
 
-  const employees = Array.isArray(rawEmployees) ? rawEmployees : rawEmployees?.data ?? [];
+  const employees = useMemo(
+    () => Array.isArray(rawEmployees) ? rawEmployees : rawEmployees?.data ?? [],
+    [rawEmployees]
+  );
   const loadingEmp = loadEmp;
 
   useEffect(() => {
     if (errEmp) setErr("Gagal memuat daftar pegawai.");
   }, [errEmp]);
-
-  useEffect(() => {
-    if (form.employee_id) {
-      const selected = employees.find((e) => String(e.id) === String(form.employee_id));
-      if (selected) {
-        setForm((p) => ({ ...p, name: selected.name }));
-      } else {
-        setForm((p) => ({ ...p, name: "" }));
-      }
-    }
-  }, [form.employee_id, employees]);
 
   // ✅ FILTER: hanya employee yang belum punya akun
   const selectableEmployees = useMemo(() => {
@@ -129,7 +120,6 @@ export default function AccountCreatePage() {
       return;
     }
     setForm((p) => ({ ...p, name: emp?.name ?? "" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.employee_id, selectableEmployees]);
 
   async function onSubmit(e) {
@@ -177,7 +167,7 @@ export default function AccountCreatePage() {
       setLastGeneratedPw("");
 
       // refresh list → employee yang barusan dibuat akun akan hilang dari dropdown
-      await loadEmployeesWithoutUser();
+      await mutate();
     } catch (e2) {
       setErr(e2?.message || "Gagal membuat akun.");
     } finally {

@@ -4,12 +4,13 @@ import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { initials } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 import AvatarInitial from "@/components/AvatarInitial";
 import AlertMessage from "@/components/AlertMessage";
 import Pagination from "@/components/Pagination";
 
-import { Search, ChevronDown, RefreshCw, Plus, Pencil, Trash2, Eye, FileText } from "lucide-react";
+import { Search, ChevronDown, RefreshCw, Plus, Trash2, Eye, FileText } from "lucide-react";
 
 export default function EmployeesPage() {
   const nav = useNavigate();
@@ -18,24 +19,19 @@ export default function EmployeesPage() {
 
   const isHCGA = role === "hcga";
   const canView = ["hcga", "fat", "director"].includes(role);
+  const { confirm } = useConfirm();
 
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
   const { data, error, isLoading, mutate } = useSWR(canView ? "/employees" : null);
 
   const loading = isLoading;
   const err = error?.message;
 
-  // Normalisasi bentuk data dari api()
-  const rawData = Array.isArray(data) ? data : data?.data ?? data?.value ?? [];
-  // Use rows from SWR + internal mutation for instant UI delete
-  const [localRows, setLocalRows] = useState([]);
-  
-  useEffect(() => {
-    if (rawData) setLocalRows(rawData);
-  }, [rawData]);
-
-  const rows = localRows;
+  const rows = useMemo(
+    () => Array.isArray(data) ? data : data?.data ?? data?.value ?? [],
+    [data]
+  );
 
   function load() {
     mutate();
@@ -47,12 +43,11 @@ export default function EmployeesPage() {
   const onDelete = async (id) => {
     if (!isHCGA) return;
 
-    const ok = confirm("Yakin mau hapus employee ini?");
+    const ok = await confirm("Yakin mau hapus employee ini?");
     if (!ok) return;
 
     try {
       await api(`/employees/${id}`, { method: "DELETE" });
-      setLocalRows((prev) => prev.filter((x) => x.id !== id));
       mutate(undefined, { revalidate: true }); // tell SWR to update in bg
     } catch (e) {
       alert(e?.message || "Gagal menghapus employee.");
@@ -64,40 +59,40 @@ export default function EmployeesPage() {
     return rows.filter((r) => {
       const code = String(r?.employee_code ?? "").toLowerCase();
       const name = String(r?.name ?? "").toLowerCase();
-      const dep = String(r?.department ?? "").toLowerCase();
       const pos = String(r?.position ?? "").toLowerCase();
-      const st = String(r?.status ?? "").toLowerCase();
+      const hasAccount = !!r?.has_account;
 
       const matchQ =
         !qq ||
         code.includes(qq) ||
         name.includes(qq) ||
-        dep.includes(qq) ||
         pos.includes(qq);
 
-      const matchStatus = status === "all" || st === status;
+      const matchAccount =
+        accountFilter === "all" ||
+        (accountFilter === "with_account" && hasAccount) ||
+        (accountFilter === "without_account" && !hasAccount);
 
-      return matchQ && matchStatus;
+      return matchQ && matchAccount;
     });
-  }, [rows, q, status]);
+  }, [rows, q, accountFilter]);
 
   const summary = useMemo(() => {
     const total = filtered.length;
-    const active = filtered.filter(
-      (x) => String(x?.status).toLowerCase() === "active"
-    ).length;
-    const inactive = total - active;
-    return { total, active, inactive };
+    const withAccount = filtered.filter((x) => !!x?.has_account).length;
+    const withoutAccount = total - withAccount;
+
+    return { total, withAccount, withoutAccount };
   }, [filtered]);
 
   const resetFilters = () => {
     setQ("");
-    setStatus("all");
+    setAccountFilter("all");
   };
 
   useEffect(() => {
     setPage(1);
-  }, [q, status]);
+  }, [q, accountFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -118,12 +113,14 @@ export default function EmployeesPage() {
         <div>
           <h1 className="text-lg font-semibold text-foreground">Employees</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Kelola data karyawan, departemen, dan posisi secara terpusat.
+            Kelola data karyawan, jabatan aktif, tanggal masuk, dan akun login secara terpusat.
           </p>
           <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
             <span>Total: <strong className="text-foreground">{summary.total}</strong></span>
-            <span className="text-border">·</span>
-            <span>Active: <strong className="text-foreground">{summary.active}</strong></span>
+            <span className="text-border">|</span>
+            <span>Ada akun: <strong className="text-foreground">{summary.withAccount}</strong></span>
+            <span className="text-border">|</span>
+            <span>Belum ada akun: <strong className="text-foreground">{summary.withoutAccount}</strong></span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -153,7 +150,7 @@ export default function EmployeesPage() {
       <div className="bg-white border border-border rounded p-4 mb-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
         <div className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1">
-            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Cari Karyawan / Dept / Posisi</label>
+            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Cari Karyawan / Jabatan</label>
             <div>
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -166,17 +163,16 @@ export default function EmployeesPage() {
             </div>
           </div>
           <div className="w-full md:w-52">
-            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Status</label>
+            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Akun Login</label>
             <div>
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
                 className="w-full appearance-none pl-3 pr-7 py-1.5 text-xs border border-border rounded bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
               >
-                <option value="all">Semua Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="terminated">Terminated</option>
+                <option value="all">Semua Karyawan</option>
+                <option value="with_account">Sudah Punya Akun</option>
+                <option value="without_account">Belum Punya Akun</option>
               </select>
               <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
@@ -193,7 +189,7 @@ export default function EmployeesPage() {
       {/* Table */}
       <div className="bg-white border border-border rounded overflow-hidden" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground">Employee Master</span>
+          <span className="text-sm font-medium text-foreground">Daftar Karyawan</span>
           <span className="text-[10px] text-muted-foreground">
             Menampilkan {paged.length} dari {summary.total} record
           </span>
@@ -204,9 +200,9 @@ export default function EmployeesPage() {
             <thead>
               <tr className="border-b border-border bg-slate-50/50">
                 <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Karyawan</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dept & Posisi</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Join Date</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Jabatan</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tanggal Masuk</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Akun Login</th>
                 <th className="text-right px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Aksi</th>
               </tr>
             </thead>
@@ -244,19 +240,19 @@ export default function EmployeesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-xs text-foreground">{row.position || "-"}</div>
-                    <div className="text-[10px] text-muted-foreground">{row.department || "-"}</div>
+                    <div className="text-xs text-foreground">{row.grade?.name || row.position || "-"}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {row.grade?.code ? String(row.grade.code).toUpperCase() : (row.position || "-")}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     {row.join_date || "-"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${
-                      String(row.status || "").toLowerCase() === "active" 
-                        ? "text-emerald-600" 
-                        : "text-slate-500"
+                    <span className={`text-[10px] font-semibold ${
+                      row.has_account ? "text-emerald-600" : "text-amber-700"
                     }`}>
-                      {row.status || "-"}
+                      {row.has_account ? "Sudah ada akun" : "Belum ada akun"}
                     </span>
                   </td>
                   
@@ -272,16 +268,11 @@ export default function EmployeesPage() {
                       {isHCGA && (
                         <>
                           <button
-                            onClick={() => nav(`/employees/${row.id}/edit`)}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-muted-foreground border border-border rounded hover:bg-muted hover:text-foreground transition-colors"
-                          >
-                            <Pencil size={9} /> Edit
-                          </button>
-                          <button
                             onClick={() => onDelete(row.id)}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
                           >
                             <Trash2 size={9} />
+                            Hapus
                           </button>
                         </>
                       )}
@@ -298,3 +289,4 @@ export default function EmployeesPage() {
     </div>
   );
 }
+

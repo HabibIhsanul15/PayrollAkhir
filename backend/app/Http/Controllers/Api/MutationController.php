@@ -4,14 +4,38 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\Grade;
 use App\Models\JobHistory;
-use App\Models\SalaryProfile;
-use Illuminate\Http\Request;
-use Carbon\Carbon;
+use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MutationController extends Controller
 {
+    public function __construct(private AllowanceRateResolver $rateResolver) {}
+
+    private function resolveBaseSalaryPayload(Grade $grade, array $data): array
+    {
+        $basis = $data['base_salary_basis']
+            ?? $grade->base_salary_basis
+            ?? 'daily';
+
+        $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
+            ? (float) $data['base_salary_amount']
+            : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
+                ? (float) $data['mandays_rate']
+                : (float) ($grade->default_base_salary_amount ?? $grade->default_mandays_rate ?? 0));
+
+        return [
+            'basis' => $basis,
+            'amount' => $amount,
+        ];
+    }
+
     /**
      * POST /api/employees/{id}/mutate
      */
@@ -20,79 +44,129 @@ class MutationController extends Controller
         $user = $request->user();
 
         // Hanya HCGA dan Director yang boleh memutasi
-        if (!in_array($user->role, ['hcga', 'director'], true)) {
+        if (! in_array($user->role, ['hcga', 'director'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $employee = Employee::findOrFail($id);
 
         $data = $request->validate([
-            'mutation_type' => ['required', 'in:promotion,demotion,mutation'],
-            'grade_id' => ['required', 'exists:grades,id'],
-            'position_allowance' => ['required', 'numeric', 'min:0'],
-            'mandays_rate' => ['required', 'numeric', 'min:0'],
+            'mutation_type' => ['required', 'in:promotion,demotion'],
+            'grade_id' => ['required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'position_allowance' => ['nullable', 'numeric', 'min:0'],
+            'base_salary_basis' => ['nullable', Rule::in(['daily', 'monthly'])],
+            'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
+            'mandays_rate' => ['nullable', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
         $effectiveDate = Carbon::parse($data['effective_from'])->startOfDay();
+        $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
+        $currentGrade = Grade::find($currentProfile?->grade_id ?? $employee->grade_id);
+        $targetGrade = Grade::findOrFail($data['grade_id']);
 
-        // 1. Tutup JobHistory yang aktif (jika ada dan belum ditutup, atau yg terakhir)
-        $currentJob = JobHistory::where('employee_id', $employee->id)
-            ->whereNull('end_date')
-            ->orderBy('start_date', 'desc')
-            ->first();
-
-        if ($currentJob) {
-            $currentJob->update([
-                'end_date' => $effectiveDate->copy()->subDay()->format('Y-m-d')
+        if (! $currentGrade || ! $currentGrade->level) {
+            throw ValidationException::withMessages([
+                'grade_id' => 'Jabatan saat ini belum memiliki level yang valid.',
             ]);
         }
 
-        // 2. Buat JobHistory baru
-        JobHistory::create([
-            'employee_id' => $employee->id,
-            'grade_id' => $data['grade_id'],
-            'start_date' => $effectiveDate->format('Y-m-d'),
-            'status' => 'active',
-            'notes' => ($data['mutation_type'] === 'promotion' ? 'Promosi: ' : 
-                        ($data['mutation_type'] === 'demotion' ? 'Demosi: ' : 'Mutasi: ')) . ($data['notes'] ?? ''),
-        ]);
+        if ((int) $targetGrade->id === (int) $currentGrade->id) {
+            throw ValidationException::withMessages([
+                'grade_id' => 'Jabatan tujuan harus berbeda dari jabatan saat ini.',
+            ]);
+        }
 
-        // 3. Buat SalaryProfile baru (source of truth untuk payroll)
-        $piiAlg = strtoupper((string) ($employee->pii_alg ?? 'AES'));
+        if ($data['mutation_type'] === 'promotion' && (int) $targetGrade->level >= (int) $currentGrade->level) {
+            throw ValidationException::withMessages([
+                'grade_id' => 'Promosi hanya bisa ke jabatan dengan level lebih tinggi dari jabatan saat ini.',
+            ]);
+        }
 
-        $encPII = function (string $v) use ($piiAlg) {
-            return $piiAlg === 'RSA'
-                ? CryptoService::encryptRSA($v)
-                : CryptoService::encryptAESGCM($v);
-        };
+        if ($data['mutation_type'] === 'demotion' && (int) $targetGrade->level <= (int) $currentGrade->level) {
+            throw ValidationException::withMessages([
+                'grade_id' => 'Demosi hanya bisa ke jabatan dengan level lebih rendah dari jabatan saat ini.',
+            ]);
+        }
 
-        $base = (float) $data['position_allowance'];
-        $mandays_rate = (float) $data['mandays_rate'];
+        DB::transaction(function () use ($data, $employee, $effectiveDate, $currentProfile, $targetGrade) {
+            $salaryConfig = $this->resolveBaseSalaryPayload($targetGrade, $data);
+            $positionRate = $this->rateResolver->resolveByCode($targetGrade->id, 'position', $effectiveDate);
+            $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
+                ? (float) $data['position_allowance']
+                : (float) ($positionRate?->rate_amount ?? 0);
+            $baseSalaryAmount = $salaryConfig['amount'];
 
-        SalaryProfile::create([
-            'employee_id' => $employee->id,
-            'grade_id' => $data['grade_id'],
-            'position' => $employee->position, 
-            'position_allowance' => $base,
-            'mandays_rate' => $mandays_rate,
-            'allowance_fixed' => 0,
-            'deduction_fixed' => 0,
-            'effective_from' => $effectiveDate->format('Y-m-d'),
-            'position_allowance_enc' => $base > 0 ? $encPII((string) $base) : null,
-            'mandays_rate_enc' => $mandays_rate > 0 ? $encPII((string) $mandays_rate) : null,
-            'salary_alg' => $piiAlg,
-            'salary_key_id' => CryptoService::keyId(),
-        ]);
+            $currentAlg = strtoupper((string) ($currentProfile?->salary_alg ?? 'AES'));
+            $alg = $currentAlg === 'RSA' ? 'RSA' : 'AES';
+            $encrypt = fn (string $value) => $alg === 'RSA'
+                ? CryptoService::encryptRSA($value)
+                : CryptoService::encryptAESGCM($value);
+            $readCurrent = function (?string $cipher, $plain = 0) use ($alg): float {
+                return (float) (CryptoService::readEncryptedOrPlainSafe($cipher, $plain, $alg) ?? 0);
+            };
+            $allowanceFixed = $currentProfile
+                ? $readCurrent($currentProfile->allowance_fixed_enc, $currentProfile->allowance_fixed)
+                : 0;
+            $deductionFixed = $currentProfile
+                ? $readCurrent($currentProfile->deduction_fixed_enc, $currentProfile->deduction_fixed)
+                : 0;
 
-        // 4. Update Employee grade (sebagai referensi cepat)
-        $employee->update([
-            'grade_id' => $data['grade_id']
-        ]);
+            $employee->salaryProfiles()->updateOrCreate(
+                ['effective_from' => $effectiveDate->toDateString()],
+                [
+                    'grade_id' => $targetGrade->id,
+                    'position' => $targetGrade->name,
+                    'base_salary_basis' => $salaryConfig['basis'],
+                    'base_salary_amount' => 0,
+                    'position_allowance' => 0,
+                    'mandays_rate' => null,
+                    'allowance_fixed' => 0,
+                    'deduction_fixed' => 0,
+                    'base_salary_amount_enc' => $encrypt((string) $baseSalaryAmount),
+                    'position_allowance_enc' => $encrypt((string) $base),
+                    'mandays_rate_enc' => $encrypt((string) $baseSalaryAmount),
+                    'allowance_fixed_enc' => $encrypt((string) $allowanceFixed),
+                    'deduction_fixed_enc' => $encrypt((string) $deductionFixed),
+                    'salary_alg' => $alg,
+                    'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                ]
+            );
+
+            $previous = JobHistory::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('start_date', '<', $effectiveDate->toDateString())
+                ->orderByDesc('start_date')
+                ->first();
+            if ($previous) {
+                $previous->update([
+                    'end_date' => $effectiveDate->copy()->subDay()->toDateString(),
+                    'status' => $effectiveDate->isFuture() ? 'active' : 'inactive',
+                ]);
+            }
+
+            JobHistory::updateOrCreate(
+                ['employee_id' => $employee->id, 'start_date' => $effectiveDate->toDateString()],
+                [
+                    'grade_id' => $targetGrade->id,
+                    'position' => $targetGrade->name,
+                    'end_date' => null,
+                    'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
+                    'notes' => ucfirst($data['mutation_type']).': '.($data['notes'] ?? '-'),
+                ]
+            );
+
+            if (! $effectiveDate->isFuture()) {
+                $employee->update(['grade_id' => $targetGrade->id, 'position' => $targetGrade->name]);
+            }
+        });
 
         return response()->json([
-            'message' => 'Mutasi karyawan berhasil disimpan.',
+            'message' => $effectiveDate->isFuture()
+                ? 'Perubahan jabatan berhasil dijadwalkan.'
+                : 'Perubahan jabatan berhasil diterapkan.',
+            'status' => $effectiveDate->isFuture() ? 'scheduled' : 'applied',
         ]);
     }
 }

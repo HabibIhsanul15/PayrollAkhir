@@ -1,137 +1,227 @@
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect, useCallback } from "react";
+import { X, AlertCircle, Trash2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { formatRupiah } from "@/lib/utils";
+import { specialDeductionsApi } from "@/lib/specialDeductionsApi";
 
-export default function PayrollPreviewModal({ isOpen, onClose, data, onSave, isSaving }) {
-  if (!isOpen || !data) return null;
+export default function PayrollPreviewModal({
+  isOpen,
+  onClose,
+  employeeId,
+  payrollId,
+  periodMonth,
+  isFAT,
+  canEditDeductions = false,
+  onDeductionSaved,
+}) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const {
-    employee_name,
-    period_month,
-    period_from,
-    period_to,
-    gaji_pokok,
-    allowances,
-    total_allowances,
-    total_deductions,
-    total_nett,
-    is_calculable,
-    blocking_warnings,
-    non_blocking_warnings,
-    message,
-  } = data;
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [savingDeduction, setSavingDeduction] = useState(false);
 
-  const formatIDR = (v) => new Intl.NumberFormat("id-ID").format(v || 0);
+  const loadPreview = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api("/payrolls/preview-calculation", {
+        method: "POST",
+        body: {
+          employee_id: employeeId,
+          payroll_id: payrollId,
+          period_month: periodMonth,
+        }
+      });
+      setData(res);
+    } catch (err) {
+      setError(err?.message || "Gagal memuat detail simulasi");
+    } finally {
+      setLoading(false);
+    }
+  }, [employeeId, payrollId, periodMonth]);
+
+  useEffect(() => {
+    if (isOpen && employeeId && periodMonth) {
+      loadPreview();
+    }
+  }, [isOpen, employeeId, periodMonth, loadPreview]);
+
+  const handleSaveDeduction = async (e) => {
+    e.preventDefault();
+    setSavingDeduction(true);
+    try {
+      await specialDeductionsApi.create({
+        employee_id: employeeId,
+        period_month: periodMonth,
+        type: "manual",
+        amount: Number(amount),
+        description: description
+      });
+      setAmount("");
+      setDescription("");
+      await loadPreview();
+      if (onDeductionSaved) onDeductionSaved();
+    } catch (err) {
+      alert(err?.message || "Gagal menyimpan potongan");
+    } finally {
+      setSavingDeduction(false);
+    }
+  };
+
+  const handleDeleteDeduction = async (id) => {
+    if (!confirm("Yakin ingin menghapus potongan ini?")) return;
+    try {
+      await specialDeductionsApi.delete(id);
+      await loadPreview();
+      if (onDeductionSaved) onDeductionSaved();
+    } catch (err) {
+      alert(err?.message || "Gagal menghapus potongan");
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold">Preview Auto Calculation</h2>
-          <p className="text-sm text-gray-500">
-            {employee_name} | {period_month} ({period_from} s.d {period_to})
-          </p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white border border-border rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <h3 className="text-lg font-bold text-slate-800">
+            Detail Slip Gaji <span className="text-sm font-normal text-slate-500 ml-2">(Simulasi)</span>
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {blocking_warnings?.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700">
-              <p className="font-bold">Kalkulasi diblokir (Prerequisite gagal):</p>
-              <ul className="list-disc ml-5 mt-2 space-y-1 text-sm">
-                {blocking_warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading && <div className="text-center py-8 text-slate-500">Memuat detail...</div>}
+          {error && (
+            <div className="bg-rose-50 text-rose-600 p-4 rounded text-sm mb-4">
+              {error}
             </div>
           )}
 
-          {non_blocking_warnings?.length > 0 && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded text-yellow-800">
-              <p className="font-bold">Peringatan (Non-blocking):</p>
-              <ul className="list-disc ml-5 mt-2 space-y-1 text-sm">
-                {non_blocking_warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {!loading && !error && data && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
+                <div>
+                  <span className="text-slate-500 block mb-1">Karyawan</span>
+                  <strong className="text-slate-800">{data.employee_name}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block mb-1">Periode</span>
+                  <strong className="text-slate-800">{data.period_month}</strong>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 p-4 rounded border">
-              <span className="text-gray-500 text-sm block">Gaji Pokok</span>
-              <span className="font-bold text-lg">Rp {formatIDR(gaji_pokok)}</span>
-            </div>
-            <div className="bg-gray-50 p-4 rounded border">
-              <span className="text-gray-500 text-sm block">Total Nett</span>
-              <span className="font-bold text-xl text-blue-600">Rp {formatIDR(total_nett)}</span>
-            </div>
-          </div>
+              {/* Rincian */}
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b">Rincian Pendapatan</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Gaji Pokok</span>
+                    <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
+                  </div>
+                  {data.allowances?.map((al, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-slate-600">{al.allowance_label} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
+                      <span className="font-medium">{formatRupiah(al.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t mt-2">
+                    <span className="font-semibold text-slate-800">Total Pendapatan</span>
+                    <span className="font-semibold text-slate-800">
+                      {formatRupiah(data.gaji_pokok + data.total_allowances)}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-          <div>
-            <h3 className="font-bold mb-3">Rincian Tunjangan (Allowances)</h3>
-            <div className="border rounded overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="p-3">Tipe</th>
-                    <th className="p-3 text-right">Rate</th>
-                    <th className="p-3 text-right">Mandays</th>
-                    <th className="p-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {allowances?.length > 0 ? (
-                    allowances.map((al, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-3">
-                          <span className="font-medium">{al.allowance_type}</span>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {JSON.stringify(al.calculation_detail)}
-                          </div>
-                        </td>
-                        <td className="p-3 text-right text-gray-600">
-                          {al.rate_amount !== null ? formatIDR(al.rate_amount) : "-"}
-                        </td>
-                        <td className="p-3 text-right text-gray-600">
-                          {al.mandays !== null ? al.mandays : "-"}
-                        </td>
-                        <td className="p-3 text-right font-medium">Rp {formatIDR(al.amount)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="p-4 text-center text-gray-500">
-                        Tidak ada tunjangan.
-                      </td>
-                    </tr>
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b">Rincian Potongan</h4>
+                <div className="space-y-2 text-sm mb-4">
+                  {data.deductions?.length === 0 && (
+                    <div className="text-slate-400 italic">Belum ada potongan.</div>
                   )}
-                  <tr className="bg-gray-50 font-bold">
-                    <td colSpan={3} className="p-3 text-right">Total Tunjangan</td>
-                    <td className="p-3 text-right">Rp {formatIDR(total_allowances)}</td>
-                  </tr>
-                  <tr className="bg-gray-50 font-bold text-red-600">
-                    <td colSpan={3} className="p-3 text-right">Total Potongan</td>
-                    <td className="p-3 text-right">Rp {formatIDR(total_deductions)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  {data.deductions?.map((d, i) => (
+                    <div key={i} className="flex justify-between items-center text-red-600 group">
+                      <span>{d.deduction_label}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium">-{formatRupiah(d.amount)}</span>
+                        {isFAT && canEditDeductions && d.calculation_detail?.special_deduction_id && (
+                          <button 
+                            onClick={() => handleDeleteDeduction(d.calculation_detail.special_deduction_id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-700 transition-opacity"
+                            title="Hapus Potongan"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {data.deductions?.length > 0 && (
+                    <div className="flex justify-between pt-2 border-t mt-2 text-red-700">
+                      <span className="font-semibold">Total Potongan</span>
+                      <span className="font-semibold">-{formatRupiah(data.total_deductions)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {isFAT && canEditDeductions && (
+                  <form onSubmit={handleSaveDeduction} className="bg-red-50 p-4 rounded-lg border border-red-100">
+                    <h5 className="text-sm font-semibold text-red-800 mb-3 flex items-center gap-2">
+                      <AlertCircle size={14} /> Tambah Potongan Khusus
+                    </h5>
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <input
+                        type="text"
+                        required
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Keterangan (Cth: Denda)"
+                        className="flex-1 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
+                      />
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="Nominal (Rp)"
+                        className="w-full md:w-32 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
+                      />
+                      <button
+                        type="submit"
+                        disabled={savingDeduction}
+                        className="bg-red-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {savingDeduction ? "Menyimpan..." : "Tambahkan"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {isFAT && !canEditDeductions && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-600">
+                    Payroll sudah diajukan/diproses, sehingga potongan tidak bisa diubah dari detail ini.
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-blue-50 p-4 rounded-lg flex justify-between items-center mt-6">
+                <span className="font-bold text-blue-900">Total Nett Diterima</span>
+                <span className="text-xl font-bold text-blue-700">{formatRupiah(data.total_nett)}</span>
+              </div>
             </div>
-          </div>
-
-          <div className="text-sm text-gray-500 italic text-center">
-            {message || "PPh 21 dan BPJS belum dihitung (Masuk Phase 5)."}
-          </div>
+          )}
         </div>
-
-        <div className="p-6 border-t flex justify-end gap-3 bg-gray-50">
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={onSave} 
-            disabled={!is_calculable || isSaving}
-            className={!is_calculable ? "opacity-50 cursor-not-allowed" : ""}
-          >
-            {isSaving ? "Saving..." : "Calculate and Save"}
-          </Button>
+        
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end shrink-0 bg-slate-50">
+          <button onClick={onClose} className="px-5 py-2 rounded bg-white border font-medium text-slate-700 hover:bg-slate-50 text-sm shadow-sm">
+            Tutup
+          </button>
         </div>
       </div>
     </div>

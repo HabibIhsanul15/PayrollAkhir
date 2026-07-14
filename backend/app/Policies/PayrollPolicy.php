@@ -43,7 +43,7 @@ class PayrollPolicy
     }
     public function batch(User $user): bool
     {
-        return $user->role === 'fat';
+        return in_array($user->role, ['fat', 'director'], true);
     }
     public function recalculate(User $user, Payroll $payroll): bool
     {

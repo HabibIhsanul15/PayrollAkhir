@@ -8,7 +8,16 @@ class PayrollCalculationRequest extends FormRequest
 {
     public function authorize()
     {
-        return $this->user() && $this->user()->can('calculate', \App\Models\Payroll::class);
+        $user = $this->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($this->is('api/payrolls/preview-calculation')) {
+            return in_array($user->role, ['fat', 'director'], true);
+        }
+
+        return $user->can('calculate', \App\Models\Payroll::class);
     }
 
     public function rules()
@@ -16,6 +25,7 @@ class PayrollCalculationRequest extends FormRequest
         return [
             'employee_id' => 'required|exists:employees,id',
             'period_month' => 'required|date_format:Y-m',
+            'payroll_id' => 'nullable|integer|exists:payrolls,id',
         ];
     }
 }

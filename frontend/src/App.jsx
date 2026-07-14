@@ -6,6 +6,7 @@ import { getUser, isAuthed } from "./lib/auth";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import RoleRoute from "@/components/RoleRoute";
+import { ConfirmProvider } from "@/components/ConfirmProvider";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -14,7 +15,6 @@ import DashboardPage from "./pages/DashboardPage";
 import PayrollList from "./pages/PayrollList";
 
 import PayrollDetailPage from "./pages/PayrollDetailPage";
-import PayrollBatchPage from "./pages/PayrollBatchPage";
 
 import EmployeesPage from "./pages/EmployeesPage";
 import EmployeeCreatePage from "./pages/EmployeeCreatePage";
@@ -65,8 +65,9 @@ export default function App() {
   const home = getHomePath(me);
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <ConfirmProvider>
+      <BrowserRouter>
+        <Routes>
         {/* ROOT */}
         <Route path="/" element={<Navigate to={authed ? home : "/login"} replace />} />
 
@@ -109,14 +110,7 @@ export default function App() {
               </RoleRoute>
             }
           />
-          <Route
-            path="/payrolls/batch"
-            element={
-              <RoleRoute allow={["fat"]}>
-                <PayrollBatchPage />
-              </RoleRoute>
-            }
-          />
+
 
 
 
@@ -134,7 +128,7 @@ export default function App() {
           <Route
             path="/employees"
             element={
-              <RoleRoute allow={["hcga", "fat"]}>
+              <RoleRoute allow={["hcga"]}>
                 <EmployeesPage />
               </RoleRoute>
             }
@@ -142,7 +136,7 @@ export default function App() {
           <Route
             path="/employees/:id"
             element={
-              <RoleRoute allow={["hcga", "fat"]}>
+              <RoleRoute allow={["hcga"]}>
                 <EmployeeDetailPage />
               </RoleRoute>
             }
@@ -171,7 +165,7 @@ export default function App() {
           <Route
             path="/master/grades"
             element={
-              <RoleRoute allow={["hcga"]}>
+              <RoleRoute allow={["hcga", "fat"]}>
                 <GradeManagementPage />
               </RoleRoute>
             }
@@ -179,7 +173,7 @@ export default function App() {
           <Route
             path="/master/allowance-types"
             element={
-              <RoleRoute allow={["hcga"]}>
+              <RoleRoute allow={["fat"]}>
                 <AllowanceTypePage />
               </RoleRoute>
             }
@@ -187,7 +181,7 @@ export default function App() {
           <Route
             path="/master/grade-rates"
             element={
-              <RoleRoute allow={["hcga"]}>
+              <RoleRoute allow={["fat"]}>
                 <GradeRatePage />
               </RoleRoute>
             }
@@ -228,5 +222,6 @@ export default function App() {
         <Route path="*" element={<Navigate to={authed ? home : "/login"} replace />} />
       </Routes>
     </BrowserRouter>
+    </ConfirmProvider>
   );
 }

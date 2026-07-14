@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import useSWR from "swr";
-import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { monthLabel } from "@/lib/utils";
 
@@ -61,11 +60,10 @@ export default function DashboardPage() {
   const hcgaCards = data?.cards || {};
   const hcgaLists = data?.lists || {};
   const noAccountList = Array.isArray(hcgaLists?.no_account) ? hcgaLists.no_account : [];
-  const noSalaryList = Array.isArray(hcgaLists?.no_salary_profile) ? hcgaLists.no_salary_profile : [];
 
   const kpi = data?.kpi || {};
   const recent = Array.isArray(data?.recent_payrolls) ? data.recent_payrolls : [];
-  const trend = Array.isArray(data?.trend) ? data.trend : [];
+  const trend = useMemo(() => Array.isArray(data?.trend) ? data.trend : [], [data]);
   const statusCounts = Array.isArray(data?.status_counts) ? data.status_counts : [];
 
   const maxTrend = useMemo(() => {

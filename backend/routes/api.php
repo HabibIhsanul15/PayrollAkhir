@@ -1,21 +1,18 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\PayrollController;
-use App\Http\Controllers\Api\EmployeeController;
-use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\AdminUserController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\PayrollReportController;
-use App\Http\Controllers\Api\GradeController;
-use App\Http\Controllers\Api\EmploymentTypeController;
-use App\Http\Controllers\Api\WorkBasisController;
 use App\Http\Controllers\Api\AllowanceTypeController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmploymentTypeController;
 use App\Http\Controllers\Api\GradeAllowanceRateController;
-
-
+use App\Http\Controllers\Api\GradeController;
+use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\PayrollController;
+use App\Http\Controllers\Api\PayrollReportController;
+use App\Http\Controllers\Api\WorkBasisController;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -49,8 +46,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Phase 4 Routes (Placed ABOVE resource / dynamic param routes)
     Route::post('/payrolls/preview-calculation', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'previewCalculation']);
     Route::post('/payrolls/auto', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'autoCalculate']);
+    Route::post('/payrolls/batch-preview', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'batchPreview']);
     Route::post('/payrolls/batch-generate', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'batchGenerate']);
-    
+
     // Phase 4 Specific Item Routes
     Route::post('/payrolls/{payroll}/recalculate', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'recalculate']);
     Route::patch('/payrolls/{payroll}/allowances/{allowance}', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'overrideAllowance']);
@@ -58,17 +56,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payrolls', [PayrollController::class, 'index']);
     Route::post('/payrolls', [PayrollController::class, 'store']);
 
+    Route::post('/payrolls/{payroll}/submit', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'submit']);
+    Route::post('/payrolls/{payroll}/approve', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'approve']);
+
     Route::get('/payrolls/{payroll}', [PayrollController::class, 'show']);
     Route::put('/payrolls/{payroll}', [PayrollController::class, 'update']);
     Route::patch('/payrolls/{payroll}', [PayrollController::class, 'update']);
     Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
 
-    // workflow actions
+    Route::apiResource('/special-deductions', \App\Http\Controllers\Api\SpecialDeductionController::class)
+        ->only(['index', 'store', 'destroy']);
+
+    // Legacy workflow actions kept only where they do not conflict with the current payroll flow.
     Route::post('/payrolls/{payroll}/request-approval', [PayrollController::class, 'requestPayment']);
-    Route::post('/payrolls/{payroll}/approve', [PayrollController::class, 'approvePayment']);
     Route::post('/payrolls/{payroll}/reject', [PayrollController::class, 'rejectPayment']);
     Route::post('/payrolls/{payroll}/mark-paid', [PayrollController::class, 'markPaid']);
-    
+
     // export
     Route::get('/payrolls/{payroll}/pdf', [PayrollController::class, 'pdf']);
 
@@ -96,6 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']);
 
     // salary profile & job histories
+    Route::apiResource('special-deductions', \App\Http\Controllers\Api\SpecialDeductionController::class)->only(['index', 'store', 'destroy']);
+    
     Route::get('/employees/{employee}/salary-profile', [EmployeeController::class, 'salaryProfile']);
     Route::get('/employees/{employee}/salary-profiles', [EmployeeController::class, 'salaryProfilesList']);
     Route::post('/employees/{employee}/salary-profiles', [EmployeeController::class, 'storeSalaryProfile']);
@@ -148,6 +153,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/monthly-recaps', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'index']);
     Route::post('/monthly-recaps', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'store']);
+    Route::post('/monthly-recaps/submit-to-finance', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'submitToFinance']);
     Route::post('/monthly-recaps/{recap}/finalize', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'finalize']);
     Route::delete('/monthly-recaps/{recap}', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'destroy']);
 

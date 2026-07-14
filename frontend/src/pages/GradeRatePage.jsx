@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -6,6 +6,7 @@ import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AlertMessage from "@/components/AlertMessage";
 import { Badge } from "@/components/ui/badge";
+import { useConfirm } from "@/components/ConfirmProvider";
 import {
   Table,
   TableHeader,
@@ -18,21 +19,32 @@ import {
 export default function GradeRatePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
-  const isHCGA = role === "hcga";
+  const canManageCompensationMaster = role === "fat";
+  const today = new Date().toISOString().slice(0, 10);
 
-  const { data: rawGrades, error: errGrades, isLoading: loadGrades } = useSWR(isHCGA ? "/master/grades" : null);
-  const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(isHCGA ? "/master/allowance-types" : null);
-  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(isHCGA ? "/master/grade-allowance-rates" : null);
+  const { data: rawGrades, error: errGrades, isLoading: loadGrades } = useSWR(canManageCompensationMaster ? "/master/grades" : null);
+  const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(canManageCompensationMaster ? "/master/allowance-types" : null);
+  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(canManageCompensationMaster ? "/master/grade-allowance-rates" : null);
+
+  const { confirm } = useConfirm();
 
   const loading = loadGrades || loadAllowances || loadRates;
-  const err = errGrades?.message || errAllowances?.message || errRates?.message || "";
+  const [localErr, setErr] = useState("");
+  const err = localErr || errGrades?.message || errAllowances?.message || errRates?.message || "";
   const [success, setSuccess] = useState("");
 
-  const grades = Array.isArray(rawGrades) ? rawGrades : [];
-  const allowances = Array.isArray(rawAllowances) ? rawAllowances : [];
-  const rates = Array.isArray(rawRates) ? rawRates : [];
+  const grades = Array.isArray(rawGrades) ? rawGrades : rawGrades?.data ?? [];
+  const allowances = Array.isArray(rawAllowances) ? rawAllowances : rawAllowances?.data ?? [];
+  const [localRates, setLocalRates] = useState([]);
+
+  useEffect(() => {
+    setLocalRates(Array.isArray(rawRates) ? rawRates : rawRates?.data ?? []);
+  }, [rawRates]);
+
+  const rates = localRates;
 
   function loadAll() {
+    setErr("");
     mutate();
   }
 
@@ -47,21 +59,25 @@ export default function GradeRatePage() {
     rate_multiplier: "",
     rate_formula: "",
     requires_condition: "",
-    effective_from: "2026-01-01",
+    effective_from: today,
     effective_to: "",
     is_active: true,
   });
 
-
-
   // Create lookup map: garMap[grade_id][allowance_type_id] = RateObject
-  const garMap = {};
-  rates.forEach((rate) => {
-    const gId = rate.grade_id;
-    const aId = rate.allowance_type_id;
-    if (!garMap[gId]) garMap[gId] = {};
-    garMap[gId][aId] = rate;
-  });
+  const garMap = useMemo(() => {
+    const map = {};
+    rates.forEach((rate) => {
+      const gId = rate.grade_id;
+      const aId = rate.allowance_type_id;
+      if (!map[gId]) map[gId] = {};
+      if (!map[gId][aId]) {
+        map[gId][aId] = rate;
+      }
+    });
+
+    return map;
+  }, [rates]);
 
   const handleCellClick = (grade, allowance) => {
     const existing = garMap[grade.id]?.[allowance.id];
@@ -74,7 +90,7 @@ export default function GradeRatePage() {
         rate_multiplier: existing.rate_multiplier !== null ? String(existing.rate_multiplier) : "",
         rate_formula: existing.rate_formula || "",
         requires_condition: existing.requires_condition || "",
-        effective_from: existing.effective_from ? existing.effective_from.split("T")[0] : "2026-01-01",
+        effective_from: existing.effective_from ? existing.effective_from.split("T")[0] : today,
         effective_to: existing.effective_to ? existing.effective_to.split("T")[0] : "",
         is_active: existing.is_active,
       });
@@ -88,7 +104,7 @@ export default function GradeRatePage() {
         rate_multiplier: "",
         rate_formula: "",
         requires_condition: "",
-        effective_from: "2026-01-01",
+        effective_from: today,
         effective_to: "",
         is_active: true,
       });
@@ -121,14 +137,14 @@ export default function GradeRatePage() {
           method: "PUT",
           body,
         });
-        setRates((prev) => prev.map((x) => (x.id === editId ? updated : x)));
+        setLocalRates((prev) => prev.map((x) => (x.id === editId ? updated : x)));
         setSuccess("Matrix rate berhasil diperbarui");
       } else {
         const created = await api("/master/grade-allowance-rates", {
           method: "POST",
           body,
         });
-        setRates((prev) => [...prev, created]);
+        setLocalRates((prev) => [created, ...prev]);
         setSuccess("Matrix rate baru berhasil dibuat");
       }
       setModalOpen(false);
@@ -139,7 +155,7 @@ export default function GradeRatePage() {
 
   const handleDelete = async () => {
     if (!editId) return;
-    const ok = confirm("Yakin ingin menghapus rate ini dari matrix?");
+    const ok = await confirm("Yakin ingin menghapus rate ini dari matrix?");
     if (!ok) return;
 
     setErr("");
@@ -154,9 +170,9 @@ export default function GradeRatePage() {
     }
   };
 
-  if (!isHCGA) {
+  if (!canManageCompensationMaster) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk Finance." />
     );
   }
 
@@ -353,7 +369,7 @@ export default function GradeRatePage() {
                   <input
                     value={form.rate_formula}
                     onChange={(e) => setForm({ ...form, rate_formula: e.target.value })}
-                    placeholder="e.g. 1.5 * mandays_rate (opsional)"
+                    placeholder="e.g. 1.5 * base_salary_amount (opsional)"
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   />
                 </div>
@@ -417,7 +433,7 @@ export default function GradeRatePage() {
                         onClick={handleDelete}
                         className="rounded"
                       >
-                        Delete
+                        Hapus Tarif
                       </Button>
                     )}
                   </div>
