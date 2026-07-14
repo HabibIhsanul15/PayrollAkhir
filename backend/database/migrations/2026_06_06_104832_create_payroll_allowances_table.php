@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('payroll_id')->constrained()->cascadeOnDelete();
             $table->foreignId('allowance_type_id')->constrained()->cascadeOnDelete();
-            $table->string('grade_code', 50)->nullable();
+            $table->string('position_code', 50)->nullable();
             $table->decimal('mandays', 8, 2)->nullable();
             $table->decimal('rate_amount', 15, 2)->nullable();
             $table->decimal('amount', 15, 2)->nullable();

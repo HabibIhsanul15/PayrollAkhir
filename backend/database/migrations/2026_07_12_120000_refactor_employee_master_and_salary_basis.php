@@ -15,11 +15,11 @@ return new class extends Migration
             }
         });
 
-        Schema::table('grades', function (Blueprint $table) {
-            if (! Schema::hasColumn('grades', 'base_salary_basis')) {
+        Schema::table('positions', function (Blueprint $table) {
+            if (! Schema::hasColumn('positions', 'base_salary_basis')) {
                 $table->string('base_salary_basis', 20)->default('daily')->after('description');
             }
-            if (! Schema::hasColumn('grades', 'default_base_salary_amount')) {
+            if (! Schema::hasColumn('positions', 'default_base_salary_amount')) {
                 $table->decimal('default_base_salary_amount', 14, 2)->nullable()->after('base_salary_basis');
             }
         });
@@ -36,7 +36,7 @@ return new class extends Migration
             }
         });
 
-        DB::table('grades')->update([
+        DB::table('positions')->update([
             'base_salary_basis' => 'daily',
             'default_base_salary_amount' => DB::raw('COALESCE(default_base_salary_amount, default_mandays_rate)'),
         ]);
@@ -89,7 +89,7 @@ return new class extends Migration
             ]);
         });
 
-        Schema::table('grades', function (Blueprint $table) {
+        Schema::table('positions', function (Blueprint $table) {
             $table->dropColumn([
                 'base_salary_basis',
                 'default_base_salary_amount',

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('grades', function (Blueprint $table) {
+        Schema::table('positions', function (Blueprint $table) {
             $table->decimal('default_base_salary', 14, 2)->nullable()->after('description');
             $table->decimal('default_mandays_rate', 14, 2)->nullable()->after('default_base_salary');
         });
@@ -22,7 +22,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('grades', function (Blueprint $table) {
+        Schema::table('positions', function (Blueprint $table) {
             $table->dropColumn(['default_base_salary', 'default_mandays_rate']);
         });
     }

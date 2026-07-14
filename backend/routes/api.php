@@ -6,8 +6,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmploymentTypeController;
-use App\Http\Controllers\Api\GradeAllowanceRateController;
-use App\Http\Controllers\Api\GradeController;
+use App\Http\Controllers\Api\PositionAllowanceRateController;
+use App\Http\Controllers\Api\PositionController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\PayrollReportController;
@@ -89,6 +89,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/employees/next-code', [EmployeeController::class, 'nextCode']);
     Route::post('/employees/{employee}/create-user', [EmployeeController::class, 'createUser']);
+    Route::post('/employees/{employee}/reset-password', [EmployeeController::class, 'resetPassword']);
 
     Route::get('/employees', [EmployeeController::class, 'index']);
     Route::post('/employees', [EmployeeController::class, 'store']);
@@ -134,11 +135,11 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('master')->group(function () {
-        Route::apiResource('grades', GradeController::class);
+        Route::apiResource('positions', PositionController::class);
         Route::get('employment-types', [EmploymentTypeController::class, 'index']);
         Route::get('work-bases', [WorkBasisController::class, 'index']);
         Route::apiResource('allowance-types', AllowanceTypeController::class);
-        Route::apiResource('grade-allowance-rates', GradeAllowanceRateController::class);
+        Route::apiResource('position-allowance-rates', PositionAllowanceRateController::class);
     });
 
     /*
@@ -156,5 +157,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/monthly-recaps/submit-to-finance', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'submitToFinance']);
     Route::post('/monthly-recaps/{recap}/finalize', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'finalize']);
     Route::delete('/monthly-recaps/{recap}', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'destroy']);
+    Route::get('/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
 
 });

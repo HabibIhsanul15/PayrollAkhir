@@ -3,17 +3,17 @@
 namespace App\Services;
 
 use App\Models\AllowanceType;
-use App\Models\GradeAllowanceRate;
+use App\Models\PositionAllowanceRate;
 use Carbon\CarbonInterface;
 
 class AllowanceRateResolver
 {
     public function resolveByCode(
-        int $gradeId,
+        int $positionId,
         string $allowanceCode,
         CarbonInterface|string $date,
         ?string $employmentTypeCode = null
-    ): ?GradeAllowanceRate {
+    ): ?PositionAllowanceRate {
         $type = AllowanceType::query()
             ->where('code', $allowanceCode)
             ->where('is_active', true)
@@ -23,19 +23,19 @@ class AllowanceRateResolver
             return null;
         }
 
-        return $this->resolve($gradeId, $type->id, $date);
+        return $this->resolve($positionId, $type->id, $date);
     }
 
     public function resolve(
-        int $gradeId,
+        int $positionId,
         int $allowanceTypeId,
         CarbonInterface|string $date
-    ): ?GradeAllowanceRate {
+    ): ?PositionAllowanceRate {
         $date = $date instanceof CarbonInterface ? $date->toDateString() : $date;
 
-        return GradeAllowanceRate::query()
+        return PositionAllowanceRate::query()
             ->with('allowanceType')
-            ->where('grade_id', $gradeId)
+            ->where('position_id', $positionId)
             ->where('allowance_type_id', $allowanceTypeId)
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $date)

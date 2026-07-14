@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('salary_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('grade_id')->nullable()->constrained('grades')->nullOnDelete();
+            $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
             $table->string('position', 255)->nullable();
 
             // aturan dasar (nanti presensi tinggal tambah)

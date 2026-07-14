@@ -240,9 +240,9 @@ export default function EmployeesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-xs text-foreground">{row.grade?.name || row.position || "-"}</div>
+                    <div className="text-xs text-foreground">{row.position?.name || row.position || "-"}</div>
                     <div className="text-[10px] text-muted-foreground">
-                      {row.grade?.code ? String(row.grade.code).toUpperCase() : (row.position || "-")}
+                      {row.position?.code ? String(row.position.code).toUpperCase() : (row.position || "-")}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">

@@ -26,8 +26,8 @@ class PayrollCalculationService
         if ($employee->status !== 'active') {
             return ['status' => false, 'error' => 'Employee tidak aktif.'];
         }
-        if (! $employee->grade_id) {
-            return ['status' => false, 'error' => 'Grade ID kosong.'];
+        if (! $employee->position_id) {
+            return ['status' => false, 'error' => 'Position ID kosong.'];
         }
 
         $recaps = MonthlyRecap::where('employee_id', $employee->id)->where('period_month', $periodMonth)->get();
@@ -41,9 +41,15 @@ class PayrollCalculationService
             }
         }
 
-        // Period logic simplified: just first and last day of the month
-        $start = Carbon::createFromFormat('Y-m', $periodMonth)->startOfMonth();
-        $end = $start->copy()->endOfMonth();
+        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
+        if ($payrollPeriod) {
+            $start = Carbon::parse($payrollPeriod->start_date);
+            $end = Carbon::parse($payrollPeriod->end_date);
+        } else {
+            // Fallback to calendar month
+            $start = Carbon::createFromFormat('Y-m', $periodMonth)->startOfMonth();
+            $end = $start->copy()->endOfMonth();
+        }
 
         // Resolve profiles for each recap
         $profilesData = [];
@@ -63,12 +69,12 @@ class PayrollCalculationService
                 return ['status' => false, 'error' => 'Salary profile tidak ditemukan untuk rekap tertentu.'];
             }
 
-            $activeGradeId = $profile->grade_id ?? $employee->grade_id;
-            $grade = $activeGradeId ? \App\Models\Grade::find($activeGradeId) : null;
+            $activePositionId = $profile->position_id ?? $employee->position_id;
+            $Position = $activePositionId ? \App\Models\Position::find($activePositionId) : null;
 
             // Profile decrypt and fallback
-            $positionAllowanceDecrypted = $this->resolvePositionAllowance($profile, $grade, $start->toDateString());
-            $baseSalary = $this->resolveBaseSalary($profile, $grade, $employee);
+            $positionAllowanceDecrypted = $this->resolvePositionAllowance($profile, $Position, $start->toDateString());
+            $baseSalary = $this->resolveBaseSalary($profile, $Position, $employee);
 
             if ($baseSalary['amount'] === null || $baseSalary['amount'] === '') {
                 return ['status' => false, 'error' => 'Gaji pokok default kosong pada salah satu profile.'];
@@ -80,7 +86,7 @@ class PayrollCalculationService
                     'position_allowance' => $positionAllowanceDecrypted,
                     'base_salary_amount' => $baseSalary['amount'],
                     'base_salary_basis' => $baseSalary['basis'],
-                    'grade_id' => $activeGradeId,
+                    'position_id' => $activePositionId,
                     'effective_from' => $profile->effective_from->toDateString(),
                 ],
             ];
@@ -132,13 +138,15 @@ class PayrollCalculationService
         $totalPositionAllowance = 0;
 
         $gaji_pokok = 0;
+        $base_salary_segments = [];
         $accumulatedAllowances = [];
 
-        $addAllowance = function ($typeCode, $typeId, $amount, $mandays, $rate, $detail, $gradeName = null) use (&$accumulatedAllowances, $profilesData) {
+        $addAllowance = function ($typeCode, $typeId, $typeName, $amount, $mandays, $rate, $detail, $positionName = null) use (&$accumulatedAllowances, $profilesData) {
             if (! isset($accumulatedAllowances[$typeCode])) {
                 $accumulatedAllowances[$typeCode] = [
                     'allowance_type_id' => $typeId,
                     'allowance_type' => $typeCode,
+                    'allowance_label' => $typeName,
                     'amount' => 0,
                     'rate_amount' => count($profilesData) > 1 ? null : $rate, // if prorated, rate is blended
                     'mandays' => 0,
@@ -165,7 +173,7 @@ class PayrollCalculationService
             }
             if (count($profilesData) > 1 && $amount > 0) {
                 $accumulatedAllowances[$typeCode]['calculation_detail']['segments'][] = [
-                    'grade' => $gradeName,
+                    'Position' => $positionName,
                     'amount' => $amount,
                     'rate' => $rate,
                     'mandays' => $mandays,
@@ -176,21 +184,30 @@ class PayrollCalculationService
         foreach ($profilesData as $pd) {
             $r = $pd['recap'];
             $p = $pd['profile'];
-            $segGradeId = $p['grade_id'];
+            $segPositionId = $p['position_id'];
 
-            $segGradeName = 'Jabatan';
-            if (isset($p['grade_id'])) {
-                $gr = \App\Models\Grade::find($p['grade_id']);
+            $segPositionName = 'Jabatan';
+            if (isset($p['position_id'])) {
+                $gr = \App\Models\Position::find($p['position_id']);
                 if ($gr) {
-                    $segGradeName = $gr->name;
+                    $segPositionName = $gr->name;
                 }
             }
 
             // 1. Basic Salary
             $ratio = $prereq['total_mandays'] > 0 ? ((float) $r->total_mandays / (float) $prereq['total_mandays']) : 0;
-            $gaji_pokok += $p['base_salary_basis'] === 'monthly'
+            $segBaseSalary = $p['base_salary_basis'] === 'monthly'
                 ? (float) $p['base_salary_amount'] * $ratio
                 : (float) $p['base_salary_amount'] * (float) $r->total_mandays;
+            $gaji_pokok += $segBaseSalary;
+
+            if (count($profilesData) > 1 && $segBaseSalary > 0) {
+                $base_salary_segments[] = [
+                    'Position' => $segPositionName,
+                    'amount' => $segBaseSalary,
+                    'mandays' => $r->total_mandays,
+                ];
+            }
 
             // 2. Position Allowance
             $segPosAllow = (float) $p['position_allowance'] * $ratio;
@@ -200,14 +217,14 @@ class PayrollCalculationService
                 if ($employee->is_on_probation) {
                     $amt = $amt * 0.5;
                 }
-                $addAllowance($trPos->code, $trPos->id, $amt, null, $p['position_allowance'], ['is_on_probation' => $employee->is_on_probation], $segGradeName);
+                $addAllowance($trPos->code, $trPos->id, $trPos->name, $amt, null, $p['position_allowance'], ['is_on_probation' => $employee->is_on_probation], $segPositionName);
             }
 
             $rateDate = max($prereq['periodFrom'], $p['effective_from']);
             $calculatedAllowances = $this->allowanceCalculator->calculate(
                 $employee,
                 $r,
-                $segGradeId,
+                $segPositionId,
                 $rateDate,
                 (float) $p['base_salary_amount'],
                 $ratio
@@ -223,11 +240,12 @@ class PayrollCalculationService
                 $addAllowance(
                     $type->code,
                     $type->id,
+                    $type->name,
                     $calculated['amount'],
                     $mandays,
                     $rate->rate_amount !== null ? (float) $rate->rate_amount : null,
                     $calculated['detail'],
-                    $segGradeName
+                    $segPositionName
                 );
             }
         }
@@ -272,6 +290,7 @@ class PayrollCalculationService
             'period_to' => $prereq['periodTo'],
             'periode' => $prereq['periode'],
             'gaji_pokok' => $gaji_pokok,
+            'base_salary_segments' => $base_salary_segments,
             'allowances' => $allowances,
             'deductions' => $deductions_list,
             'total_allowances' => $total_allowances,
@@ -668,7 +687,7 @@ class PayrollCalculationService
         }
     }
 
-    private function resolvePositionAllowance($profile, $grade, string $periodStart): string
+    private function resolvePositionAllowance($profile, $Position, string $periodStart): string
     {
         $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $positionAllowanceDecrypted = $profile->position_allowance_enc
@@ -681,8 +700,8 @@ class PayrollCalculationService
             }
 
             $rateDate = max($periodStart, $profile->effective_from->toDateString());
-            $posRate = $grade
-                ? $this->rateResolver->resolveByCode($grade->id, 'position', $rateDate)
+            $posRate = $Position
+                ? $this->rateResolver->resolveByCode($Position->id, 'position', $rateDate)
                 : null;
 
             return $posRate ? (string) $posRate->rate_amount : '0';
@@ -691,7 +710,7 @@ class PayrollCalculationService
         return (string) $positionAllowanceDecrypted;
     }
 
-    private function resolveBaseSalary($profile, $grade, Employee $employee): array
+    private function resolveBaseSalary($profile, $Position, Employee $employee): array
     {
         $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $amount = $profile->base_salary_amount_enc
@@ -705,15 +724,15 @@ class PayrollCalculationService
                 $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $profileAlg);
             } elseif ($profile->mandays_rate !== null && $profile->mandays_rate !== '') {
                 $amount = (string) $profile->mandays_rate;
-            } elseif ($grade?->default_base_salary_amount !== null) {
-                $amount = (string) $grade->default_base_salary_amount;
-            } elseif ($grade?->default_mandays_rate !== null) {
-                $amount = (string) $grade->default_mandays_rate;
+            } elseif ($Position?->default_base_salary_amount !== null) {
+                $amount = (string) $Position->default_base_salary_amount;
+            } elseif ($Position?->default_mandays_rate !== null) {
+                $amount = (string) $Position->default_mandays_rate;
             }
         }
 
         $basis = $profile->base_salary_basis
-            ?: $grade?->base_salary_basis
+            ?: $Position?->base_salary_basis
             ?: match ($employee->workBasis?->code) {
                 'monthly' => 'monthly',
                 default => 'daily',

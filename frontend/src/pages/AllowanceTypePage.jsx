@@ -18,20 +18,9 @@ const calculationLabels = {
   per_mandays: "Berdasarkan Rekap",
   per_trip: "Per Perjalanan",
   flat: "Tetap Bulanan",
-  formula: "Formula Bersyarat",
 };
 
-const inputSourceLabels = {
-  total_mandays: "Total Hari Dibayar",
-  wfo_days: "Hari WFO",
-  wfh_days: "Hari WFH",
-  out_of_town_days: "Hari Luar Kota",
-  training_days: "Hari Training",
-  business_trips: "Jumlah Perjalanan Dinas",
-  overtime_hours: "Jam Lembur",
-};
-
-const recapInputSources = ["total_mandays", "wfo_days", "out_of_town_days", "training_days", "wfh_days", "overtime_hours"];
+// Deleted inputSourceLabels and recapInputSources
 
 function sortByDisplayOrder(rows) {
   return [...rows].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
@@ -49,7 +38,7 @@ function makeAllowanceCode(name) {
 
 function calculationText(row) {
   if (row.calculation_type === "per_mandays") {
-    return `Rekap - ${inputSourceLabels[row.input_source] || "Indikator rekap"}`;
+    return "Rekap Kehadiran";
   }
 
   if (row.calculation_type === "per_trip") {
@@ -60,32 +49,11 @@ function calculationText(row) {
     return "Tetap bulanan";
   }
 
-  if (row.calculation_type === "formula") {
-    return row.input_source
-      ? `Formula - ${inputSourceLabels[row.input_source] || row.input_source}`
-      : "Formula bersyarat";
-  }
-
   return calculationLabels[row.calculation_type] || row.calculation_type;
 }
 
 function normalizeFormByCalculation(form, calculationType) {
-  if (calculationType === "flat") {
-    return { ...form, calculation_type: calculationType, input_source: null };
-  }
-
-  if (calculationType === "per_trip") {
-    return { ...form, calculation_type: calculationType, input_source: "business_trips" };
-  }
-
-  if (calculationType === "per_mandays") {
-    const inputSource = recapInputSources.includes(form.input_source)
-      ? form.input_source
-      : "total_mandays";
-    return { ...form, calculation_type: calculationType, input_source: inputSource };
-  }
-
-  return { ...form, calculation_type: calculationType, input_source: form.input_source || null };
+  return { ...form, calculation_type: calculationType };
 }
 
 export default function AllowanceTypePage() {
@@ -401,32 +369,12 @@ export default function AllowanceTypePage() {
                     <option value="per_mandays">Berdasarkan Rekap</option>
                     <option value="per_trip">Per Perjalanan Dinas</option>
                     <option value="flat">Tetap Bulanan</option>
-                    {form.calculation_type === "formula" && (
-                      <option value="formula">Formula Bersyarat</option>
-                    )}
                   </select>
                 </div>
 
                 {form.calculation_type === "per_mandays" && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-800 mb-1">
-                      Dasar Pengali dari Rekap
-                    </label>
-                    <select
-                      value={form.input_source || "total_mandays"}
-                      onChange={(e) => setForm({ ...form, input_source: e.target.value })}
-                      className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                    >
-                      <option value="total_mandays">Total Hari Dibayar</option>
-                      <option value="wfo_days">Hari WFO</option>
-                      <option value="out_of_town_days">Hari Luar Kota</option>
-                      <option value="training_days">Hari Training</option>
-                      <option value="wfh_days">Hari WFH</option>
-                      <option value="overtime_hours">Jam Lembur</option>
-                    </select>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Jika tunjangan berlaku untuk semua bentuk kehadiran, pilih Total Hari Dibayar.
-                    </p>
+                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Dasar perhitungan: <strong>Total Hari Kehadiran</strong>
                   </div>
                 )}
 
@@ -439,12 +387,6 @@ export default function AllowanceTypePage() {
                 {form.calculation_type === "flat" && (
                   <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                     Dasar perhitungan: <strong>Nominal tetap per bulan</strong>
-                  </div>
-                )}
-
-                {form.calculation_type === "formula" && (
-                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    Formula bersyarat dipakai untuk komponen khusus yang sudah ada di data awal.
                   </div>
                 )}
 

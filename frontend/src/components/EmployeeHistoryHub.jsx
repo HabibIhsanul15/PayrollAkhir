@@ -14,11 +14,13 @@ import {
 import { api } from "../lib/api";
 import { formatRupiah } from "../lib/utils";
 
-export default function EmployeeHistoryHub({ employeeId }) {
+export default function EmployeeHistoryHub({ employeeId, role }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [salaryProfiles, setSalaryProfiles] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
+
+  const isHCGA = String(role || "").toLowerCase() === "hcga";
 
   useEffect(() => {
     let active = true;
@@ -107,79 +109,81 @@ export default function EmployeeHistoryHub({ employeeId }) {
     <div className="space-y-6 mt-6">
       
       {/* Chart Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Grafik Take Home Pay Bulanan */}
-        <Card className="bg-white border border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-slate-800">Tren Slip Gaji (Take-Home Pay)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {prData.length === 0 ? (
-              <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat slip gaji bulanan.</p>
-            ) : (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={prData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 11, fill: '#64748b' }} 
-                      tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
-                    <Line 
-                      type="monotone" 
-                      dataKey="Take Home Pay" 
-                      stroke="#0ea5e9" 
-                      strokeWidth={3}
-                      activeDot={{ r: 6 }} 
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {!isHCGA && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* Grafik Take Home Pay Bulanan */}
+          <Card className="bg-white border border-border shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold text-slate-800">Tren Slip Gaji (Take-Home Pay)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {prData.length === 0 ? (
+                <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat slip gaji bulanan.</p>
+              ) : (
+                <div className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={prData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 11, fill: '#64748b' }} 
+                        tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
+                      <Line 
+                        type="monotone" 
+                        dataKey="Take Home Pay" 
+                        stroke="#0ea5e9" 
+                        strokeWidth={3}
+                        activeDot={{ r: 6 }} 
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Grafik Karir (Tunjangan Jabatan) */}
-        <Card className="bg-white border border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-slate-800">Pertumbuhan Karir & Tunjangan Jabatan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {spData.length === 0 ? (
-              <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat jabatan tersimpan.</p>
-            ) : (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={spData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 11, fill: '#64748b' }} 
-                      tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
-                    <Line 
-                      type="stepAfter" 
-                      dataKey="Tunjangan Jabatan" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={3}
-                      activeDot={{ r: 6 }} 
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          {/* Grafik Karir (Tunjangan Jabatan) */}
+          <Card className="bg-white border border-border shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold text-slate-800">Pertumbuhan Karir & Tunjangan Jabatan</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {spData.length === 0 ? (
+                <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat jabatan tersimpan.</p>
+              ) : (
+                <div className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={spData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 11, fill: '#64748b' }} 
+                        tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
+                      <Line 
+                        type="stepAfter" 
+                        dataKey="Tunjangan Jabatan" 
+                        stroke="#8b5cf6" 
+                        strokeWidth={3}
+                        activeDot={{ r: 6 }} 
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Tables Section */}
       <div className="grid grid-cols-1 gap-6">
@@ -193,16 +197,16 @@ export default function EmployeeHistoryHub({ employeeId }) {
               <thead className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider font-bold border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Periode</th>
-                  <th className="px-4 py-3 text-right">Gaji Pokok</th>
-                  <th className="px-4 py-3 text-right">Take Home Pay</th>
+                  {!isHCGA && <th className="px-4 py-3 text-right">Gaji Pokok</th>}
+                  {!isHCGA && <th className="px-4 py-3 text-right">Take Home Pay</th>}
                   <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-center">Aksi</th>
+                  {!isHCGA && <th className="px-4 py-3 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {payrolls.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-8 text-slate-400 font-medium">Belum ada riwayat gaji</td>
+                    <td colSpan={isHCGA ? "2" : "5"} className="text-center py-8 text-slate-400 font-medium">Belum ada riwayat gaji</td>
                   </tr>
                 ) : (
                   payrolls.map((pr) => (
@@ -210,12 +214,16 @@ export default function EmployeeHistoryHub({ employeeId }) {
                       <td className="px-4 py-3 font-medium text-slate-800">
                         {new Date(pr.periode).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        {pr.gaji_pokok != null ? formatRupiah(pr.gaji_pokok) : <span className="text-slate-300 italic">Masked</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-sky-600">
-                        {pr.total != null ? formatRupiah(pr.total) : <span className="text-slate-300 italic">Masked</span>}
-                      </td>
+                      {!isHCGA && (
+                        <>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {pr.gaji_pokok != null ? formatRupiah(pr.gaji_pokok) : <span className="text-slate-300 italic">-</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-sky-600">
+                            {pr.total != null ? formatRupiah(pr.total) : <span className="text-slate-300 italic">-</span>}
+                          </td>
+                        </>
+                      )}
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
                           ${pr.status === 'paid' ? 'bg-teal-100 text-teal-700' :
@@ -226,11 +234,13 @@ export default function EmployeeHistoryHub({ employeeId }) {
                           {pr.status || "DRAFT"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <Link to={`/payrolls/${pr.id}`} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded transition-colors border border-sky-100 hover:bg-sky-100">
-                          Lihat Detail
-                        </Link>
-                      </td>
+                      {!isHCGA && (
+                        <td className="px-4 py-3 text-center">
+                          <Link to={`/payrolls/${pr.id}`} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded transition-colors border border-sky-100 hover:bg-sky-100">
+                            Lihat Detail
+                          </Link>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -242,7 +252,7 @@ export default function EmployeeHistoryHub({ employeeId }) {
         {/* Table Riwayat Jabatan */}
         <Card className="bg-white border border-border shadow-sm">
           <CardHeader>
-            <CardTitle className="text-sm font-bold text-slate-800">Riwayat Jabatan & Komponen</CardTitle>
+            <CardTitle className="text-sm font-bold text-slate-800">Riwayat Jabatan {isHCGA ? "" : "& Komponen"}</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm text-left border-collapse">
@@ -250,15 +260,15 @@ export default function EmployeeHistoryHub({ employeeId }) {
                 <tr>
                   <th className="px-4 py-3">Berlaku Sejak</th>
                   <th className="px-4 py-3">Posisi</th>
-                  <th className="px-4 py-3 text-right">Tunjangan Jabatan</th>
-                  <th className="px-4 py-3 text-right">Tunjangan Tetap</th>
-                  <th className="px-4 py-3 text-right">Potongan Tetap</th>
+                  {!isHCGA && <th className="px-4 py-3 text-right">Tunjangan Jabatan</th>}
+                  {!isHCGA && <th className="px-4 py-3 text-right">Tunjangan Tetap</th>}
+                  {!isHCGA && <th className="px-4 py-3 text-right">Potongan Tetap</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {salaryProfiles.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-8 text-slate-400 font-medium">Belum ada profil jabatan</td>
+                    <td colSpan={isHCGA ? "2" : "5"} className="text-center py-8 text-slate-400 font-medium">Belum ada profil jabatan</td>
                   </tr>
                 ) : (
                   salaryProfiles.map((sp) => (
@@ -269,15 +279,19 @@ export default function EmployeeHistoryHub({ employeeId }) {
                       <td className="px-4 py-3 font-medium text-slate-700">
                         {sp.position || "-"}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-purple-600 font-medium">
-                        {sp.position_allowance != null ? formatRupiah(sp.position_allowance) : <span className="text-slate-300 italic">Masked</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-teal-600">
-                        {sp.allowance_fixed != null && sp.allowance_fixed > 0 ? formatRupiah(sp.allowance_fixed) : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-rose-600">
-                        {sp.deduction_fixed != null && sp.deduction_fixed > 0 ? formatRupiah(sp.deduction_fixed) : "-"}
-                      </td>
+                      {!isHCGA && (
+                        <>
+                          <td className="px-4 py-3 text-right font-mono text-purple-600 font-medium">
+                            {sp.position_allowance != null ? formatRupiah(sp.position_allowance) : <span className="text-slate-300 italic">-</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-teal-600">
+                            {sp.allowance_fixed != null && sp.allowance_fixed > 0 ? formatRupiah(sp.allowance_fixed) : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-rose-600">
+                            {sp.deduction_fixed != null && sp.deduction_fixed > 0 ? formatRupiah(sp.deduction_fixed) : "-"}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}

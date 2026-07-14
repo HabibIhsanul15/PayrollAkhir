@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Employee;
 use App\Models\EmploymentType;
-use App\Models\Grade;
+use App\Models\Position;
 use App\Models\SalaryProfile;
 use App\Models\User;
 use App\Models\WorkBasis;
@@ -22,12 +22,12 @@ class DummyPayrollSeeder extends Seeder
     {
         $this->command->info('Menyiapkan data payroll demo (3 user)...');
 
-        $grade = Grade::where('code', 'staff')->first() ?? Grade::first();
+        $Position = Position::where('code', 'staff')->first() ?? Position::first();
         $employmentType = EmploymentType::where('code', 'project')->first() ?? EmploymentType::first();
         $workBasis = WorkBasis::where('code', 'mandays')->first() ?? WorkBasis::first();
 
-        if (! $grade || ! $employmentType || ! $workBasis) {
-            $this->command->error('Pastikan master data grade, employment type, dan work basis sudah tersedia.');
+        if (! $Position || ! $employmentType || ! $workBasis) {
+            $this->command->error('Pastikan master data Position, employment type, dan work basis sudah tersedia.');
             return;
         }
 
@@ -73,9 +73,9 @@ class DummyPayrollSeeder extends Seeder
                 'name' => $d['name'],
                 'employee_code' => $d['code'],
                 'department' => 'Operations',
-                'position' => $grade->name,
+                'position' => $Position->name,
                 'status' => 'active',
-                'grade_id' => $grade->id,
+                'position_id' => $Position->id,
                 'employment_type_id' => $employmentType->id,
                 'work_basis_id' => $workBasis->id,
                 'bank_name' => 'Bank BCA',
@@ -88,8 +88,8 @@ class DummyPayrollSeeder extends Seeder
             $profile = SalaryProfile::create([
                 'employee_id' => $employee->id,
                 'effective_from' => $effectiveFrom,
-                'grade_id' => $grade->id,
-                'position' => $grade->name,
+                'position_id' => $Position->id,
+                'position' => $Position->name,
                 'position_allowance' => 0,
                 'position_allowance_enc' => CryptoService::encryptAESGCM('0'),
                 'mandays_rate' => null,

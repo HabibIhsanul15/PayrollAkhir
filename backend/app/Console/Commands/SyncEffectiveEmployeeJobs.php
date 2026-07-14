@@ -20,15 +20,15 @@ class SyncEffectiveEmployeeJobs extends Command
         Employee::query()->chunkById(100, function ($employees) use ($date, &$updated) {
             foreach ($employees as $employee) {
                 $profile = $employee->currentSalaryProfile($date);
-                if (! $profile?->grade_id) {
+                if (! $profile?->position_id) {
                     continue;
                 }
 
                 DB::transaction(function () use ($employee, $profile, $date, &$updated) {
-                    $grade = $profile->grade;
+                    $position = $profile->position;
                     $employee->update([
-                        'grade_id' => $profile->grade_id,
-                        'position' => $profile->position ?? $grade?->name,
+                        'position_id' => $profile->position_id,
+                        'position' => $profile->position ?? $position?->name,
                     ]);
 
                     $employee->jobHistories()->update(['status' => 'inactive']);

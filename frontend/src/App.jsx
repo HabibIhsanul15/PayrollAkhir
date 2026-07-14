@@ -29,9 +29,9 @@ import AccountCreatePage from "./pages/AccountCreatePage";
 import PayrollReportPage from "./pages/PayrollReportPage";
 
 // Master data pages (Phase 1)
-import GradeManagementPage from "./pages/GradeManagementPage";
+import PositionManagementPage from "./pages/PositionManagementPage";
 import AllowanceTypePage from "./pages/AllowanceTypePage";
-import GradeRatePage from "./pages/GradeRatePage";
+import PositionRatePage from "./pages/PositionRatePage";
 
 // Phase 3 UI
 import MonthlyRecapPage from "./pages/MonthlyRecapPage";
@@ -163,10 +163,10 @@ export default function App() {
 
           {/* MASTER DATA (Phase 1) */}
           <Route
-            path="/master/grades"
+            path="/master/positions"
             element={
               <RoleRoute allow={["hcga", "fat"]}>
-                <GradeManagementPage />
+                <PositionManagementPage />
               </RoleRoute>
             }
           />
@@ -179,10 +179,10 @@ export default function App() {
             }
           />
           <Route
-            path="/master/grade-rates"
+            path="/master/position-rates"
             element={
               <RoleRoute allow={["fat"]}>
-                <GradeRatePage />
+                <PositionRatePage />
               </RoleRoute>
             }
           />

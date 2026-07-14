@@ -34,7 +34,7 @@ return new class extends Migration {
             $table->string('department')->nullable();
             $table->string('position')->nullable();
 
-            $table->foreignId('grade_id')->nullable()->constrained('grades')->nullOnDelete();
+            $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
             $table->foreignId('employment_type_id')->nullable()->constrained('employment_types')->nullOnDelete();
             $table->foreignId('work_basis_id')->nullable()->constrained('work_bases')->nullOnDelete();
 

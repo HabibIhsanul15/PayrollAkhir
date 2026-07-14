@@ -2,14 +2,14 @@
 
 namespace Database\Seeders;
 
-use App\Models\Grade;
+use App\Models\Position;
 use Illuminate\Database\Seeder;
 
-class GradeSeeder extends Seeder
+class PositionSeeder extends Seeder
 {
     public function run(): void
     {
-        $grades = [
+        $positions = [
             [
                 'code' => 'bod',
                 'name' => 'Board of Directors',
@@ -68,8 +68,8 @@ class GradeSeeder extends Seeder
             ],
         ];
 
-        foreach ($grades as $grade) {
-            Grade::updateOrCreate(['code' => $grade['code']], $grade);
+        foreach ($positions as $Position) {
+            Position::updateOrCreate(['code' => $Position['code']], $Position);
         }
     }
 }

@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Grade;
+use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-class GradeController extends Controller
+class PositionController extends Controller
 {
     private function normalizeBaseSalaryPayload(array $data): array
     {
@@ -47,7 +47,7 @@ class GradeController extends Controller
     private function uniqueCode(string $base, ?int $ignoreId = null): string
     {
         $base = $this->sanitizeCode($base);
-        $exists = fn (string $code) => Grade::where('code', $code)
+        $exists = fn (string $code) => Position::where('code', $code)
             ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
             ->exists();
 
@@ -78,9 +78,9 @@ class GradeController extends Controller
         return in_array($r, $roles, true);
     }
 
-    private function gradePayloadFor($user, Grade $grade): array
+    private function positionPayloadFor($user, Position $Position): array
     {
-        $data = $grade->toArray();
+        $data = $Position->toArray();
 
         if ($this->inRoles($user, ['hcga'])) {
             unset(
@@ -100,7 +100,7 @@ class GradeController extends Controller
         }
 
         $date = $request->query('date', now()->toDateString());
-        $query = Grade::query();
+        $query = Position::query();
 
         if ($request->boolean('active_only')) {
             $query->where('is_active', true);
@@ -114,22 +114,22 @@ class GradeController extends Controller
             }]);
         }
 
-        $grades = $query
+        $positions = $query
             ->orderBy('level')
             ->get()
-            ->map(fn (Grade $grade) => $this->gradePayloadFor($request->user(), $grade))
+            ->map(fn (Position $Position) => $this->positionPayloadFor($request->user(), $Position))
             ->values();
 
-        return response()->json($grades);
+        return response()->json($positions);
     }
 
-    public function show(Request $request, Grade $grade)
+    public function show(Request $request, Position $Position)
     {
         if (! $this->inRoles($request->user(), ['hcga', 'fat'])) {
             return $this->forbid();
         }
 
-        return response()->json($this->gradePayloadFor($request->user(), $grade));
+        return response()->json($this->positionPayloadFor($request->user(), $Position));
     }
 
     public function store(Request $request)
@@ -140,7 +140,7 @@ class GradeController extends Controller
 
         $data = $request->validate([
             'code' => ['nullable', 'string', 'max:50'],
-            'name' => ['required', 'string', 'max:100', Rule::unique('grades', 'name')],
+            'name' => ['required', 'string', 'max:100', Rule::unique('positions', 'name')],
             'level' => ['required', 'integer', 'min:1'],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
@@ -150,12 +150,12 @@ class GradeController extends Controller
         $data['base_salary_basis'] = 'daily';
         $data['default_base_salary_amount'] = 0;
         $data['default_mandays_rate'] = 0;
-        $grade = Grade::create($data);
+        $Position = Position::create($data);
 
-        return response()->json($this->gradePayloadFor($request->user(), $grade), 201);
+        return response()->json($this->positionPayloadFor($request->user(), $Position), 201);
     }
 
-    public function update(Request $request, Grade $grade)
+    public function update(Request $request, Position $Position)
     {
         if (! $this->inRoles($request->user(), ['hcga', 'fat'])) {
             return $this->forbid();
@@ -163,7 +163,7 @@ class GradeController extends Controller
 
         if ($this->inRoles($request->user(), ['hcga'])) {
             $data = $request->validate([
-                'name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('grades', 'name')->ignore($grade->id)],
+                'name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('positions', 'name')->ignore($Position->id)],
                 'code' => ['nullable', 'string', 'max:50'],
                 'level' => ['sometimes', 'required', 'integer', 'min:1'],
                 'description' => ['nullable', 'string'],
@@ -172,15 +172,15 @@ class GradeController extends Controller
 
             if (array_key_exists('name', $data) || array_key_exists('code', $data)) {
                 $data['code'] = $this->uniqueCode(
-                    $data['code'] ?? $this->makeCodeFromName($data['name'] ?? $grade->name),
-                    $grade->id
+                    $data['code'] ?? $this->makeCodeFromName($data['name'] ?? $Position->name),
+                    $Position->id
                 );
             }
 
             $data['base_salary_basis'] = 'daily';
-            $grade->update($data);
+            $Position->update($data);
 
-            return response()->json($this->gradePayloadFor($request->user(), $grade->fresh()));
+            return response()->json($this->positionPayloadFor($request->user(), $Position->fresh()));
         }
 
         $structureFields = ['name', 'code', 'level', 'description', 'is_active', 'base_salary_basis'];
@@ -195,25 +195,25 @@ class GradeController extends Controller
         ]);
 
         $data = $this->normalizeBaseSalaryPayload($data);
-        $grade->update($data);
+        $Position->update($data);
 
-        return response()->json($grade->fresh());
+        return response()->json($Position->fresh());
     }
 
-    public function destroy(Request $request, Grade $grade)
+    public function destroy(Request $request, Position $Position)
     {
         if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
-        if ($grade->employees()->exists() || $grade->salaryProfiles()->exists() || $grade->jobHistories()->exists()) {
+        if ($Position->employees()->exists() || $Position->salaryProfiles()->exists() || $Position->jobHistories()->exists()) {
             return response()->json([
                 'message' => 'Jabatan sudah dipakai karyawan atau riwayat. Nonaktifkan jabatan tanpa menghapusnya.',
             ], 422);
         }
 
-        $grade->delete();
+        $Position->delete();
 
-        return response()->json(['message' => 'Grade deleted successfully']);
+        return response()->json(['message' => 'Position deleted successfully']);
     }
 }

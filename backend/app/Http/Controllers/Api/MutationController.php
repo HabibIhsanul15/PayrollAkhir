@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Grade;
+use App\Models\Position;
 use App\Models\JobHistory;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
@@ -18,17 +18,17 @@ class MutationController extends Controller
 {
     public function __construct(private AllowanceRateResolver $rateResolver) {}
 
-    private function resolveBaseSalaryPayload(Grade $grade, array $data): array
+    private function resolveBaseSalaryPayload(Position $Position, array $data): array
     {
         $basis = $data['base_salary_basis']
-            ?? $grade->base_salary_basis
+            ?? $Position->base_salary_basis
             ?? 'daily';
 
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
             ? (float) $data['base_salary_amount']
             : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
                 ? (float) $data['mandays_rate']
-                : (float) ($grade->default_base_salary_amount ?? $grade->default_mandays_rate ?? 0));
+                : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
 
         return [
             'basis' => $basis,
@@ -52,7 +52,7 @@ class MutationController extends Controller
 
         $data = $request->validate([
             'mutation_type' => ['required', 'in:promotion,demotion'],
-            'grade_id' => ['required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'position_allowance' => ['nullable', 'numeric', 'min:0'],
             'base_salary_basis' => ['nullable', Rule::in(['daily', 'monthly'])],
             'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
@@ -61,38 +61,49 @@ class MutationController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $effectiveDate = Carbon::parse($data['effective_from'])->startOfDay();
+        $effectiveDateInput = Carbon::parse($data['effective_from'])->startOfDay();
+        
+        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', '<=', $effectiveDateInput)
+            ->where('end_date', '>=', $effectiveDateInput)
+            ->first();
+
+        if ($payrollPeriod) {
+            $effectiveDate = Carbon::parse($payrollPeriod->start_date)->startOfDay();
+        } else {
+            $effectiveDate = $effectiveDateInput->copy()->startOfMonth();
+        }
+
         $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
-        $currentGrade = Grade::find($currentProfile?->grade_id ?? $employee->grade_id);
-        $targetGrade = Grade::findOrFail($data['grade_id']);
+        $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
+        $targetPosition = Position::findOrFail($data['position_id']);
 
-        if (! $currentGrade || ! $currentGrade->level) {
+        if (! $currentPosition || ! $currentPosition->level) {
             throw ValidationException::withMessages([
-                'grade_id' => 'Jabatan saat ini belum memiliki level yang valid.',
+                'position_id' => 'Jabatan saat ini belum memiliki level yang valid.',
             ]);
         }
 
-        if ((int) $targetGrade->id === (int) $currentGrade->id) {
+        if ((int) $targetPosition->id === (int) $currentPosition->id) {
             throw ValidationException::withMessages([
-                'grade_id' => 'Jabatan tujuan harus berbeda dari jabatan saat ini.',
+                'position_id' => 'Jabatan tujuan harus berbeda dari jabatan saat ini.',
             ]);
         }
 
-        if ($data['mutation_type'] === 'promotion' && (int) $targetGrade->level >= (int) $currentGrade->level) {
+        if ($data['mutation_type'] === 'promotion' && (int) $targetPosition->level >= (int) $currentPosition->level) {
             throw ValidationException::withMessages([
-                'grade_id' => 'Promosi hanya bisa ke jabatan dengan level lebih tinggi dari jabatan saat ini.',
+                'position_id' => 'Promosi hanya bisa ke jabatan dengan level lebih tinggi dari jabatan saat ini.',
             ]);
         }
 
-        if ($data['mutation_type'] === 'demotion' && (int) $targetGrade->level <= (int) $currentGrade->level) {
+        if ($data['mutation_type'] === 'demotion' && (int) $targetPosition->level <= (int) $currentPosition->level) {
             throw ValidationException::withMessages([
-                'grade_id' => 'Demosi hanya bisa ke jabatan dengan level lebih rendah dari jabatan saat ini.',
+                'position_id' => 'Demosi hanya bisa ke jabatan dengan level lebih rendah dari jabatan saat ini.',
             ]);
         }
 
-        DB::transaction(function () use ($data, $employee, $effectiveDate, $currentProfile, $targetGrade) {
-            $salaryConfig = $this->resolveBaseSalaryPayload($targetGrade, $data);
-            $positionRate = $this->rateResolver->resolveByCode($targetGrade->id, 'position', $effectiveDate);
+        DB::transaction(function () use ($data, $employee, $effectiveDate, $currentProfile, $targetPosition) {
+            $salaryConfig = $this->resolveBaseSalaryPayload($targetPosition, $data);
+            $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position', $effectiveDate);
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']
                 : (float) ($positionRate?->rate_amount ?? 0);
@@ -116,8 +127,8 @@ class MutationController extends Controller
             $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveDate->toDateString()],
                 [
-                    'grade_id' => $targetGrade->id,
-                    'position' => $targetGrade->name,
+                    'position_id' => $targetPosition->id,
+                    'position' => $targetPosition->name,
                     'base_salary_basis' => $salaryConfig['basis'],
                     'base_salary_amount' => 0,
                     'position_allowance' => 0,
@@ -149,8 +160,8 @@ class MutationController extends Controller
             JobHistory::updateOrCreate(
                 ['employee_id' => $employee->id, 'start_date' => $effectiveDate->toDateString()],
                 [
-                    'grade_id' => $targetGrade->id,
-                    'position' => $targetGrade->name,
+                    'position_id' => $targetPosition->id,
+                    'position' => $targetPosition->name,
                     'end_date' => null,
                     'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
                     'notes' => ucfirst($data['mutation_type']).': '.($data['notes'] ?? '-'),
@@ -158,7 +169,7 @@ class MutationController extends Controller
             );
 
             if (! $effectiveDate->isFuture()) {
-                $employee->update(['grade_id' => $targetGrade->id, 'position' => $targetGrade->name]);
+                $employee->update(['position_id' => $targetPosition->id, 'position' => $targetPosition->name]);
             }
         });
 

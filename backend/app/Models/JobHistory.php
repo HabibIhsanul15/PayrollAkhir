@@ -8,7 +8,7 @@ class JobHistory extends Model
 {
     protected $fillable = [
         'employee_id',
-        'grade_id',
+        'position_id',
         'position',
         'start_date',
         'end_date',
@@ -21,8 +21,8 @@ class JobHistory extends Model
         return $this->belongsTo(Employee::class);
     }
 
-    public function grade()
+    public function position()
     {
-        return $this->belongsTo(Grade::class);
+        return $this->belongsTo(Position::class);
     }
 }

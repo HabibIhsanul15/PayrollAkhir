@@ -16,24 +16,24 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-export default function GradeRatePage() {
+export default function PositionRatePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
   const canManageCompensationMaster = role === "fat";
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: rawGrades, error: errGrades, isLoading: loadGrades } = useSWR(canManageCompensationMaster ? "/master/grades" : null);
+  const { data: rawPositions, error: errPositions, isLoading: loadPositions } = useSWR(canManageCompensationMaster ? "/master/positions" : null);
   const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(canManageCompensationMaster ? "/master/allowance-types" : null);
-  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(canManageCompensationMaster ? "/master/grade-allowance-rates" : null);
+  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(canManageCompensationMaster ? "/master/position-allowance-rates" : null);
 
   const { confirm } = useConfirm();
 
-  const loading = loadGrades || loadAllowances || loadRates;
+  const loading = loadPositions || loadAllowances || loadRates;
   const [localErr, setErr] = useState("");
-  const err = localErr || errGrades?.message || errAllowances?.message || errRates?.message || "";
+  const err = localErr || errPositions?.message || errAllowances?.message || errRates?.message || "";
   const [success, setSuccess] = useState("");
 
-  const grades = Array.isArray(rawGrades) ? rawGrades : rawGrades?.data ?? [];
+  const positions = Array.isArray(rawPositions) ? rawPositions : rawPositions?.data ?? [];
   const allowances = Array.isArray(rawAllowances) ? rawAllowances : rawAllowances?.data ?? [];
   const [localRates, setLocalRates] = useState([]);
 
@@ -53,22 +53,19 @@ export default function GradeRatePage() {
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({
-    grade_id: "",
+    position_id: "",
     allowance_type_id: "",
     rate_amount: "",
-    rate_multiplier: "",
-    rate_formula: "",
-    requires_condition: "",
     effective_from: today,
     effective_to: "",
     is_active: true,
   });
 
-  // Create lookup map: garMap[grade_id][allowance_type_id] = RateObject
+  // Create lookup map: garMap[position_id][allowance_type_id] = RateObject
   const garMap = useMemo(() => {
     const map = {};
     rates.forEach((rate) => {
-      const gId = rate.grade_id;
+      const gId = rate.position_id;
       const aId = rate.allowance_type_id;
       if (!map[gId]) map[gId] = {};
       if (!map[gId][aId]) {
@@ -79,17 +76,14 @@ export default function GradeRatePage() {
     return map;
   }, [rates]);
 
-  const handleCellClick = (grade, allowance) => {
-    const existing = garMap[grade.id]?.[allowance.id];
+  const handleCellClick = (position, allowance) => {
+    const existing = garMap[position.id]?.[allowance.id];
 
     if (existing) {
       setForm({
-        grade_id: existing.grade_id,
+        position_id: existing.position_id,
         allowance_type_id: existing.allowance_type_id,
         rate_amount: existing.rate_amount !== null ? String(existing.rate_amount) : "",
-        rate_multiplier: existing.rate_multiplier !== null ? String(existing.rate_multiplier) : "",
-        rate_formula: existing.rate_formula || "",
-        requires_condition: existing.requires_condition || "",
         effective_from: existing.effective_from ? existing.effective_from.split("T")[0] : today,
         effective_to: existing.effective_to ? existing.effective_to.split("T")[0] : "",
         is_active: existing.is_active,
@@ -98,12 +92,9 @@ export default function GradeRatePage() {
       setIsEdit(true);
     } else {
       setForm({
-        grade_id: grade.id,
+        position_id: position.id,
         allowance_type_id: allowance.id,
         rate_amount: "",
-        rate_multiplier: "",
-        rate_formula: "",
-        requires_condition: "",
         effective_from: today,
         effective_to: "",
         is_active: true,
@@ -120,12 +111,9 @@ export default function GradeRatePage() {
 
     // Prepare body
     const body = {
-      grade_id: parseInt(form.grade_id),
+      position_id: parseInt(form.position_id),
       allowance_type_id: parseInt(form.allowance_type_id),
       rate_amount: form.rate_amount !== "" ? parseFloat(form.rate_amount) : null,
-      rate_multiplier: form.rate_multiplier !== "" ? parseFloat(form.rate_multiplier) : null,
-      rate_formula: form.rate_formula || null,
-      requires_condition: form.requires_condition || null,
       effective_from: form.effective_from,
       effective_to: form.effective_to || null,
       is_active: form.is_active,
@@ -133,14 +121,14 @@ export default function GradeRatePage() {
 
     try {
       if (isEdit) {
-        const updated = await api(`/master/grade-allowance-rates/${editId}`, {
+        const updated = await api(`/master/position-allowance-rates/${editId}`, {
           method: "PUT",
           body,
         });
         setLocalRates((prev) => prev.map((x) => (x.id === editId ? updated : x)));
         setSuccess("Matrix rate berhasil diperbarui");
       } else {
-        const created = await api("/master/grade-allowance-rates", {
+        const created = await api("/master/position-allowance-rates", {
           method: "POST",
           body,
         });
@@ -161,7 +149,7 @@ export default function GradeRatePage() {
     setErr("");
     setSuccess("");
     try {
-      await api(`/master/grade-allowance-rates/${editId}`, { method: "DELETE" });
+      await api(`/master/position-allowance-rates/${editId}`, { method: "DELETE" });
       mutate();
       setSuccess("Rate dihapus.");
       setModalOpen(false);
@@ -245,39 +233,39 @@ export default function GradeRatePage() {
                     </TableRow>
                   )}
 
-                  {!loading && grades.length === 0 && (
+                  {!loading && positions.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={allowances.length + 1} className="py-12 text-center text-slate-500">
-                        Belum ada grade yang terdaftar.
+                        Belum ada position yang terdaftar.
                       </TableCell>
                     </TableRow>
                   )}
 
                   {!loading &&
-                    grades.map((grade, idx) => (
+                    positions.map((position, idx) => (
                       <TableRow
-                        key={grade.id}
+                        key={position.id}
                         className={[
                           "transition align-middle border-b border-slate-100",
                           idx % 2 === 0 ? "bg-white/40" : "bg-white/20",
                           "hover:bg-slate-50/80",
                         ].join(" ")}
                       >
-                        {/* Row Header: Grade */}
+                        {/* Row Header: position */}
                         <TableCell className="pl-6 py-4 font-bold text-slate-900 border-r border-slate-200/50">
-                          <div className="uppercase text-sky-700 text-sm">{grade.code}</div>
-                          <div className="text-[11px] text-slate-500 font-normal">{grade.name}</div>
+                          <div className="uppercase text-sky-700 text-sm">{position.code}</div>
+                          <div className="text-[11px] text-slate-500 font-normal">{position.name}</div>
                         </TableCell>
 
                         {/* Cells: Allowance Rates */}
                         {allowances.map((allowance) => {
-                          const rateObj = garMap[grade.id]?.[allowance.id];
+                          const rateObj = garMap[position.id]?.[allowance.id];
                           const hasRate = !!rateObj;
 
                           return (
                             <TableCell
                               key={allowance.id}
-                              onClick={() => handleCellClick(grade, allowance)}
+                              onClick={() => handleCellClick(position, allowance)}
                               className={[
                                 "p-2 text-center text-xs transition cursor-pointer hover:bg-sky-100/40 select-none",
                                 hasRate ? "font-bold text-slate-900" : "text-slate-400",
@@ -289,16 +277,6 @@ export default function GradeRatePage() {
                                     <div className="text-[13px] text-slate-900">
                                       {formatRupiah(rateObj.rate_amount)}
                                     </div>
-                                  )}
-                                  {rateObj.rate_multiplier !== null && (
-                                    <div className="text-[11px] text-indigo-700">
-                                      Multiplier: {rateObj.rate_multiplier}x
-                                    </div>
-                                  )}
-                                  {rateObj.requires_condition && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0.5 border-orange-200 bg-orange-50 text-orange-700 scale-90">
-                                      {rateObj.requires_condition}
-                                    </Badge>
                                   )}
                                 </div>
                               ) : (
@@ -325,7 +303,7 @@ export default function GradeRatePage() {
 
               <div className="mb-4 p-3 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700 space-y-1">
                 <div>
-                  <strong>Grade:</strong> {grades.find((g) => g.id === form.grade_id)?.name} ({grades.find((g) => g.id === form.grade_id)?.code.toUpperCase()})
+                  <strong>position:</strong> {positions.find((g) => g.id === form.position_id)?.name} ({positions.find((g) => g.id === form.position_id)?.code.toUpperCase()})
                 </div>
                 <div>
                   <strong>Allowance:</strong> {allowances.find((a) => a.id === form.allowance_type_id)?.name}
@@ -342,46 +320,7 @@ export default function GradeRatePage() {
                     min="0"
                     value={form.rate_amount}
                     onChange={(e) => setForm({ ...form, rate_amount: e.target.value })}
-                    placeholder="e.g. 25000 (biarkan kosong jika pakai multiplier/formula)"
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Rate Multiplier
-                  </label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    min="0"
-                    value={form.rate_multiplier}
-                    onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })}
-                    placeholder="e.g. 1.5 (opsional)"
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Formula Description
-                  </label>
-                  <input
-                    value={form.rate_formula}
-                    onChange={(e) => setForm({ ...form, rate_formula: e.target.value })}
-                    placeholder="e.g. 1.5 * base_salary_amount (opsional)"
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Requires Condition
-                  </label>
-                  <input
-                    value={form.requires_condition}
-                    onChange={(e) => setForm({ ...form, requires_condition: e.target.value })}
-                    placeholder="e.g. num_toddlers>=3, is_trainer=1 (opsional)"
+                    placeholder="e.g. 25000"
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   />
                 </div>

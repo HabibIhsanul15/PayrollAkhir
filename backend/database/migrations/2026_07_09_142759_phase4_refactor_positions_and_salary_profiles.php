@@ -12,22 +12,22 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Move default_base_salary to grade_allowance_rates
+        // 1. Move default_base_salary to position_allowance_rates
         $positionType = DB::table('allowance_types')->where('code', 'position')->first();
         if ($positionType) {
-            $grades = DB::table('grades')->get();
-            foreach ($grades as $grade) {
-                if ($grade->default_base_salary !== null) {
-                    DB::table('grade_allowance_rates')->updateOrInsert(
-                        ['grade_id' => $grade->id, 'allowance_type_id' => $positionType->id],
-                        ['rate_amount' => $grade->default_base_salary, 'updated_at' => now()]
+            $positions = DB::table('positions')->get();
+            foreach ($positions as $position) {
+                if ($position->default_base_salary !== null) {
+                    DB::table('position_allowance_rates')->updateOrInsert(
+                        ['position_id' => $position->id, 'allowance_type_id' => $positionType->id],
+                        ['rate_amount' => $position->default_base_salary, 'updated_at' => now()]
                     );
                 }
             }
         }
 
-        // 2. Drop default_base_salary from grades
-        Schema::table('grades', function (Blueprint $table) {
+        // 2. Drop default_base_salary from positions
+        Schema::table('positions', function (Blueprint $table) {
             $table->dropColumn('default_base_salary');
         });
 
@@ -45,7 +45,7 @@ return new class extends Migration
             $table->renameColumn('position_allowance_enc', 'base_salary_enc');
         });
 
-        Schema::table('grades', function (Blueprint $table) {
+        Schema::table('positions', function (Blueprint $table) {
             $table->decimal('default_base_salary', 14, 2)->nullable()->after('description');
         });
     }

@@ -28,9 +28,9 @@ function menuByRole(role) {
       { to: "/dashboard", label: "Dasbor", icon: LayoutDashboard },
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
-      { to: "/master/grades", label: "Gaji Jabatan", icon: FolderOpen },
+      { to: "/master/positions", label: "Gaji Jabatan", icon: FolderOpen },
       { to: "/master/allowance-types", label: "Jenis Tunjangan", icon: ClipboardList },
-      { to: "/master/grade-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
+      { to: "/master/position-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];
   }
@@ -51,7 +51,7 @@ function menuByRole(role) {
     return [
       { to: "/dashboard", label: "Dasbor", icon: LayoutDashboard },
       { to: "/employees", label: "Data Karyawan", icon: Users },
-      { to: "/master/grades", label: "Jabatan", icon: FolderOpen },
+      { to: "/master/positions", label: "Jabatan", icon: FolderOpen },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];

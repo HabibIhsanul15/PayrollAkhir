@@ -113,6 +113,11 @@ export default function PayrollPreviewModal({
                 <div>
                   <span className="text-slate-500 block mb-1">Periode</span>
                   <strong className="text-slate-800">{data.period_month}</strong>
+                  {data.period_from && data.period_to && (
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {new Date(data.period_from).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} - {new Date(data.period_to).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -120,14 +125,53 @@ export default function PayrollPreviewModal({
               <div>
                 <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b">Rincian Pendapatan</h4>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Gaji Pokok</span>
-                    <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
-                  </div>
+                  {data.base_salary_segments && data.base_salary_segments.length > 0 ? (
+                    <div className="mb-2">
+                      <div className="text-slate-600 font-medium">Gaji Pokok</div>
+                      <div className="pl-4 space-y-1 mt-1 text-xs">
+                        {data.base_salary_segments.map((seg, i) => (
+                          <div key={i} className="flex justify-between text-slate-500">
+                            <span>- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
+                            <span>{formatRupiah(seg.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-sm font-medium border-t border-slate-100 mt-1 pt-1">
+                        <span className="text-slate-600">Total Gaji Pokok</span>
+                        <span>{formatRupiah(data.gaji_pokok)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between mb-2">
+                      <span className="text-slate-600">Gaji Pokok</span>
+                      <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
+                    </div>
+                  )}
+
                   {data.allowances?.map((al, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span className="text-slate-600">{al.allowance_label} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
-                      <span className="font-medium">{formatRupiah(al.amount)}</span>
+                    <div key={i} className="mb-2">
+                      {al.calculation_detail?.is_prorated && al.calculation_detail?.segments?.length > 0 ? (
+                        <>
+                          <div className="text-slate-600 font-medium">{al.allowance_label || al.allowance_type}</div>
+                          <div className="pl-4 space-y-1 mt-1 text-xs">
+                            {al.calculation_detail.segments.map((seg, idx) => (
+                              <div key={idx} className="flex justify-between text-slate-500">
+                                <span>- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
+                                <span>{formatRupiah(seg.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex justify-between text-sm font-medium border-t border-slate-100 mt-1 pt-1">
+                            <span className="text-slate-600">Total {al.allowance_label || al.allowance_type}</span>
+                            <span>{formatRupiah(al.amount)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
+                          <span className="font-medium">{formatRupiah(al.amount)}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="flex justify-between pt-2 border-t mt-2">

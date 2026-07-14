@@ -5,15 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-class GradeAllowanceRate extends Model
+class PositionAllowanceRate extends Model
 {
     protected $fillable = [
-        'grade_id',
+        'position_id',
         'allowance_type_id',
         'rate_amount',
-        'rate_multiplier',
-        'rate_formula',
-        'requires_condition',
         'effective_from',
         'effective_to',
         'is_active',
@@ -21,15 +18,14 @@ class GradeAllowanceRate extends Model
 
     protected $casts = [
         'rate_amount' => 'decimal:2',
-        'rate_multiplier' => 'decimal:4',
         'effective_from' => 'date',
         'effective_to' => 'date',
         'is_active' => 'boolean',
     ];
 
-    public function grade()
+    public function position()
     {
-        return $this->belongsTo(Grade::class, 'grade_id');
+        return $this->belongsTo(Position::class, 'position_id');
     }
 
     public function allowanceType()

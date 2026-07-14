@@ -26,7 +26,7 @@ export default function EmployeeEditPage() {
     employee_code: "",
     name: "",
     join_date: "",
-    grade_id: "",
+    position_id: "",
     position_allowance: "",
     base_salary_basis: "daily",
     base_salary_amount: "",
@@ -40,7 +40,7 @@ export default function EmployeeEditPage() {
     bank_account_name: "",
     bank_account_number: "",
   });
-  const [grades, setGrades] = useState([]);
+  const [positions, setPositions] = useState([]);
 
   useEffect(() => {
     if (!canManage) {
@@ -51,12 +51,12 @@ export default function EmployeeEditPage() {
   const { data: swrData, error: swrErr, isLoading } = useSWR(
     canManage ? `/employees/${id}/edit-data` : null,
     async () => {
-      const [data, gradesList] = await Promise.all([
+      const [data, positionsList] = await Promise.all([
         api(`/employees/${id}`),
-        api("/master/grades?active_only=1"),
+        api("/master/positions?active_only=1"),
       ]);
 
-      return { data, gradesList };
+      return { data, positionsList };
     }
   );
 
@@ -67,23 +67,23 @@ export default function EmployeeEditPage() {
 
     if (!swrData) return;
 
-    const gradesList = Array.isArray(swrData.gradesList) ? swrData.gradesList : [];
+    const positionsList = Array.isArray(swrData.positionsList) ? swrData.positionsList : [];
     const data = swrData.data;
-    const activeGrade = gradesList.find((grade) => String(grade.id) === String(data.grade_id));
-    const positionRate = activeGrade?.allowance_rates?.find(
+    const activePosition = positionsList.find((position) => String(position.id) === String(data.position_id));
+    const positionRate = activePosition?.allowance_rates?.find(
       (rate) => rate.allowance_type?.code === "position"
     );
 
-    setGrades(gradesList);
+    setPositions(positionsList);
     setForm({
       employee_code: data.employee_code ?? "",
       name: data.name ?? "",
       join_date: data.join_date ?? "",
-      grade_id: data.grade_id ?? "",
+      position_id: data.position_id ?? "",
       position_allowance: positionRate?.rate_amount ?? "",
-      base_salary_basis: data.salary_profile_summary?.base_salary_basis ?? activeGrade?.base_salary_basis ?? "daily",
+      base_salary_basis: data.salary_profile_summary?.base_salary_basis ?? activePosition?.base_salary_basis ?? "daily",
       base_salary_amount:
-        data.salary_profile_summary?.base_salary_amount ?? activeGrade?.default_base_salary_amount ?? "",
+        data.salary_profile_summary?.base_salary_amount ?? activePosition?.default_base_salary_amount ?? "",
       num_toddlers: data.num_toddlers ? String(data.num_toddlers) : "",
       is_trainer: !!data.is_trainer,
       nik: data.nik ?? "",
@@ -147,11 +147,11 @@ export default function EmployeeEditPage() {
     }
   }
 
-  const selectedGrade = grades.find((grade) => String(grade.id) === String(form.grade_id));
+  const selectedPosition = positions.find((position) => String(position.id) === String(form.position_id));
   const hasChildcare =
-    selectedGrade?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
+    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
   const hasTraining =
-    selectedGrade?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
+    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
 
   return (
     <div className="space-y-6">
@@ -210,14 +210,14 @@ export default function EmployeeEditPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-slate-600">Jabatan Aktif</label>
                   <select
-                    value={form.grade_id}
+                    value={form.position_id}
                     disabled
                     className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-900"
                   >
                     <option value="">-- Pilih Jabatan --</option>
-                    {grades.map((grade) => (
-                      <option key={grade.id} value={grade.id}>
-                        {grade.name} ({grade.code.toUpperCase()})
+                    {positions.map((position) => (
+                      <option key={position.id} value={position.id}>
+                        {position.name} ({position.code.toUpperCase()})
                       </option>
                     ))}
                   </select>
@@ -228,9 +228,9 @@ export default function EmployeeEditPage() {
                 Jabatan aktif diubah melalui proses promosi atau demosi supaya histori jabatan dan perubahan payroll tetap konsisten.
               </EmployeeNotice>
 
-              {selectedGrade ? (
+              {selectedPosition ? (
                 <EmployeeNotice tone="info">
-                  Jabatan aktif: <b>{selectedGrade.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
+                  Jabatan aktif: <b>{selectedPosition.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
                 </EmployeeNotice>
               ) : (
                 <EmployeeNotice>Data jabatan aktif belum terbaca.</EmployeeNotice>

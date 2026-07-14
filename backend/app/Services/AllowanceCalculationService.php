@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\AllowanceType;
 use App\Models\Employee;
-use App\Models\GradeAllowanceRate;
+use App\Models\PositionAllowanceRate;
 use App\Models\MonthlyRecap;
 use Carbon\CarbonInterface;
 
@@ -15,7 +15,7 @@ class AllowanceCalculationService
     public function calculate(
         Employee $employee,
         MonthlyRecap $recap,
-        int $gradeId,
+        int $positionId,
         CarbonInterface|string $date,
         float $baseSalaryAmount,
         float $segmentRatio
@@ -29,12 +29,12 @@ class AllowanceCalculationService
             ->get();
 
         foreach ($types as $type) {
-            $rate = $this->rateResolver->resolve($gradeId, $type->id, $date);
-            if (! $rate || ! $this->conditionMatches($employee, $type)) {
+            $rate = $this->rateResolver->resolve($positionId, $type->id, $date);
+            if (! $rate) {
                 continue;
             }
 
-            $units = $this->units($employee, $recap, $type->input_source);
+            $units = $this->units($employee, $recap, $type);
             $amount = $this->amount($type, $rate, $units, $baseSalaryAmount, $segmentRatio);
 
             if ($amount <= 0) {
@@ -48,9 +48,7 @@ class AllowanceCalculationService
                 'units' => $units,
                 'detail' => [
                     'calculation_type' => $type->calculation_type,
-                    'input_source' => $type->input_source,
                     'units' => $units,
-                    'rate_multiplier' => $rate->rate_multiplier !== null ? (float) $rate->rate_multiplier : null,
                 ],
             ];
         }
@@ -60,7 +58,7 @@ class AllowanceCalculationService
 
     private function amount(
         AllowanceType $type,
-        GradeAllowanceRate $rate,
+        PositionAllowanceRate $rate,
         float $units,
         float $baseSalaryAmount,
         float $segmentRatio
@@ -70,43 +68,23 @@ class AllowanceCalculationService
         return match ($type->calculation_type) {
             'flat' => $rateAmount * $segmentRatio,
             'per_mandays', 'per_trip' => $rateAmount * $units,
-            'formula' => $rate->rate_multiplier !== null
-                ? $baseSalaryAmount * (float) $rate->rate_multiplier * $units
-                : $rateAmount * $segmentRatio,
             default => 0.0,
         };
     }
 
-    private function units(Employee $employee, MonthlyRecap $recap, ?string $source): float
+    private function units(Employee $employee, MonthlyRecap $recap, AllowanceType $type): float
     {
-        if ($source && isset($recap->{$source})) {
-            return (float) $recap->{$source};
+        if ($type->calculation_type === 'per_trip') {
+            return (float) ($recap->business_trips ?? 0);
         }
 
-        if ($source && isset($employee->{$source})) {
-            return (float) $employee->{$source};
+        if ($type->calculation_type === 'per_mandays') {
+            if ($type->code === 'training') {
+                return (float) ($recap->training_days ?? 0);
+            }
+            return (float) ($recap->total_mandays ?? 0);
         }
 
         return 1.0;
-    }
-
-    private function conditionMatches(Employee $employee, AllowanceType $type): bool
-    {
-        if (! $type->condition_field) {
-            return true;
-        }
-
-        $actual = $employee->{$type->condition_field};
-        $expected = (float) $type->condition_value;
-
-        return match ($type->condition_operator) {
-            '>=' => (float) $actual >= $expected,
-            '>' => (float) $actual > $expected,
-            '<=' => (float) $actual <= $expected,
-            '<' => (float) $actual < $expected,
-            '!=' => (float) $actual !== $expected,
-            '=' => (float) $actual === $expected,
-            default => false,
-        };
     }
 }

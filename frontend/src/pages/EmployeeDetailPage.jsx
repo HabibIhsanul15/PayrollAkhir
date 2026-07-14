@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useNavigate, useParams } from "react-router-dom";
 import { getUser } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import AlertMessage from "@/components/AlertMessage";
@@ -14,6 +15,7 @@ import {
   EmployeePageHeader,
   EmployeeSectionCard,
 } from "@/components/employee/EmployeePageBlocks";
+import { X, CheckCircle2 } from "lucide-react";
 
 function maskValue(value, keep = 4) {
   const text = String(value ?? "").trim();
@@ -41,12 +43,11 @@ function roleLabel(role) {
       employee: "Staff",
       hcga: "HCGA",
       admin: "Admin",
-    }[normalized] || normalized || "-"
+    }[normalized] || normalized.toUpperCase() || "-"
   );
 }
 
-function formatCurrencyValue(value) {
-  const num = Number(value ?? 0);
+function formatCurrencyValue(num) {
   if (!Number.isFinite(num) || num <= 0) {
     return "-";
   }
@@ -81,6 +82,11 @@ export default function EmployeeDetailPage() {
   const [reveal, setReveal] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isMutationModalOpen, setIsMutationModalOpen] = useState(false);
+  const [confirmResetModalOpen, setConfirmResetModalOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetError, setResetError] = useState("");
 
   const isOwner =
     !!emp?.user_id &&
@@ -99,21 +105,16 @@ export default function EmployeeDetailPage() {
       nik: isMasked ? maskValue(emp?.nik) : emp?.nik || "-",
       npwp: isMasked ? maskValue(emp?.npwp) : emp?.npwp || "-",
       phone: isMasked ? maskValue(emp?.phone) : emp?.phone || "-",
-      address: isMasked ? (emp?.address ? "**** (disembunyikan)" : "-") : emp?.address || "-",
-      bank_name: emp?.bank_name || "-",
-      bank_account_name: emp?.bank_account_name || "-",
-      bank_account_number: isMasked ? maskValue(emp?.bank_account_number) : emp?.bank_account_number || "-",
+      address: isMasked ? "**************" : emp?.address || "-",
+      bank: isMasked
+        ? `***** (${emp?.bank_name || "-"})`
+        : `${emp?.bank_account_number || "-"} a.n ${emp?.bank_account_name || "-"} (${emp?.bank_name || "-"})`,
     };
   }, [emp, masked, reveal]);
 
   const accountView = useMemo(() => {
     if (!hasAccount) {
-      return {
-        status: "Belum ada akun",
-        email: "-",
-        role: "-",
-        name: "-",
-      };
+      return { status: "Belum ada akun", name: "-", role: "-", email: "-" };
     }
 
     const accountRole = emp?.user?.role;
@@ -130,8 +131,8 @@ export default function EmployeeDetailPage() {
   const employmentFields = [
     {
       label: "Jabatan Aktif",
-      value: emp?.grade ? `${emp.grade.name} (${String(emp.grade.code || "").toUpperCase()})` : emp?.position || "-",
-      helper: emp?.grade?.level ? `Level ${emp.grade.level}` : undefined,
+      value: emp?.position ? `${emp.position.name} (${String(emp.position.code || "").toUpperCase()})` : emp?.position || "-",
+      helper: emp?.position?.level ? `Level ${emp.position.level}` : undefined,
     },
     {
       label: "Basis Gaji Pokok",
@@ -146,6 +147,25 @@ export default function EmployeeDetailPage() {
       value: String(emp?.num_toddlers || 0),
     },
   ];
+
+  const handleResetPasswordClick = () => {
+    setConfirmResetModalOpen(true);
+  };
+
+  const performResetPassword = async () => {
+    setConfirmResetModalOpen(false);
+    setResetError("");
+    setResetting(true);
+    try {
+      const res = await api(`/employees/${id}/reset-password`, { method: "POST" });
+      setNewPassword(res.new_password);
+      setResetModalOpen(true);
+    } catch (err) {
+      window.alert(err.message || "Gagal mereset password.");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -282,15 +302,27 @@ export default function EmployeeDetailPage() {
                 title="Informasi Akun"
                 description="Keterkaitan akun login pegawai dengan akses ke aplikasi."
                 actions={
-                  hasAccount ? (
-                    <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
-                      sudah ada akun
-                    </Badge>
-                  ) : (
-                    <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
-                      belum ada akun
-                    </Badge>
-                  )
+                  <div className="flex gap-2 items-center">
+                    {hasAccount ? (
+                      <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                        sudah ada akun
+                      </Badge>
+                    ) : (
+                      <Badge className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
+                        belum ada akun
+                      </Badge>
+                    )}
+                    {hasAccount && isHCGA ? (
+                      <Button
+                        variant="outline"
+                        className="rounded border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                        onClick={handleResetPasswordClick}
+                        disabled={resetting}
+                      >
+                        {resetting ? "Memproses..." : "Reset Password"}
+                      </Button>
+                    ) : null}
+                  </div>
                 }
               >
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -353,7 +385,7 @@ export default function EmployeeDetailPage() {
           </div>
         )
       ) : (
-        <EmployeeHistoryHub employeeId={id} employeeName={emp?.name} />
+        <EmployeeHistoryHub employeeId={id} employeeName={emp?.name} role={role} />
       )}
 
       <EmployeeMutationModal
@@ -365,6 +397,75 @@ export default function EmployeeDetailPage() {
           mutate();
         }}
       />
+
+      {/* Reset Password Modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setResetModalOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200/50 animate-in fade-in zoom-in-95">
+            <button
+              onClick={() => setResetModalOpen(false)}
+              className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="mb-6 flex flex-col items-center text-center">
+              <div className="mb-4 rounded-full bg-emerald-100 p-3">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Password Berhasil Di-reset</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Gunakan password di bawah ini untuk login kembali. Harap simpan dengan baik.
+              </p>
+            </div>
+
+            <div className="mb-6 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-4 text-center">
+              <div className="text-xs font-semibold uppercase tracking-wider text-indigo-500 mb-1">
+                Password Baru
+              </div>
+              <div className="text-2xl font-mono font-bold text-indigo-700 select-all">
+                {newPassword}
+              </div>
+            </div>
+
+            <Button
+              className="w-full rounded-xl bg-indigo-600 py-2.5 font-semibold text-white shadow-sm hover:bg-indigo-700"
+              onClick={() => setResetModalOpen(false)}
+            >
+              Tutup
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Konfirmasi Reset Password Modal */}
+      {confirmResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setConfirmResetModalOpen(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200/50 animate-in fade-in zoom-in-95">
+            <h3 className="mb-2 text-lg font-bold text-slate-900">Konfirmasi Reset</h3>
+            <p className="mb-6 text-sm text-slate-500">
+              Yakin ingin mereset password akun pegawai ini? Password lama tidak akan bisa digunakan lagi.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                className="rounded-xl border-slate-200 hover:bg-slate-50"
+                onClick={() => setConfirmResetModalOpen(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                className="rounded-xl bg-rose-600 font-semibold text-white hover:bg-rose-700"
+                onClick={performResetPassword}
+              >
+                Ya, Reset
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

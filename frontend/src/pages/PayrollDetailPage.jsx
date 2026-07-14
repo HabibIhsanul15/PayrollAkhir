@@ -313,8 +313,13 @@ export default function PayrollDetailPage() {
               </div>
               <div className="text-right">
                 <div className="text-blue-200 text-sm mb-1">Periode</div>
-                <div className="text-xl font-bold">{periodeLabel}</div>
-                <div className="text-blue-200/60 text-xs mt-2">ID: #{row.id}</div>
+                <div className="text-xl font-bold">{row?.period_month ? row.period_month : periodeLabel}</div>
+                {row?.period_from && row?.period_to && (
+                  <div className="text-blue-200/80 text-xs mt-1">
+                    {new Date(row.period_from).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} - {new Date(row.period_to).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </div>
+                )}
+                <div className="text-blue-200/60 text-xs mt-2">ID: #{row?.id}</div>
               </div>
             </div>
           </div>
@@ -355,9 +360,9 @@ export default function PayrollDetailPage() {
                     <p className="text-xs text-slate-500">{row.employee_code || "-"}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={12} /> Posisi & Grade</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={12} /> Posisi & position</p>
                     <p className="font-medium text-slate-800">{row.employee?.position || "-"}</p>
-                    <p className="text-xs text-slate-500">{row.employee?.grade_name || "-"} · {row.employee?.department || "-"}</p>
+                    <p className="text-xs text-slate-500">{row.employee?.position_name || "-"} · {row.employee?.department || "-"}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={12} /> Basis Gaji Pokok</p>
@@ -403,7 +408,7 @@ export default function PayrollDetailPage() {
                             <div className="space-y-2 mt-2">
                               {row.monthly_recaps.map((recap, idx) => (
                                 <div key={idx} className="bg-white p-2.5 rounded-lg border border-slate-100 text-xs">
-                                  <div className="font-medium text-slate-700 mb-1">{recap.grade_name} <span className="text-slate-400 font-normal">(Mulai: {recap.effective_from})</span></div>
+                                  <div className="font-medium text-slate-700 mb-1">{recap.position_name} <span className="text-slate-400 font-normal">(Mulai: {recap.effective_from})</span></div>
                                   <div className="flex justify-between text-slate-500">
                                     <span>{recap.base_salary_basis_label}: {formatIDR(recap.base_salary_amount)}</span>
                                     <span>{recap.base_salary_basis === "monthly" ? `${formatPlainNumber(recap.total_mandays)} hari prorata` : `${formatPlainNumber(recap.total_mandays)} hari`}</span>
@@ -459,7 +464,7 @@ export default function PayrollDetailPage() {
                                 <div className="mt-3 space-y-1.5">
                                   {al.calculation_detail.segments.map((seg, sIdx) => (
                                     <div key={sIdx} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-[11px] border border-slate-100">
-                                      <span className="text-slate-600 font-medium">{seg.grade} {seg.mandays != null ? `(${formatPlainNumber(seg.mandays)} hr)` : ''} {seg.rate != null ? ` x ${formatIDR(seg.rate)}` : ''}</span>
+                                      <span className="text-slate-600 font-medium">{seg.position} {seg.mandays != null ? `(${formatPlainNumber(seg.mandays)} hr)` : ''} {seg.rate != null ? ` x ${formatIDR(seg.rate)}` : ''}</span>
                                       <span className="text-slate-700 font-semibold">{formatIDR(seg.amount)}</span>
                                     </div>
                                   ))}

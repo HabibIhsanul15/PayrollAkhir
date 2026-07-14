@@ -62,7 +62,7 @@ function normalizeName(name) {
   return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export default function GradeManagementPage() {
+export default function PositionManagementPage() {
   const navigate = useNavigate();
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
@@ -71,7 +71,7 @@ export default function GradeManagementPage() {
   const canAccessPage = isHCGA || isFinance;
   const { confirm } = useConfirm();
 
-  const { data, error, isLoading, mutate } = useSWR(canAccessPage ? "/master/grades" : null);
+  const { data, error, isLoading, mutate } = useSWR(canAccessPage ? "/master/positions" : null);
   const [rows, setRows] = useState([]);
   const [localErr, setErr] = useState("");
   const [success, setSuccess] = useState("");
@@ -193,7 +193,7 @@ export default function GradeManagementPage() {
 
     try {
       if (isEdit) {
-        const updated = await api(`/master/grades/${editId}`, { method: "PUT", body: payload });
+        const updated = await api(`/master/positions/${editId}`, { method: "PUT", body: payload });
         setRows((prev) =>
           prev.map((row) =>
             row.id === editId
@@ -203,7 +203,7 @@ export default function GradeManagementPage() {
         );
         setSuccess("Jabatan berhasil diperbarui.");
       } else {
-        const created = await api("/master/grades", { method: "POST", body: payload });
+        const created = await api("/master/positions", { method: "POST", body: payload });
         setRows((prev) => [...prev, created].sort((a, b) => a.level - b.level));
         setSuccess("Jabatan baru berhasil dibuat.");
       }
@@ -219,7 +219,7 @@ export default function GradeManagementPage() {
 
     clearMessage();
     try {
-      await api(`/master/grades/${id}`, { method: "DELETE" });
+      await api(`/master/positions/${id}`, { method: "DELETE" });
       await mutate();
       setSuccess("Jabatan dihapus.");
     } catch (deleteErr) {
@@ -258,7 +258,7 @@ export default function GradeManagementPage() {
           {isFinance ? (
             <Button
               variant="outline"
-              onClick={() => navigate("/master/grade-rates")}
+              onClick={() => navigate("/master/position-rates")}
               className="rounded border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50"
             >
               <SlidersHorizontal size={13} />

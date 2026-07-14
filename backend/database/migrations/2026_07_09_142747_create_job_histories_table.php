@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('job_histories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('grade_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('position_id')->nullable()->constrained()->nullOnDelete();
             $table->string('position')->nullable();
             
             $table->date('start_date');

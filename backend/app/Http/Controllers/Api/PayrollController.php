@@ -153,7 +153,7 @@ class PayrollController extends Controller
         $payroll->load([
             'user:id,name',
             'employee',
-            'employee.grade',
+            'employee.Position',
             'employee.employmentType',
             'employee.workBasis',
             'allowances.allowanceType',
@@ -327,10 +327,10 @@ class PayrollController extends Controller
                 'join_date' => optional($payroll->employee->join_date)->toDateString(),
                 'department' => $payroll->employee->department,
                 'position' => $payroll->employee->position,
-                'grade_name' => $payroll->employee->grade?->name,
-                'base_salary_basis' => $activeProfile['base_salary_basis'] ?? ($payroll->employee->grade?->base_salary_basis ?? 'daily'),
+                'position_name' => $payroll->employee->Position?->name,
+                'base_salary_basis' => $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily'),
                 'base_salary_basis_label' => $this->baseSalaryBasisLabel(
-                    $activeProfile['base_salary_basis'] ?? ($payroll->employee->grade?->base_salary_basis ?? 'daily')
+                    $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily')
                 ),
                 'bank_name' => $payroll->employee->bank_name,
                 'bank_account_name' => $payroll->employee->bank_account_name,
@@ -392,7 +392,7 @@ class PayrollController extends Controller
                         'base_salary_basis_label' => $this->baseSalaryBasisLabel($baseSalary['basis']),
                         'base_salary_amount' => (float) $baseSalary['amount'],
                         'position_allowance' => (float) $decBase,
-                        'grade_name' => $prof && $prof->grade ? $prof->grade->name : '-',
+                        'position_name' => $prof && $prof->Position ? $prof->Position->name : '-',
                         'effective_from' => $prof ? $prof->effective_from->toDateString() : '-',
                     ];
                 }),
@@ -578,7 +578,7 @@ class PayrollController extends Controller
         $payroll->load([
             'user:id,name',
             'employee',
-            'employee.grade',
+            'employee.Position',
             'employee.employmentType',
             'employee.workBasis',
             'allowances.allowanceType',
@@ -1071,9 +1071,9 @@ class PayrollController extends Controller
                 return (float) $profile->position_allowance;
             }
 
-            $grade = $profile->grade ?? $employee?->grade;
-            $posRate = $grade
-                ? \App\Models\GradeAllowanceRate::where('grade_id', $grade->id)
+            $Position = $profile->Position ?? $employee?->Position;
+            $posRate = $Position
+                ? \App\Models\PositionAllowanceRate::where('position_id', $Position->id)
                     ->whereHas('allowanceType', fn ($q) => $q->where('code', 'position'))
                     ->first()
                 : null;
@@ -1099,14 +1099,14 @@ class PayrollController extends Controller
             } elseif ($profile->mandays_rate !== null) {
                 $amount = $profile->mandays_rate;
             } else {
-                $grade = $profile->grade ?? $employee?->grade;
-                $amount = $grade?->default_base_salary_amount ?? $grade?->default_mandays_rate ?? 0;
+                $Position = $profile->Position ?? $employee?->Position;
+                $amount = $Position?->default_base_salary_amount ?? $Position?->default_mandays_rate ?? 0;
             }
         }
 
-        $grade = $profile->grade ?? $employee?->grade;
+        $Position = $profile->Position ?? $employee?->Position;
         $basis = $profile->base_salary_basis
-            ?? $grade?->base_salary_basis
+            ?? $Position?->base_salary_basis
             ?? match ($employee?->workBasis?->code) {
                 'monthly' => 'monthly',
                 default => 'daily',

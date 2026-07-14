@@ -36,7 +36,7 @@ class Employee extends Model
         'pii_key_id',
 
         // Phase 1 fields
-        'grade_id',
+        'position_id',
         'employment_type_id',
         'work_basis_id',
         'num_toddlers',
@@ -51,9 +51,9 @@ class Employee extends Model
         'is_on_probation' => 'boolean',
     ];
 
-    public function grade()
+    public function position()
     {
-        return $this->belongsTo(Grade::class, 'grade_id');
+        return $this->belongsTo(Position::class, 'position_id');
     }
 
     public function employmentType()
@@ -98,7 +98,7 @@ class Employee extends Model
         if ($this->status !== 'active') {
             $missing[] = 'Status karyawan tidak aktif';
         }
-        if (! $this->grade_id) {
+        if (! $this->position_id) {
             $missing[] = 'Jabatan belum dipilih';
         }
         if (! $this->currentSalaryProfile($date)) {

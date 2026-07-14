@@ -46,13 +46,13 @@ function getInfoBadge(type) {
   }
 }
 
-export default function EmployeePayrollPreview({ grade, form }) {
-  if (!grade) return null;
+export default function EmployeePayrollPreview({ position, form }) {
+  if (!position) return null;
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/50">
       <div className="border-b border-slate-200 bg-slate-100/50 px-4 py-3">
-        <h3 className="text-sm font-semibold text-slate-800">Standar Jabatan: {grade.name}</h3>
+        <h3 className="text-sm font-semibold text-slate-800">Standar Jabatan: {position.name}</h3>
         <p className="mt-0.5 text-[11px] text-slate-500">
           Nilai ini menjadi acuan payroll. Basis gaji pokok dan nominal default diatur dari menu Jabatan.
         </p>
@@ -101,7 +101,7 @@ export default function EmployeePayrollPreview({ grade, form }) {
           </div>
         </div>
 
-        {grade.allowance_rates?.length > 0 ? (
+        {position.allowance_rates?.length > 0 ? (
           <div>
             <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">
               Daftar Tunjangan
@@ -116,7 +116,7 @@ export default function EmployeePayrollPreview({ grade, form }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {grade.allowance_rates.map((rate, index) => {
+                  {position.allowance_rates.map((rate, index) => {
                     const conditionStatus = getAllowanceConditionStatus(rate.allowance_type, form);
 
                     return (

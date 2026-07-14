@@ -74,7 +74,7 @@ export default function PayrollCreateModal({ open, onClose, onSuccess }) {
           <div>
             <h2 className="text-lg font-bold text-slate-800">Generate Payroll Baru</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Sistem akan menghitung komponen gaji otomatis berdasarkan Grade.
+              Sistem akan menghitung komponen gaji otomatis berdasarkan position.
             </p>
           </div>
           <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-50 transition-colors">

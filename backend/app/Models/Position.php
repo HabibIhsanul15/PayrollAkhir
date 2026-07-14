@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Grade extends Model
+class Position extends Model
 {
     protected $fillable = [
         'code',
@@ -26,12 +26,12 @@ class Grade extends Model
 
     public function employees()
     {
-        return $this->hasMany(Employee::class, 'grade_id');
+        return $this->hasMany(Employee::class, 'position_id');
     }
 
     public function allowanceRates()
     {
-        return $this->hasMany(GradeAllowanceRate::class, 'grade_id');
+        return $this->hasMany(PositionAllowanceRate::class, 'position_id');
     }
 
     public function salaryProfiles()

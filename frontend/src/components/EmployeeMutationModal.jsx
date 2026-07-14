@@ -3,71 +3,74 @@ import { api } from "@/lib/api";
 import { X } from "lucide-react";
 
 export default function EmployeeMutationModal({ isOpen, onClose, employee, onSuccess }) {
-  const [grades, setGrades] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const [form, setForm] = useState({
     mutation_type: "promotion",
-    grade_id: "",
-    effective_from: "",
+    position_id: "",
+    period_choice: "current",
     notes: "",
   });
 
   useEffect(() => {
+    let active = true;
     if (isOpen) {
-      loadGrades();
-      
-      // Default to 1st of next month for effective date
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      nextMonth.setDate(1);
-      
-      setForm({
-        mutation_type: "promotion",
-        grade_id: "",
-        effective_from: nextMonth.toISOString().split("T")[0],
-        notes: "",
-      });
-      setErr("");
+      const fetchData = async () => {
+        setLoading(true);
+        try {
+          const positionsRes = await api("/master/positions?active_only=1");
+          if (active) {
+            setPositions(Array.isArray(positionsRes) ? positionsRes : []);
+            
+            setForm({
+              mutation_type: "promotion",
+              position_id: "",
+              period_choice: "current",
+              notes: "",
+            });
+            setErr("");
+          }
+        } catch {
+          if (active) setErr("Gagal memuat data master.");
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+      fetchData();
     }
+    return () => { active = false; };
   }, [isOpen]);
 
   useEffect(() => {
-    setForm((current) => ({ ...current, grade_id: "" }));
+    setForm((current) => ({ ...current, position_id: "" }));
   }, [form.mutation_type]);
-
-  const loadGrades = async () => {
-    setLoading(true);
-    try {
-      const res = await api("/master/grades?active_only=1");
-      setGrades(Array.isArray(res) ? res : []);
-    } catch {
-      setErr("Gagal memuat data master jabatan.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
     setSaving(true);
     
-    if (!form.grade_id) {
-      setErr("Jabatan (Grade) baru harus dipilih.");
+    if (!form.position_id) {
+      setErr("Jabatan (position) baru harus dipilih.");
       setSaving(false);
       return;
     }
     
+    let effectiveDate = new Date();
+    if (form.period_choice === "next") {
+      effectiveDate.setDate(effectiveDate.getDate() + 30);
+    }
+
     try {
       await api(`/employees/${employee.id}/mutate`, {
         method: "POST",
         body: {
           mutation_type: form.mutation_type,
-          grade_id: parseInt(form.grade_id),
-          effective_from: form.effective_from,
+          position_id: parseInt(form.position_id),
+          effective_from: effectiveDate.toISOString().split("T")[0],
           notes: form.notes,
         },
       });
@@ -79,29 +82,29 @@ export default function EmployeeMutationModal({ isOpen, onClose, employee, onSuc
     }
   };
 
-  const currentGradeId = Number(employee?.grade?.id ?? employee?.grade_id ?? 0);
-  const currentGradeLevel = Number(employee?.grade?.level ?? NaN);
-  const hasCurrentGradeLevel = Number.isFinite(currentGradeLevel) && currentGradeLevel > 0;
+  const currentPositionId = Number(employee?.position?.id ?? employee?.position_id ?? 0);
+  const currentPositionLevel = Number(employee?.position?.level ?? NaN);
+  const hascurrentPositionLevel = Number.isFinite(currentPositionLevel) && currentPositionLevel > 0;
   const mutationLabel = form.mutation_type === "promotion" ? "Promosi" : "Demosi";
 
-  const eligibleGrades = useMemo(() => {
-    if (!hasCurrentGradeLevel) {
+  const eligiblePositions = useMemo(() => {
+    if (!hascurrentPositionLevel) {
       return [];
     }
 
-    return grades.filter((grade) => {
-      const targetId = Number(grade?.id ?? 0);
-      const targetLevel = Number(grade?.level ?? NaN);
+    return positions.filter((position) => {
+      const targetId = Number(position?.id ?? 0);
+      const targetLevel = Number(position?.level ?? NaN);
 
-      if (!targetId || targetId === currentGradeId || !Number.isFinite(targetLevel)) {
+      if (!targetId || targetId === currentPositionId || !Number.isFinite(targetLevel)) {
         return false;
       }
 
       return form.mutation_type === "promotion"
-        ? targetLevel < currentGradeLevel
-        : targetLevel > currentGradeLevel;
+        ? targetLevel < currentPositionLevel
+        : targetLevel > currentPositionLevel;
     });
-  }, [grades, form.mutation_type, hasCurrentGradeLevel, currentGradeId, currentGradeLevel]);
+  }, [positions, form.mutation_type, hascurrentPositionLevel, currentPositionId, currentPositionLevel]);
 
   if (!isOpen || !employee) return null;
 
@@ -136,12 +139,12 @@ export default function EmployeeMutationModal({ isOpen, onClose, employee, onSuc
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">Jabatan Sekarang</div>
-                  <div className="text-sm font-semibold text-slate-900">{employee.grade?.name || '-'}</div>
+                  <div className="text-sm font-semibold text-slate-900">{employee.position?.name || '-'}</div>
                 </div>
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">Level Sekarang</div>
                   <div className="text-sm font-semibold text-slate-900">
-                    {hasCurrentGradeLevel ? `Level ${currentGradeLevel}` : "-"}
+                    {hascurrentPositionLevel ? `Level ${currentPositionLevel}` : "-"}
                   </div>
                 </div>
               </div>
@@ -166,39 +169,43 @@ export default function EmployeeMutationModal({ isOpen, onClose, employee, onSuc
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700">Tanggal Efektif</label>
-                <input
-                  type="date"
+                <label className="text-xs font-semibold text-slate-700">Pilih Opsi Keberlakuan</label>
+                <select
                   required
-                  value={form.effective_from}
-                  onChange={(e) => setForm(p => ({ ...p, effective_from: e.target.value }))}
+                  value={form.period_choice}
+                  onChange={(e) => setForm(p => ({ ...p, period_choice: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
-                />
-                <p className="text-[10px] text-slate-500">* Dianjurkan tanggal 1 pada bulan baru untuk perhitungan gaji yang akurat.</p>
+                >
+                  <option value="current">Mulai Periode Berjalan (Gaji Bulan Ini)</option>
+                  <option value="next">Mulai Periode Selanjutnya (Gaji Bulan Depan)</option>
+                </select>
+                <p className="text-[10px] text-emerald-600 mt-1 font-medium bg-emerald-50 p-1.5 rounded border border-emerald-100">
+                  * Otomatis mengunci efektifitas ke awal Cutoff periode yang dipilih.
+                </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700">Jabatan Tujuan {mutationLabel}</label>
               <select
-                value={form.grade_id}
-                onChange={(e) => setForm((current) => ({ ...current, grade_id: e.target.value }))}
-                disabled={loading || !hasCurrentGradeLevel || eligibleGrades.length === 0}
+                value={form.position_id}
+                onChange={(e) => setForm((current) => ({ ...current, position_id: e.target.value }))}
+                disabled={loading || !hascurrentPositionLevel || eligiblePositions.length === 0}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
               >
                 <option value="">-- Pilih Jabatan Tujuan --</option>
-                {eligibleGrades.map((g) => (
+                {eligiblePositions.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name} ({g.code.toUpperCase()}) - Level {g.level}
                   </option>
                 ))}
               </select>
-              {!hasCurrentGradeLevel && (
+              {!hascurrentPositionLevel && (
                 <p className="text-[10px] text-rose-600">
                   Level jabatan saat ini belum tersedia, jadi sistem belum bisa menentukan opsi promosi atau demosi.
                 </p>
               )}
-              {hasCurrentGradeLevel && !loading && eligibleGrades.length === 0 && (
+              {hascurrentPositionLevel && !loading && eligiblePositions.length === 0 && (
                 <p className="text-[10px] text-slate-500">
                   Tidak ada jabatan aktif yang cocok untuk {mutationLabel.toLowerCase()} dari level saat ini.
                 </p>
@@ -230,7 +237,7 @@ export default function EmployeeMutationModal({ isOpen, onClose, employee, onSuc
           <button
             form="mutation-form"
             type="submit"
-            disabled={saving || loading || !form.grade_id || !hasCurrentGradeLevel}
+            disabled={saving || loading || !form.position_id || !hascurrentPositionLevel}
             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-4 focus:ring-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Menyimpan..." : `Simpan ${mutationLabel}`}

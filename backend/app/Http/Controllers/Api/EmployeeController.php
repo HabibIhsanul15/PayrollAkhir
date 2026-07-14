@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Grade;
+use App\Models\Position;
 use App\Models\User;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
@@ -62,17 +62,17 @@ class EmployeeController extends Controller
         ];
     }
 
-    private function resolveBaseSalaryPayload(Grade $grade, array $data): array
+    private function resolveBaseSalaryPayload(Position $Position, array $data): array
     {
         $basis = $data['base_salary_basis']
-            ?? $grade->base_salary_basis
+            ?? $Position->base_salary_basis
             ?? 'daily';
 
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
             ? (float) $data['base_salary_amount']
             : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
                 ? (float) $data['mandays_rate']
-                : (float) ($grade->default_base_salary_amount ?? $grade->default_mandays_rate ?? 0));
+                : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
 
         return [
             'basis' => $basis,
@@ -80,9 +80,9 @@ class EmployeeController extends Controller
         ];
     }
 
-    private function resolveBaseSalaryFromProfile(Employee $employee, $profile, ?Grade $grade = null): array
+    private function resolveBaseSalaryFromProfile(Employee $employee, $profile, ?Position $Position = null): array
     {
-        $grade ??= $profile->grade ?? $employee->grade;
+        $Position ??= $profile->Position ?? $employee->Position;
         $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
 
         $amount = $profile->base_salary_amount_enc
@@ -96,15 +96,15 @@ class EmployeeController extends Controller
                 $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $alg);
             } elseif ($profile->mandays_rate !== null) {
                 $amount = (string) $profile->mandays_rate;
-            } elseif ($grade?->default_base_salary_amount !== null) {
-                $amount = (string) $grade->default_base_salary_amount;
-            } elseif ($grade?->default_mandays_rate !== null) {
-                $amount = (string) $grade->default_mandays_rate;
+            } elseif ($Position?->default_base_salary_amount !== null) {
+                $amount = (string) $Position->default_base_salary_amount;
+            } elseif ($Position?->default_mandays_rate !== null) {
+                $amount = (string) $Position->default_mandays_rate;
             }
         }
 
         $basis = $profile->base_salary_basis
-            ?? $grade?->base_salary_basis
+            ?? $Position?->base_salary_basis
             ?? match ($employee->workBasis?->code) {
                 'monthly' => 'monthly',
                 default => 'daily',
@@ -133,7 +133,7 @@ class EmployeeController extends Controller
         }
 
         return $query->with([
-            'grade:id,code,name,is_active',
+            'Position:id,code,name,is_active',
             'employmentType:id,code,name',
         ])->get([
             'id',
@@ -142,7 +142,7 @@ class EmployeeController extends Controller
             'position',
             'status',
             'user_id',
-            'grade_id',
+            'position_id',
             'join_date',
             'employment_type_id',
             'work_basis_id',
@@ -187,17 +187,17 @@ class EmployeeController extends Controller
         $user = $request->user();
         $role = $this->roleOf($user);
         $currentProfile = $employee->currentSalaryProfile();
-        $currentGrade = Grade::find($currentProfile?->grade_id ?? $employee->grade_id);
+        $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $baseSalary = $currentProfile
-            ? $this->resolveBaseSalaryFromProfile($employee, $currentProfile, $currentGrade)
+            ? $this->resolveBaseSalaryFromProfile($employee, $currentProfile, $currentPosition)
             : null;
 
         $isOwner = $employee->user_id && (int) $employee->user_id === (int) $user->id;
         $canSeePayrollNominal = in_array($role, ['fat', 'director'], true);
-        $gradePayload = $currentGrade?->toArray();
+        $positionPayload = $currentPosition?->toArray();
 
-        if ($gradePayload && ! $canSeePayrollNominal) {
-            unset($gradePayload['default_base_salary_amount'], $gradePayload['default_mandays_rate']);
+        if ($positionPayload && ! $canSeePayrollNominal) {
+            unset($positionPayload['default_base_salary_amount'], $positionPayload['default_mandays_rate']);
         }
 
         // akses dasar:
@@ -216,18 +216,18 @@ class EmployeeController extends Controller
             'name' => $employee->name,
             'join_date' => optional($employee->join_date)->toDateString(),
             'department' => $employee->department,
-            'position' => $currentProfile?->position ?? $employee->grade?->name ?? $employee->position,
+            'position' => $currentProfile?->position ?? $employee->Position?->name ?? $employee->position,
             'status' => $employee->status,
             'user_id' => $employee->user_id,
 
             // Phase 1 fields:
-            'grade_id' => $currentProfile?->grade_id ?? $employee->grade_id,
+            'position_id' => $currentProfile?->position_id ?? $employee->position_id,
             'employment_type_id' => $employee->employment_type_id,
             'work_basis_id' => $employee->work_basis_id,
             'num_toddlers' => (int) $employee->num_toddlers,
             'is_trainer' => (bool) $employee->is_trainer,
             'is_on_probation' => (bool) $employee->is_on_probation,
-            'grade' => $gradePayload,
+            'Position' => $positionPayload,
             'employment_type' => $employee->employmentType,
             'work_basis' => $employee->workBasis,
             'salary_profile_summary' => $baseSalary ? [
@@ -301,42 +301,57 @@ class EmployeeController extends Controller
 
     public function createUser(Request $request, Employee $employee)
     {
-        $actor = $request->user();
-
-        // hanya HCGA bikin akun
-        if (! $this->inRoles($actor, ['hcga'])) {
+        $user = $request->user();
+        if (! $this->inRoles($user, ['hcga', 'director'])) {
             return $this->forbid();
         }
 
         if ($employee->user_id) {
-            return response()->json(['message' => 'Employee ini sudah punya akun.'], 422);
+            return response()->json(['message' => 'Pegawai ini sudah memiliki akun.'], 400);
         }
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'role' => ['required', Rule::in(['staff', 'hcga'])],
+            'role' => ['required', \Illuminate\Validation\Rule::in(['staff', 'hcga', 'fat', 'director'])],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $user = User::create([
-            'name' => $data['name'],
+        $account = User::create([
+            'name' => $employee->name,
             'email' => $data['email'],
             'role' => $data['role'],
             'password' => Hash::make($data['password']),
         ]);
 
-        $employee->update(['user_id' => $user->id]);
+        $employee->user_id = $account->id;
+        $employee->save();
 
         return response()->json([
-            'message' => 'Akun berhasil dibuat.',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-            ],
+            'message' => 'Akun berhasil dibuat dan dihubungkan.',
+            'user' => $account,
         ], 201);
+    }
+
+    public function resetPassword(Request $request, Employee $employee)
+    {
+        $user = $request->user();
+        if (! $this->inRoles($user, ['hcga', 'director'])) {
+            return $this->forbid();
+        }
+
+        if (! $employee->user_id) {
+            return response()->json(['message' => 'Karyawan ini tidak memiliki akun login.'], 400);
+        }
+
+        $newPassword = 'Password123!'; 
+        $account = \App\Models\User::find($employee->user_id);
+        $account->password = \Illuminate\Support\Facades\Hash::make($newPassword);
+        $account->save();
+
+        return response()->json([
+            'message' => 'Password berhasil di-reset.',
+            'new_password' => $newPassword
+        ]);
     }
 
     public function salaryProfile(Request $request, Employee $employee)
@@ -362,11 +377,11 @@ class EmployeeController extends Controller
         $allow = $profile->allowance_fixed_enc ? (float) CryptoService::decryptByAlg($profile->allowance_fixed_enc, $alg) : (float) $profile->allowance_fixed;
         $ded = $profile->deduction_fixed_enc ? (float) CryptoService::decryptByAlg($profile->deduction_fixed_enc, $alg) : (float) $profile->deduction_fixed;
 
-        $effectiveGradeId = $profile->grade_id ?? $employee->grade_id;
+        $effectivepositionId = $profile->position_id ?? $employee->position_id;
         $effectivePosition = $profile->position ?? $employee->position;
 
-        $grade = $effectiveGradeId ? \App\Models\Grade::find($effectiveGradeId) : null;
-        $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $profile, $grade);
+        $Position = $effectivepositionId ? \App\Models\Position::find($effectivepositionId) : null;
+        $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $profile, $Position);
 
         $is_using_default_base = false;
         if ($positionVal === null || $positionVal === '') {
@@ -374,7 +389,7 @@ class EmployeeController extends Controller
                 $base = (float) $profile->position_allowance;
                 $is_using_default_base = false;
             } else {
-                $posRate = $grade ? $this->rateResolver->resolveByCode($grade->id, 'position', $date) : null;
+                $posRate = $Position ? $this->rateResolver->resolveByCode($Position->id, 'position', $date) : null;
                 $base = $posRate ? (float) $posRate->rate_amount : 0.0;
                 $is_using_default_base = true;
             }
@@ -391,7 +406,7 @@ class EmployeeController extends Controller
         return response()->json([
             'employee_id' => $employee->id,
             'effective_from' => $profile->effective_from->toDateString(),
-            'grade_id' => $effectiveGradeId,
+            'position_id' => $effectivepositionId,
             'position' => $effectivePosition,
             'base_salary_basis' => $baseSalary['basis'],
             'base_salary_amount' => $baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null,
@@ -434,7 +449,7 @@ class EmployeeController extends Controller
             'pii_alg' => ['nullable', 'in:AES,RSA'],
 
             // Phase 1 fields:
-            'grade_id' => ['required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'employment_type_id' => ['nullable', Rule::exists('employment_types', 'id')->where('is_active', true)],
             'num_toddlers' => ['nullable', 'integer', 'min:0'],
             'is_trainer' => ['nullable', 'boolean'],
@@ -453,10 +468,10 @@ class EmployeeController extends Controller
         ], $this->digitFieldMessages());
 
         $employee = DB::transaction(function () use ($data) {
-            $grade = Grade::findOrFail($data['grade_id']);
-            $salaryConfig = $this->resolveBaseSalaryPayload($grade, $data);
+            $Position = Position::findOrFail($data['position_id']);
+            $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
             $effectiveFrom = $data['join_date'] ?? now()->startOfMonth()->toDateString();
-            $positionRate = $this->rateResolver->resolveByCode($grade->id, 'position', $effectiveFrom);
+            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']
                 : (float) ($positionRate?->rate_amount ?? 0);
@@ -480,7 +495,7 @@ class EmployeeController extends Controller
 
             $employeeData = $data;
             $employeeData['user_id'] = $userId;
-            $employeeData['position'] = $grade->name;
+            $employeeData['position'] = $Position->name;
             $employeeData['status'] = 'active';
             $employeeData['join_date'] = $data['join_date'] ?? $effectiveFrom;
             $employeeData['num_toddlers'] = $data['num_toddlers'] ?? 0;
@@ -504,8 +519,8 @@ class EmployeeController extends Controller
             $salaryAlg = 'AES';
 
             $employee->salaryProfiles()->create([
-                'grade_id' => $grade->id,
-                'position' => $grade->name,
+                'position_id' => $Position->id,
+                'position' => $Position->name,
                 'base_salary_basis' => $salaryConfig['basis'],
                 'base_salary_amount' => 0,
                 'position_allowance' => 0,
@@ -523,8 +538,8 @@ class EmployeeController extends Controller
             ]);
 
             $employee->jobHistories()->create([
-                'grade_id' => $grade->id,
-                'position' => $grade->name,
+                'position_id' => $Position->id,
+                'position' => $Position->name,
                 'start_date' => $effectiveFrom,
                 'status' => 'active',
                 'notes' => 'Penempatan awal karyawan',
@@ -534,7 +549,7 @@ class EmployeeController extends Controller
         });
 
         return response()->json([
-            'employee' => $employee->fresh(['grade', 'employmentType', 'workBasis', 'salaryProfiles']),
+            'employee' => $employee->fresh(['Position', 'employmentType', 'workBasis', 'salaryProfiles']),
         ], 201);
     }
 
@@ -549,18 +564,18 @@ class EmployeeController extends Controller
         $canSeeNominal = in_array($role, ['fat', 'director'], true);
 
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
-        $employeeGrade = $employee->grade;
+        $employeePosition = $employee->Position;
 
-        $results = $profiles->map(function ($p) use ($employeeGrade, $canSeeNominal, $employee) {
+        $results = $profiles->map(function ($p) use ($employeePosition, $canSeeNominal, $employee) {
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
 
             $positionVal = $p->position_allowance_enc ? CryptoService::decryptByAlg($p->position_allowance_enc, $alg) : null;
             $allow = $p->allowance_fixed_enc ? (float) CryptoService::decryptByAlg($p->allowance_fixed_enc, $alg) : (float) $p->allowance_fixed;
             $ded = $p->deduction_fixed_enc ? (float) CryptoService::decryptByAlg($p->deduction_fixed_enc, $alg) : (float) $p->deduction_fixed;
 
-            $effectiveGradeId = $p->grade_id ?? null;
-            $grade = $effectiveGradeId ? \App\Models\Grade::find($effectiveGradeId) : $employeeGrade;
-            $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $p, $grade);
+            $effectivepositionId = $p->position_id ?? null;
+            $Position = $effectivepositionId ? \App\Models\Position::find($effectivepositionId) : $employeePosition;
+            $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $p, $Position);
 
             $is_using_default_base = false;
             if ($positionVal === null || $positionVal === '') {
@@ -568,8 +583,8 @@ class EmployeeController extends Controller
                     $base = (float) $p->position_allowance;
                     $is_using_default_base = false;
                 } else {
-                    $posRate = $grade
-                        ? $this->rateResolver->resolveByCode($grade->id, 'position', $p->effective_from)
+                    $posRate = $Position
+                        ? $this->rateResolver->resolveByCode($Position->id, 'position', $p->effective_from)
                         : null;
                     $base = $posRate ? (float) $posRate->rate_amount : 0.0;
                     $is_using_default_base = true;
@@ -582,8 +597,8 @@ class EmployeeController extends Controller
             return [
                 'id' => $p->id,
                 'effective_from' => $p->effective_from->toDateString(),
-                'grade_id' => $effectiveGradeId,
-                'grade_name' => $grade ? $grade->name : '-',
+                'position_id' => $effectivepositionId,
+                'position_name' => $Position ? $Position->name : '-',
                 'position' => $p->position,
                 'base_salary_basis' => $baseSalary['basis'],
                 'base_salary_amount' => $canSeeNominal ? ($baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null) : null,
@@ -622,21 +637,21 @@ class EmployeeController extends Controller
             'late_penalty_per_minute' => ['nullable', 'numeric', 'min:0'],
             'mandays_rate' => ['nullable', 'numeric', 'min:0'],
 
-            'grade_id' => ['required', Rule::exists('grades', 'id')->where('is_active', true)],
+            'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
 
             'salary_alg' => ['nullable', 'in:AES,RSA'],
         ]);
 
         $profile = DB::transaction(function () use ($data, $employee) {
-            $grade = Grade::findOrFail($data['grade_id']);
+            $Position = Position::findOrFail($data['position_id']);
             $effectiveFrom = \Carbon\Carbon::parse($data['effective_from'])->startOfDay();
             $alg = strtoupper((string) ($data['salary_alg'] ?? 'AES'));
             $encrypt = fn (string $value) => $alg === 'RSA'
                 ? CryptoService::encryptRSA($value)
                 : CryptoService::encryptAESGCM($value);
-            $salaryConfig = $this->resolveBaseSalaryPayload($grade, $data);
+            $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
 
-            $positionRate = $this->rateResolver->resolveByCode($grade->id, 'position', $effectiveFrom);
+            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']
                 : (float) ($positionRate?->rate_amount ?? 0);
@@ -650,8 +665,8 @@ class EmployeeController extends Controller
             $profile = $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveFrom->toDateString()],
                 [
-                    'grade_id' => $grade->id,
-                    'position' => $grade->name,
+                    'position_id' => $Position->id,
+                    'position' => $Position->name,
                     'base_salary_basis' => $salaryConfig['basis'],
                     'base_salary_amount' => 0,
                     'position_allowance' => 0,
@@ -689,8 +704,8 @@ class EmployeeController extends Controller
             $employee->jobHistories()->updateOrCreate(
                 ['start_date' => $effectiveFrom->toDateString()],
                 [
-                    'grade_id' => $grade->id,
-                    'position' => $grade->name,
+                    'position_id' => $Position->id,
+                    'position' => $Position->name,
                     'end_date' => null,
                     'status' => $effectiveFrom->isFuture() ? 'inactive' : 'active',
                     'notes' => $effectiveFrom->isFuture() ? 'Perubahan jabatan terjadwal' : 'Perubahan jabatan diterapkan',
@@ -698,7 +713,7 @@ class EmployeeController extends Controller
             );
 
             if (! $effectiveFrom->isFuture()) {
-                $employee->update(['grade_id' => $grade->id, 'position' => $grade->name]);
+                $employee->update(['position_id' => $Position->id, 'position' => $Position->name]);
             }
 
             return $profile;
@@ -790,7 +805,7 @@ class EmployeeController extends Controller
 
         return response()->json([
             'message' => 'Employee updated',
-            'employee' => $employee->fresh(['grade', 'employmentType', 'workBasis']),
+            'employee' => $employee->fresh(['Position', 'employmentType', 'workBasis']),
         ]);
     }
 
@@ -826,7 +841,7 @@ class EmployeeController extends Controller
             return $this->forbid();
         }
 
-        $histories = $employee->jobHistories()->with('grade')->orderBy('start_date', 'desc')->get();
+        $histories = $employee->jobHistories()->with('Position')->orderBy('start_date', 'desc')->get();
 
         return response()->json($histories);
     }

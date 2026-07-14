@@ -22,7 +22,7 @@ export default function EmployeeCreatePage() {
     employee_code: "",
     name: "",
     join_date: "",
-    grade_id: "",
+    position_id: "",
     position_allowance: "",
     base_salary_basis: "daily",
     base_salary_amount: "",
@@ -42,7 +42,7 @@ export default function EmployeeCreatePage() {
     password_confirmation: "",
   });
 
-  const [grades, setGrades] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingCode, setLoadingCode] = useState(true);
   const [errors, setErrors] = useState({});
@@ -100,34 +100,34 @@ export default function EmployeeCreatePage() {
     setServerError("");
   }
 
-  function applySelectedGrade(gradeId) {
-    const grade = grades.find((item) => String(item.id) === String(gradeId));
+  function applyselectedPosition(positionId) {
+    const position = positions.find((item) => String(item.id) === String(positionId));
 
-    if (grade) {
-      const positionRate = grade.allowance_rates?.find(
+    if (position) {
+      const positionRate = position.allowance_rates?.find(
         (rate) => rate.allowance_type?.code === "position"
       );
 
       setForm((prev) => ({
         ...prev,
-        grade_id: gradeId,
+        position_id: positionId,
         position_allowance: positionRate ? positionRate.rate_amount : 0,
-        base_salary_basis: grade.base_salary_basis || "daily",
-        base_salary_amount: grade.default_base_salary_amount || 0,
+        base_salary_basis: position.base_salary_basis || "daily",
+        base_salary_amount: position.default_base_salary_amount || 0,
       }));
-      setErrors((prev) => ({ ...prev, grade_id: undefined }));
+      setErrors((prev) => ({ ...prev, position_id: undefined }));
       setServerError("");
       return;
     }
 
     setForm((prev) => ({
       ...prev,
-      grade_id: gradeId,
+      position_id: positionId,
       position_allowance: "",
       base_salary_basis: "daily",
       base_salary_amount: "",
     }));
-    setErrors((prev) => ({ ...prev, grade_id: undefined }));
+    setErrors((prev) => ({ ...prev, position_id: undefined }));
     setServerError("");
   }
 
@@ -138,7 +138,7 @@ export default function EmployeeCreatePage() {
       try {
         setLoadingCode(true);
         const nextCodeData = await api("/employees/next-code");
-        const gradesList = await api("/master/grades?active_only=1");
+        const positionsList = await api("/master/positions?active_only=1");
 
         if (!mounted) return;
 
@@ -149,7 +149,7 @@ export default function EmployeeCreatePage() {
           }));
         }
 
-        setGrades(Array.isArray(gradesList) ? gradesList : []);
+        setPositions(Array.isArray(positionsList) ? positionsList : []);
       } catch (error) {
         console.error("Failed to load master lists:", error);
       } finally {
@@ -169,7 +169,7 @@ export default function EmployeeCreatePage() {
 
     if (!form.employee_code.trim()) nextErrors.employee_code = "Kode pegawai wajib terisi.";
     if (!form.name.trim()) nextErrors.name = "Nama wajib diisi.";
-    if (!form.grade_id) nextErrors.grade_id = "Jabatan wajib dipilih.";
+    if (!form.position_id) nextErrors.position_id = "Jabatan wajib dipilih.";
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -184,7 +184,7 @@ export default function EmployeeCreatePage() {
 
     try {
       const payload = {
-        grade_id: form.grade_id ? parseInt(form.grade_id, 10) : null,
+        position_id: form.position_id ? parseInt(form.position_id, 10) : null,
         employee_code: form.employee_code,
         name: form.name,
         join_date: form.join_date || null,
@@ -227,11 +227,11 @@ export default function EmployeeCreatePage() {
     }
   }
 
-  const selectedGrade = grades.find((grade) => String(grade.id) === String(form.grade_id));
+  const selectedPosition = positions.find((position) => String(position.id) === String(form.position_id));
   const hasChildcare =
-    selectedGrade?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
+    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
   const hasTraining =
-    selectedGrade?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
+    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
 
   return (
     <div className="space-y-6">
@@ -295,24 +295,24 @@ export default function EmployeeCreatePage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600">Jabatan *</label>
                 <select
-                  value={form.grade_id}
-                  onChange={(event) => applySelectedGrade(event.target.value)}
+                  value={form.position_id}
+                  onChange={(event) => applyselectedPosition(event.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
                 >
                   <option value="">-- Pilih Jabatan --</option>
-                  {grades.map((grade) => (
-                    <option key={grade.id} value={grade.id}>
-                      {grade.name} ({grade.code.toUpperCase()})
+                  {positions.map((position) => (
+                    <option key={position.id} value={position.id}>
+                      {position.name} ({position.code.toUpperCase()})
                     </option>
                   ))}
                 </select>
-                {errors.grade_id ? <p className="text-xs text-rose-500">{errors.grade_id}</p> : null}
+                {errors.position_id ? <p className="text-xs text-rose-500">{errors.position_id}</p> : null}
               </div>
             </div>
 
-            {selectedGrade ? (
+            {selectedPosition ? (
               <EmployeeNotice tone="info">
-                Jabatan terpilih: <b>{selectedGrade.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
+                Jabatan terpilih: <b>{selectedPosition.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
               </EmployeeNotice>
             ) : (
               <EmployeeNotice>Pilih jabatan aktif yang akan menjadi acuan payroll pegawai.</EmployeeNotice>

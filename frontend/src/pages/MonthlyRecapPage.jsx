@@ -473,7 +473,7 @@ export default function MonthlyRecapPage() {
                     if (!prof) return null;
                     return (
                       <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                        <div className="font-semibold text-slate-900">{prof.grade_name || "Jabatan"}</div>
+                        <div className="font-semibold text-slate-900">{prof.position_name || "Jabatan"}</div>
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                           <span>Mulai: {prof.effective_from}</span>
                           <span>Segmen jabatan untuk rekap payroll</span>
@@ -492,7 +492,7 @@ export default function MonthlyRecapPage() {
                       <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
                         Segmen Mutasi: {(() => {
                           const prof = employeeProfiles.find(p => String(p.id) === String(recap.salary_profile_id));
-                          return prof ? `Mulai ${prof.effective_from} (Jabatan: ${prof.grade_name})` : "Profil Tidak Ditemukan";
+                          return prof ? `Mulai ${prof.effective_from} (Jabatan: ${prof.position_name})` : "Profil Tidak Ditemukan";
                         })()}
                       </div>
                     </div>
@@ -654,7 +654,7 @@ function RecapDetailModal({ group, onClose }) {
                 {group.items.map((item, index) => (
                   <tr key={item.id || index}>
                     <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">{item.salary_profile?.grade_name || item.employee?.grade?.name || `Segmen ${index + 1}`}</div>
+                      <div className="font-medium text-slate-900">{item.salary_profile?.position_name || item.employee?.position?.name || `Segmen ${index + 1}`}</div>
                       <div className="text-xs text-slate-500">{item.salary_profile?.effective_from ? `Mulai ${item.salary_profile.effective_from}` : "Rekap utama"}</div>
                     </td>
                     <td className="px-3 py-2 text-right">{cleanNumber(item.wfo_days)}</td>
