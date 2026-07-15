@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X, AlertCircle, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatRupiah, monthLabel } from "@/lib/utils";
@@ -21,11 +21,13 @@ export default function PayrollPreviewModal({
   const [error, setError] = useState("");
 
   const [amount, setAmount] = useState("");
+  const [deductionTypeId, setDeductionTypeId] = useState("");
+  const [deductionTypes, setDeductionTypes] = useState([]);
   const [description, setDescription] = useState("");
   const [savingDeduction, setSavingDeduction] = useState(false);
 
-  const loadPreview = useCallback(async () => {
-    setLoading(true);
+  const loadPreview = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError("");
     try {
       const res = await api("/payrolls/preview-calculation", {
@@ -40,7 +42,7 @@ export default function PayrollPreviewModal({
     } catch (err) {
       setError(err?.message || "Gagal memuat detail simulasi");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [employeeId, payrollId, periodMonth]);
 
@@ -50,6 +52,51 @@ export default function PayrollPreviewModal({
     }
   }, [isOpen, employeeId, periodMonth, loadPreview]);
 
+  useEffect(() => {
+    if (!isOpen || !isFAT) return;
+
+    api("/master/deduction-types?active_only=1")
+      .then((response) => {
+        const rows = Array.isArray(response) ? response : response?.data || [];
+        setDeductionTypes(rows);
+        setDeductionTypeId((current) => (
+          rows.some((row) => String(row.id) === String(current))
+            ? current
+            : String(rows[0]?.id || "")
+        ));
+      })
+      .catch(() => setDeductionTypes([]));
+  }, [isOpen, isFAT]);
+
+  const usedDeductionTypeIds = useMemo(() => new Set(
+    (data?.deductions || [])
+      .filter((item) => item.calculation_detail?.special_deduction_id && item.deduction_type_id)
+      .map((item) => String(item.deduction_type_id))
+  ), [data]);
+
+  const usedDeductionTypeCodes = useMemo(() => new Set(
+    (data?.deductions || [])
+      .filter((item) => item.calculation_detail?.special_deduction_id && item.deduction_type)
+      .map((item) => String(item.deduction_type).toLowerCase())
+  ), [data]);
+
+  const availableDeductionTypes = useMemo(
+    () => deductionTypes.filter((type) => (
+      !usedDeductionTypeIds.has(String(type.id))
+      && !usedDeductionTypeCodes.has(String(type.code).toLowerCase())
+    )),
+    [deductionTypes, usedDeductionTypeIds, usedDeductionTypeCodes]
+  );
+
+  useEffect(() => {
+    setDeductionTypeId((current) => {
+      if (current && availableDeductionTypes.some((type) => String(type.id) === String(current))) {
+        return current;
+      }
+      return String(availableDeductionTypes[0]?.id || "");
+    });
+  }, [availableDeductionTypes]);
+
   const handleSaveDeduction = async (e) => {
     e.preventDefault();
     setSavingDeduction(true);
@@ -57,13 +104,14 @@ export default function PayrollPreviewModal({
       await specialDeductionsApi.create({
         employee_id: employeeId,
         period_month: periodMonth,
-        type: "manual",
+        deduction_type_id: deductionTypeId,
         amount: Number(amount),
         description: description
       });
       setAmount("");
       setDescription("");
-      await loadPreview();
+      setDeductionTypeId("");
+      await loadPreview(false);
       if (onDeductionSaved) onDeductionSaved();
     } catch (err) {
       alert(err?.message || "Gagal menyimpan potongan");
@@ -76,7 +124,7 @@ export default function PayrollPreviewModal({
     if (!confirm("Yakin ingin menghapus potongan ini?")) return;
     try {
       await specialDeductionsApi.delete(id);
-      await loadPreview();
+      await loadPreview(false);
       if (onDeductionSaved) onDeductionSaved();
     } catch (err) {
       alert(err?.message || "Gagal menghapus potongan");
@@ -86,18 +134,18 @@ export default function PayrollPreviewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white border border-border rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white border border-border rounded-xl shadow-xl w-full max-w-4xl 2xl:max-w-5xl overflow-hidden flex flex-col max-h-[92vh] min-w-0">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
-            Detail Slip Gaji <span className="text-sm font-normal text-slate-500 ml-2">(Simulasi)</span>
+            Detail Slip Gaji
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-5 sm:p-7">
           {loading && <div className="text-center py-8 text-slate-500">Memuat detail...</div>}
           {error && (
             <div className="bg-rose-50 text-rose-600 p-4 rounded text-sm mb-4">
@@ -117,11 +165,15 @@ export default function PayrollPreviewModal({
           )}
 
           {!loading && !error && data && data.is_calculable !== false && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
+            <div className="space-y-6 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
                 <div>
                   <span className="text-slate-500 block mb-1">Karyawan</span>
                   <strong className="text-slate-800">{data.employee_name}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block mb-1">Jabatan</span>
+                  <strong className="text-slate-800">{data.position_name || "-"}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500 block mb-1">Periode</span>
@@ -155,9 +207,9 @@ export default function PayrollPreviewModal({
                       <div className="text-slate-600 font-medium">Gaji Pokok</div>
                       <div className="pl-4 space-y-1 mt-1 text-xs">
                         {data.base_salary_segments.map((seg, i) => (
-                          <div key={i} className="flex justify-between text-slate-500">
-                            <span>- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
-                            <span>{formatRupiah(seg.amount)}</span>
+                          <div key={i} className="flex min-w-0 justify-between gap-4 text-slate-500">
+                            <span className="min-w-0 break-words">- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
+                            <span className="shrink-0">{formatRupiah(seg.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -180,9 +232,9 @@ export default function PayrollPreviewModal({
                           <div className="text-slate-600 font-medium">{al.allowance_label || al.allowance_type}</div>
                           <div className="pl-4 space-y-1 mt-1 text-xs">
                             {al.calculation_detail.segments.map((seg, idx) => (
-                              <div key={idx} className="flex justify-between text-slate-500">
-                                <span>- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
-                                <span>{formatRupiah(seg.amount)}</span>
+                              <div key={idx} className="flex min-w-0 justify-between gap-4 text-slate-500">
+                                <span className="min-w-0 break-words">- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
+                                <span className="shrink-0">{formatRupiah(seg.amount)}</span>
                               </div>
                             ))}
                           </div>
@@ -192,9 +244,9 @@ export default function PayrollPreviewModal({
                           </div>
                         </>
                       ) : (
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
-                          <span className="font-medium">{formatRupiah(al.amount)}</span>
+                        <div className="flex min-w-0 justify-between gap-4">
+                          <span className="min-w-0 break-words text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
+                          <span className="shrink-0 font-medium">{formatRupiah(al.amount)}</span>
                         </div>
                       )}
                     </div>
@@ -215,15 +267,17 @@ export default function PayrollPreviewModal({
                     <div className="text-slate-400 italic">Belum ada potongan.</div>
                   )}
                   {data.deductions?.map((d, i) => (
-                    <div key={i} className="flex justify-between items-center text-red-600 group">
-                      <span>{d.deduction_label}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium">-{formatRupiah(d.amount)}</span>
+                    <div key={i} className="flex min-w-0 justify-between items-center gap-4 text-red-600 group">
+                      <span className="min-w-0 break-words">{d.deduction_label}</span>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="font-medium whitespace-nowrap">-{formatRupiah(d.amount)}</span>
                         {isFAT && canEditDeductions && d.calculation_detail?.special_deduction_id && (
                           <button 
+                            type="button"
                             onClick={() => handleDeleteDeduction(d.calculation_detail.special_deduction_id)}
-                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-700 transition-opacity"
+                            className="text-red-400 hover:text-red-700 transition-colors"
                             title="Hapus Potongan"
+                            aria-label={`Hapus ${d.deduction_label}`}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -232,7 +286,7 @@ export default function PayrollPreviewModal({
                     </div>
                   ))}
                   {data.deductions?.length > 0 && (
-                    <div className="flex justify-between pt-2 border-t mt-2 text-red-700">
+                    <div className="flex justify-between gap-4 pt-2 border-t mt-2 text-red-700">
                       <span className="font-semibold">Total Potongan</span>
                       <span className="font-semibold">-{formatRupiah(data.total_deductions)}</span>
                     </div>
@@ -242,32 +296,55 @@ export default function PayrollPreviewModal({
                 {isFAT && canEditDeductions && (
                   <form onSubmit={handleSaveDeduction} className="bg-red-50 p-4 rounded-lg border border-red-100">
                     <h5 className="text-sm font-semibold text-red-800 mb-3 flex items-center gap-2">
-                      <AlertCircle size={14} /> Tambah Potongan Khusus
+                      <AlertCircle size={14} /> Tambah Potongan
                     </h5>
-                    <div className="flex flex-col md:flex-row gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(150px,180px)_auto] gap-3 items-end">
+                      <select
+                        value={deductionTypeId}
+                        onChange={(e) => setDeductionTypeId(e.target.value)}
+                        required
+                        disabled={availableDeductionTypes.length === 0}
+                        className="w-full min-w-0 border rounded px-3 py-2 text-sm focus:ring-1 focus:ring-red-200 bg-white disabled:bg-slate-100"
+                      >
+                        <option value="">-- Pilih Jenis Potongan --</option>
+                        {deductionTypes.map((type) => {
+                          const isUsed = usedDeductionTypeIds.has(String(type.id))
+                            || usedDeductionTypeCodes.has(String(type.code).toLowerCase());
+
+                          return (
+                            <option key={type.id} value={type.id} disabled={isUsed}>
+                              {type.name}{isUsed ? " (sudah ditambahkan)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
                       <input
                         type="text"
-                        required
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Keterangan (Cth: Denda)"
-                        className="flex-1 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
+                        placeholder="Catatan (opsional)"
+                        className="w-full min-w-0 border rounded px-3 py-2 text-sm focus:ring-1 focus:ring-red-200 bg-white"
                       />
                         <CurrencyInput
                           value={amount}
                           onChange={(value) => setAmount(value)}
                           placeholder="Nominal (Rp)"
-                          className="w-full md:w-32 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
+                          className="w-full min-w-0 border rounded px-3 py-2 text-sm focus:ring-1 focus:ring-red-200 bg-white"
                           required
                         />
                       <button
                         type="submit"
-                        disabled={savingDeduction}
-                        className="bg-red-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+                        disabled={savingDeduction || !deductionTypeId || availableDeductionTypes.length === 0}
+                        className="w-full md:w-auto bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
                       >
                         {savingDeduction ? "Menyimpan..." : "Tambahkan"}
                       </button>
                     </div>
+                    {availableDeductionTypes.length === 0 && (
+                      <p className="mt-2 text-xs text-red-700">
+                        Semua jenis potongan yang tersedia sudah ditambahkan pada periode ini.
+                      </p>
+                    )}
                   </form>
                 )}
                 {isFAT && !canEditDeductions && (

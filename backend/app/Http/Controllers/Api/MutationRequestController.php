@@ -7,6 +7,9 @@ use App\Models\Employee;
 use App\Models\Position;
 use App\Models\JobHistory;
 use App\Models\MutationRequest;
+use App\Models\Payroll;
+use App\Models\PayrollPeriod;
+use App\Models\MonthlyRecap;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
 use Carbon\Carbon;
@@ -44,21 +47,15 @@ class MutationRequestController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
-            'effective_from' => ['required', 'date'],
+            'period_month' => ['required', 'date_format:Y-m'],
             'reason' => ['nullable', 'string', 'max:500'],
             'document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
         ]);
 
         $employee = Employee::findOrFail($data['employee_id']);
 
-        $existingPending = MutationRequest::where('employee_id', $employee->id)
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($existingPending) {
-            return response()->json(['message' => 'Karyawan ini masih memiliki pengajuan promosi/demosi yang berstatus Menunggu Persetujuan. Harap tunggu keputusan Direktur terlebih dahulu.'], 400);
-        }
-        $currentPosition = Position::find($employee->position_id);
+        $currentProfile = $employee->currentSalaryProfile();
+        $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
 
         if (!$currentPosition || !$currentPosition->level) {
@@ -90,48 +87,32 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $effectiveDateInput = \Carbon\Carbon::parse($data['effective_from'])->startOfDay();
-        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', '<=', $effectiveDateInput)
-            ->where('end_date', '>=', $effectiveDateInput)
-            ->first();
-            
-        if ($payrollPeriod) {
-            $effectiveDate = \Carbon\Carbon::parse($payrollPeriod->start_date)->startOfDay();
-        } else {
-            $effectiveDate = $effectiveDateInput->copy()->startOfMonth();
-        }
+        $period = PayrollPeriod::forMonth($data['period_month']);
+        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
 
-        // --- NEW VALIDATION: Block if Payroll is already processed for this period ---
-        $existingPayroll = \App\Models\Payroll::where('employee_id', $employee->id)
-            ->whereYear('periode', $effectiveDate->year)
-            ->whereMonth('periode', $effectiveDate->month)
-            ->first();
+        $mutationRequest = DB::transaction(function () use ($employee, $targetPosition, $data, $path, $effectiveDate, $user) {
+            $lockedEmployee = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            $activeMutation = $this->activeMutationQuery($lockedEmployee->id)->first();
+            if ($activeMutation) {
+                abort(409, $this->activeMutationMessage($activeMutation));
+            }
 
-        if ($existingPayroll) {
-            $statusLabels = [
-                'draft' => 'Draft',
-                'submitted' => 'Menunggu Direktur',
-                'approved' => 'Disetujui',
-                'paid' => 'Sudah Dibayar'
-            ];
-            $statusStr = $statusLabels[$existingPayroll->status] ?? $existingPayroll->status;
-            
-            return response()->json([
-                'message' => "Pengajuan promosi/demosi tidak dapat dilakukan karena data penggajian karyawan untuk periode {$effectiveDate->format('M Y')} sudah diproses (Status: {$statusStr}). Silakan minta Finance untuk membatalkan/menghapus payroll periode tersebut jika ingin melanjutkan pengajuan."
-            ], 400);
-        }
-        // ----------------------------------------------------------------------------
+            $payrollLockMessage = $this->payrollLockMessage($lockedEmployee, $effectiveDate);
+            if ($payrollLockMessage) {
+                abort(409, $payrollLockMessage);
+            }
 
-        $mutationRequest = MutationRequest::create([
-            'employee_id' => $employee->id,
-            'target_position_id' => $targetPosition->id,
-            'mutation_type' => $data['mutation_type'],
-            'effective_date' => $effectiveDate->toDateString(),
-            'reason' => $data['reason'] ?? null,
-            'document_path' => $path,
-            'status' => 'pending',
-            'requested_by' => $user->id,
-        ]);
+            return MutationRequest::create([
+                'employee_id' => $lockedEmployee->id,
+                'target_position_id' => $targetPosition->id,
+                'mutation_type' => $data['mutation_type'],
+                'effective_date' => $effectiveDate->toDateString(),
+                'reason' => $data['reason'] ?? null,
+                'document_path' => $path,
+                'status' => 'pending',
+                'requested_by' => $user->id,
+            ]);
+        });
 
         return response()->json([
             'message' => 'Pengajuan promosi/demosi berhasil dikirim dan menunggu persetujuan Direktur.',
@@ -146,49 +127,34 @@ class MutationRequestController extends Controller
             return response()->json(['message' => 'Hanya Direktur yang dapat menyetujui.'], 403);
         }
 
-        $mutationRequest = MutationRequest::findOrFail($id);
-        if ($mutationRequest->status !== 'pending') {
-            return response()->json(['message' => 'Hanya pengajuan pending yang dapat diproses.'], 400);
-        }
+        DB::transaction(function () use ($id, $user) {
+            $mutationRequest = MutationRequest::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($mutationRequest->status !== 'pending') {
+                abort(409, 'Pengajuan sudah diproses.');
+            }
 
-        DB::transaction(function () use ($mutationRequest, $user) {
             $employee = $mutationRequest->employee;
             $targetPosition = $mutationRequest->targetPosition;
-            $effectiveDateInput = Carbon::parse($mutationRequest->effective_date)->startOfDay();
-
-            $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', '<=', $effectiveDateInput)
-                ->where('end_date', '>=', $effectiveDateInput)
-                ->first();
-
-            if ($payrollPeriod) {
-                $effectiveDate = Carbon::parse($payrollPeriod->start_date)->startOfDay();
-            } else {
-                $effectiveDate = $effectiveDateInput->copy()->startOfMonth();
+            $employee = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
+            $activeMutation = $this->activeMutationQuery($employee->id, $mutationRequest->id)->first();
+            if ($activeMutation) {
+                abort(409, $this->activeMutationMessage($activeMutation));
             }
 
-            // --- NEW VALIDATION: Block if Payroll is already processed for this period ---
-            $existingPayroll = \App\Models\Payroll::where('employee_id', $employee->id)
-                ->whereYear('periode', $effectiveDate->year)
-                ->whereMonth('periode', $effectiveDate->month)
-                ->first();
-
-            if ($existingPayroll) {
-                $statusLabels = [
-                    'draft' => 'Draft',
-                    'submitted' => 'Menunggu Direktur',
-                    'approved' => 'Disetujui',
-                    'paid' => 'Sudah Dibayar'
-                ];
-                $statusStr = $statusLabels[$existingPayroll->status] ?? $existingPayroll->status;
-                
-                abort(400, "Persetujuan gagal: Data penggajian untuk periode {$effectiveDate->format('M Y')} sudah diproses (Status: {$statusStr}). Minta Finance membatalkan payroll tersebut sebelum menyetujui.");
+            $effectiveDate = Carbon::parse($mutationRequest->effective_date)->startOfDay();
+            $payrollLockMessage = $this->payrollLockMessage($employee, $effectiveDate);
+            if ($payrollLockMessage) {
+                abort(409, $payrollLockMessage);
             }
-            // ----------------------------------------------------------------------------
 
             $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
 
             $basis = $targetPosition->base_salary_basis ?? 'daily';
             $amount = (float) ($targetPosition->default_base_salary_amount ?? $targetPosition->default_mandays_rate ?? 0);
+
+            if ($amount <= 0) {
+                abort(422, 'Gaji pokok jabatan tujuan belum diatur. Lengkapi master gaji jabatan sebelum menyetujui pengajuan.');
+            }
             
             $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position', $effectiveDate);
             $baseAllowance = (float) ($positionRate?->rate_amount ?? 0);
@@ -270,7 +236,11 @@ class MutationRequestController extends Controller
         }
 
         $mutationRequest = MutationRequest::with(['employee.position', 'targetPosition', 'requester', 'approver'])->findOrFail($id);
-        return response()->json($mutationRequest);
+        $period = PayrollPeriod::forDate($mutationRequest->effective_date);
+
+        return response()->json(array_merge($mutationRequest->toArray(), [
+            'payroll_period' => $period?->only(['period_month', 'start_date', 'end_date', 'status']),
+        ]));
     }
 
     public function reject(Request $request, $id)
@@ -332,13 +302,14 @@ class MutationRequestController extends Controller
         $data = $request->validate([
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
-            'effective_from' => ['required', 'date'],
+            'period_month' => ['required', 'date_format:Y-m'],
             'reason' => ['nullable', 'string', 'max:500'],
             'document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
         ]);
 
         $employee = $mutationRequest->employee;
-        $currentPosition = Position::find($employee->position_id);
+        $currentProfile = $employee->currentSalaryProfile();
+        $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
 
         if (!$currentPosition || !$currentPosition->level) {
@@ -370,15 +341,17 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $effectiveDateInput = \Carbon\Carbon::parse($data['effective_from'])->startOfDay();
-        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', '<=', $effectiveDateInput)
-            ->where('end_date', '>=', $effectiveDateInput)
-            ->first();
-            
-        if ($payrollPeriod) {
-            $effectiveDate = \Carbon\Carbon::parse($payrollPeriod->start_date)->startOfDay();
-        } else {
-            $effectiveDate = $effectiveDateInput->copy()->startOfMonth();
+        $period = PayrollPeriod::forMonth($data['period_month']);
+        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
+
+        $activeMutation = $this->activeMutationQuery($employee->id, $mutationRequest->id)->first();
+        if ($activeMutation) {
+            return response()->json(['message' => $this->activeMutationMessage($activeMutation)], 409);
+        }
+
+        $payrollLockMessage = $this->payrollLockMessage($employee, $effectiveDate);
+        if ($payrollLockMessage) {
+            return response()->json(['message' => $payrollLockMessage], 409);
         }
 
         $mutationRequest->update([
@@ -393,5 +366,73 @@ class MutationRequestController extends Controller
             'message' => 'Pengajuan promosi/demosi berhasil diubah.',
             'data' => $mutationRequest,
         ]);
+    }
+
+    private function activeMutationQuery(int $employeeId, ?int $excludeId = null)
+    {
+        return MutationRequest::query()
+            ->where('employee_id', $employeeId)
+            ->when($excludeId, fn ($query) => $query->where('id', '<>', $excludeId))
+            ->where(function ($query) {
+                $query->where('status', 'pending')
+                    ->orWhere(function ($approved) {
+                        $approved->where('status', 'approved')
+                            ->whereDate('effective_date', '>', Carbon::today()->toDateString());
+                    });
+            })
+            ->orderByDesc('created_at');
+    }
+
+    private function activeMutationMessage(MutationRequest $mutation): string
+    {
+        if ($mutation->status === 'pending') {
+            return 'Karyawan masih memiliki pengajuan mutasi aktif.';
+        }
+
+        return 'Pengajuan baru dapat dibuat setelah tanggal efektif '
+            .Carbon::parse($mutation->effective_date)->translatedFormat('d F Y')
+            .'.';
+    }
+
+    private function payrollLockMessage(Employee $employee, Carbon $effectiveDate): ?string
+    {
+        $period = PayrollPeriod::forDate($effectiveDate);
+
+        if ($period?->status === 'closed') {
+            return "Perubahan tidak dapat dijadwalkan karena periode penggajian {$period->period_month} sudah ditutup.";
+        }
+
+        if ($period && MonthlyRecap::query()
+            ->where('employee_id', $employee->id)
+            ->where('period_month', $period->period_month)
+            ->where('is_finalized', true)
+            ->exists()) {
+            return "Perubahan tidak dapat dijadwalkan karena rekap kehadiran periode {$period->period_month} sudah difinalisasi.";
+        }
+
+        $payroll = Payroll::query()
+            ->where('employee_id', $employee->id)
+            ->when($period, fn ($query) => $query->whereDate('periode', $period->start_date))
+            ->when(! $period, fn ($query) => $query
+                ->whereYear('periode', $effectiveDate->year)
+                ->whereMonth('periode', $effectiveDate->month))
+            ->whereIn('status', ['requested', 'submitted', 'approved', 'paid'])
+            ->first();
+
+        if (! $payroll) {
+            return null;
+        }
+
+        $labels = [
+            'requested' => 'Menunggu diproses',
+            'submitted' => 'Menunggu persetujuan Direktur',
+            'approved' => 'Disetujui',
+            'paid' => 'Sudah dibayar',
+        ];
+
+        $status = $labels[$payroll->status] ?? $payroll->status;
+
+        $periodMonth = $period?->period_month ?? $effectiveDate->format('Y-m');
+        return "Payroll periode {$periodMonth} sudah diproses ({$status}).";
     }
 }

@@ -43,6 +43,12 @@ export function monthLabel(ym, withRange = false) {
   return label;
 }
 
+export function currentPayrollMonth(date = new Date()) {
+  const value = new Date(date);
+  if (value.getDate() >= 28) value.setMonth(value.getMonth() + 1);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /**
  * Ambil 2 huruf inisial dari nama.
  * @param {string} name

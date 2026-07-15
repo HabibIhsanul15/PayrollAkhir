@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
-import { monthLabel } from "@/lib/utils";
+import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AlertMessage from "@/components/AlertMessage";
@@ -12,10 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Download, RefreshCw, ChevronDown, FileText } from "lucide-react";
 
 function todayMonth() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
+  return currentPayrollMonth();
 }
 
 function fmtRp(n) {

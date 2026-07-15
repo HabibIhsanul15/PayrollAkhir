@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MonthlyRecap;
 use App\Models\Employee;
 use App\Models\SalaryProfile;
+use App\Models\PayrollPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,8 @@ class MonthlyRecapController extends Controller
             }
         }
 
-        $periodMonth = $request->query('period_month', now()->format('Y-m'));
+        $periodMonth = $request->query('period_month', PayrollPeriod::currentMonth());
+        PayrollPeriod::forMonth($periodMonth);
 
         $recaps = MonthlyRecap::with('employee')
             ->where('period_month', $periodMonth)
@@ -60,12 +62,8 @@ class MonthlyRecapController extends Controller
         $employeeId = $validated['employee_id'];
         $periodMonth = $validated['period_month'];
         
-        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
-        if ($payrollPeriod) {
-            $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
-        } else {
-            $maxDays = Carbon::createFromFormat('Y-m-d', "{$periodMonth}-01")->daysInMonth;
-        }
+        $payrollPeriod = PayrollPeriod::forMonth($periodMonth);
+        $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
 
         $totalSubmittedMandays = 0;
 
@@ -222,14 +220,9 @@ class MonthlyRecapController extends Controller
         $employeeId = $validated['employee_id'];
         $periodMonth = $validated['period_month'];
 
-        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
-        if ($payrollPeriod) {
-            $startDate = Carbon::parse($payrollPeriod->start_date);
-            $endDate = Carbon::parse($payrollPeriod->end_date);
-        } else {
-            $startDate = Carbon::createFromFormat('Y-m-d', "{$periodMonth}-01");
-            $endDate = $startDate->copy()->endOfMonth();
-        }
+        $payrollPeriod = PayrollPeriod::forMonth($periodMonth);
+        $startDate = Carbon::parse($payrollPeriod->start_date);
+        $endDate = Carbon::parse($payrollPeriod->end_date);
 
         $totalDays = $startDate->diffInDays($endDate) + 1;
 

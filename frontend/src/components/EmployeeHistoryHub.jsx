@@ -1,23 +1,36 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from "recharts";
 import { api } from "../lib/api";
 import { formatRupiah } from "../lib/utils";
+
+function formatDate(value, options) {
+  const datePart = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return "-";
+
+  const date = new Date(`${datePart}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("id-ID", options);
+}
+
+function parseDate(value) {
+  const datePart = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+
+  const date = new Date(`${datePart}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatProfileAmount(value, zeroLabel) {
+  if (value === null || value === undefined || value === "") return "Belum diatur";
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? formatRupiah(amount) : zeroLabel;
+}
 
 export default function EmployeeHistoryHub({ employeeId, role }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [salaryProfiles, setSalaryProfiles] = useState([]);
+  const [jobHistories, setJobHistories] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
 
   const isHCGA = String(role || "").toLowerCase() === "hcga";
@@ -29,13 +42,15 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
         setLoading(true);
         setErr("");
 
-        const [dataSp, dataPr] = await Promise.all([
+        const [dataSp, dataJobs, dataPr] = await Promise.all([
           api(`/employees/${employeeId}/salary-profiles`),
+          api(`/employees/${employeeId}/job-histories`),
           api(`/payrolls?employee_id=${employeeId}`)
         ]);
 
         if (active) {
           setSalaryProfiles(dataSp || []);
+          setJobHistories(Array.isArray(dataJobs) ? dataJobs : []);
           setPayrolls(dataPr?.data || dataPr || []);
         }
       } catch (error) {
@@ -68,122 +83,52 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
     );
   }
 
-  // 1. Data Pertumbuhan Gaji Pokok (dari salaryProfiles)
-  // Recharts butuh array dari yang terlama ke terbaru
-  const spData = [...salaryProfiles].reverse().map(sp => ({
-    name: new Date(sp.effective_from).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
-    "Tunjangan Jabatan": parseFloat(sp.position_allowance) || 0,
-    "Posisi": sp.position || "-"
-  }));
+  const historyRows = (() => {
+    const usedProfileIds = new Set();
+    const rows = jobHistories.map((history) => {
+      const startDate = String(history.start_date || "").slice(0, 10);
+      const profile = salaryProfiles.find((item) => {
+        if (usedProfileIds.has(item.id)) return false;
+        const profileDate = String(item.effective_from || "").slice(0, 10);
+        return profileDate === startDate
+          || (history.position_id && item.position_id && Number(history.position_id) === Number(item.position_id));
+      });
 
-  // 2. Data Gaji Bulanan (Take Home Pay) dari payrolls
-  const prData = [...payrolls].reverse().map(pr => ({
-    name: new Date(pr.periode).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
-    "Take Home Pay": parseFloat(pr.total) || 0,
-    "Gaji Pokok": parseFloat(pr.gaji_pokok) || 0
-  }));
+      if (profile) usedProfileIds.add(profile.id);
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-slate-200 p-3 rounded shadow-lg text-sm">
-          <p className="font-bold text-slate-800 mb-1">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={`item-${index}`} style={{ color: entry.color }} className="font-medium">
-              {entry.name}: {formatRupiah(entry.value)}
-            </p>
-          ))}
-          {/* Tampilkan Posisi jika ada (khusus chart Jabatan) */}
-          {payload[0]?.payload?.Posisi && (
-            <p className="mt-1 text-xs text-slate-500 bg-slate-50 p-1 rounded">
-              Posisi: <span className="font-semibold text-slate-700">{payload[0].payload.Posisi}</span>
-            </p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
+      return {
+        ...(profile || {}),
+        id: `job-${history.id}`,
+        position: typeof history.position === "string"
+          ? history.position
+          : history.position?.name || profile?.position || "-",
+        effective_from: startDate || profile?.effective_from,
+        end_date: history.end_date,
+        status: history.status,
+        notes: history.notes,
+      };
+    });
+
+    salaryProfiles.forEach((profile) => {
+      if (!usedProfileIds.has(profile.id) && !rows.some((row) => row.effective_from === profile.effective_from)) {
+        rows.push(profile);
+      }
+    });
+
+    return rows.sort((a, b) => String(b.effective_from || "").localeCompare(String(a.effective_from || "")));
+  })();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentIndex = historyRows.findIndex((row) => {
+    const start = parseDate(row.effective_from);
+    const end = parseDate(row.end_date);
+
+    return start && start <= today && (!end || end >= today);
+  });
 
   return (
     <div className="space-y-6 mt-6">
-      
-      {/* Chart Section */}
-      {!isHCGA && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Grafik Take Home Pay Bulanan */}
-          <Card className="bg-white border border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-slate-800">Tren Slip Gaji (Take-Home Pay)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {prData.length === 0 ? (
-                <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat slip gaji bulanan.</p>
-              ) : (
-                <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={prData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 11, fill: '#64748b' }} 
-                        tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
-                      <Line 
-                        type="monotone" 
-                        dataKey="Take Home Pay" 
-                        stroke="#0ea5e9" 
-                        strokeWidth={3}
-                        activeDot={{ r: 6 }} 
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Grafik Karir (Tunjangan Jabatan) */}
-          <Card className="bg-white border border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-slate-800">Pertumbuhan Karir & Tunjangan Jabatan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {spData.length === 0 ? (
-                <p className="text-xs text-slate-500 py-10 text-center">Belum ada riwayat jabatan tersimpan.</p>
-              ) : (
-                <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={spData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 11, fill: '#64748b' }} 
-                        tickFormatter={(val) => `Rp${(val/1000000).toFixed(1)}Jt`}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}/>
-                      <Line 
-                        type="stepAfter" 
-                        dataKey="Tunjangan Jabatan" 
-                        stroke="#8b5cf6" 
-                        strokeWidth={3}
-                        activeDot={{ r: 6 }} 
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Tables & Timeline Section */}
       <div className="grid grid-cols-1 gap-6">
@@ -194,59 +139,65 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
             <CardTitle className="text-sm font-bold text-slate-800">Perjalanan Karir & Jabatan</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            {salaryProfiles.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 font-medium">Belum ada profil jabatan</div>
+            {historyRows.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 font-medium">Belum ada riwayat jabatan</div>
             ) : (
               <div className="relative border-l-2 border-indigo-100 ml-3 md:ml-6 space-y-8">
-                {salaryProfiles.map((sp, index) => {
-                  const isLatest = index === 0;
+                {historyRows.map((sp, index) => {
+                  const start = parseDate(sp.effective_from);
+                  const isCurrent = index === currentIndex;
+                  const isUpcoming = Boolean(start && start > today);
+                  const statusLabel = isCurrent ? "Posisi Saat Ini" : isUpcoming ? "Akan Berlaku" : "Riwayat";
+                  const isHighlighted = isCurrent || isUpcoming;
+
                   return (
                     <div key={sp.id} className="relative pl-6 md:pl-8">
                       {/* Timeline Dot */}
                       <div className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 bg-white ${
-                        isLatest ? 'border-indigo-600 ring-4 ring-indigo-50' : 'border-slate-300'
+                        isCurrent ? 'border-indigo-600 ring-4 ring-indigo-50' : isUpcoming ? 'border-amber-500 ring-4 ring-amber-50' : 'border-slate-300'
                       }`} />
                       
                       {/* Content Card */}
                       <div className={`rounded-xl border p-4 transition-all ${
-                        isLatest ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : 'bg-white border-slate-200 hover:border-indigo-100 hover:shadow-sm'
+                        isCurrent ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : isUpcoming ? 'bg-amber-50/40 border-amber-200 shadow-sm' : 'bg-white border-slate-200 hover:border-indigo-100 hover:shadow-sm'
                       }`}>
                         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className={`text-base font-bold ${isLatest ? 'text-indigo-900' : 'text-slate-800'}`}>
+                              <h4 className={`text-base font-bold ${isCurrent ? 'text-indigo-900' : 'text-slate-800'}`}>
                                 {sp.position || "-"}
                               </h4>
-                              {isLatest && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-600 text-white">
-                                  Posisi Saat Ini
+                              {isHighlighted && (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  isCurrent ? 'bg-indigo-600 text-white' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {statusLabel}
                                 </span>
                               )}
                             </div>
                             <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                              Berlaku sejak: {new Date(sp.effective_from).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              <span className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-emerald-400' : isUpcoming ? 'bg-amber-400' : 'bg-slate-300'}`}></span>
+                              Berlaku sejak: {formatDate(sp.effective_from, { day: 'numeric', month: 'long', year: 'numeric' })}
+                              {sp.end_date && ` · sampai ${formatDate(sp.end_date, { day: 'numeric', month: 'long', year: 'numeric' })}`}
                             </p>
+                            {sp.notes && <p className="mt-1 text-[11px] text-slate-400">{sp.notes}</p>}
                           </div>
 
                           {!isHCGA && (
                             <div className="flex flex-wrap gap-3">
                               <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gaji Pokok</div>
+                                <div className="text-sm font-mono font-bold text-sky-600">
+                                  {formatProfileAmount(sp.base_salary_amount, "Belum diatur")}
+                                </div>
+                                <div className="mt-1 text-[10px] text-slate-400">
+                                  {sp.base_salary_basis === "monthly" ? "Bulanan" : "Harian"}
+                                </div>
+                              </div>
+                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tunj. Jabatan</div>
                                 <div className="text-sm font-mono font-bold text-indigo-600">
-                                  {sp.position_allowance != null ? formatRupiah(sp.position_allowance) : '-'}
-                                </div>
-                              </div>
-                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tunj. Tetap</div>
-                                <div className="text-sm font-mono font-bold text-emerald-600">
-                                  {sp.allowance_fixed != null && sp.allowance_fixed > 0 ? formatRupiah(sp.allowance_fixed) : '-'}
-                                </div>
-                              </div>
-                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Potongan Tetap</div>
-                                <div className="text-sm font-mono font-bold text-rose-600">
-                                  {sp.deduction_fixed != null && sp.deduction_fixed > 0 ? formatRupiah(sp.deduction_fixed) : '-'}
+                                  {formatProfileAmount(sp.position_allowance, "Tidak ada")}
                                 </div>
                               </div>
                             </div>
@@ -285,7 +236,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                   payrolls.map((pr) => (
                     <tr key={pr.id} className="text-slate-700 hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-800">
-                        {new Date(pr.periode).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                        {formatDate(pr.periode, { month: 'long', year: 'numeric' })}
                       </td>
                       {!isHCGA && (
                         <>

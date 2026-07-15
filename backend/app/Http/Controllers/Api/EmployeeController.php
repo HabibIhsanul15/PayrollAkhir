@@ -135,6 +135,13 @@ class EmployeeController extends Controller
         return $query->with([
             'position:id,code,name,is_active,level',
             'employmentType:id,code,name',
+            'salaryProfiles' => function ($profileQuery) {
+                $profileQuery
+                    ->whereDate('effective_from', '<=', now()->toDateString())
+                    ->orderByDesc('effective_from')
+                    ->select(['id', 'employee_id', 'position_id', 'effective_from'])
+                    ->with('position:id,code,name,is_active,level');
+            },
         ])->get([
             'id',
             'employee_code',
@@ -146,8 +153,15 @@ class EmployeeController extends Controller
             'employment_type_id',
             'work_basis_id',
         ])->map(function (Employee $employee) {
+            $currentProfile = $employee->salaryProfiles->first();
+            $currentPosition = $currentProfile?->getRelation('position') ?? $employee->position;
+            $payload = $employee->toArray();
+            $payload['position_id'] = $currentProfile?->position_id ?? $employee->position_id;
+            $payload['position'] = $currentPosition?->toArray();
+            unset($payload['salary_profiles']);
+
             return [
-                ...$employee->toArray(),
+                ...$payload,
                 'join_date' => optional($employee->join_date)->toDateString(),
                 'has_account' => (bool) $employee->user_id,
                 'payroll_readiness' => $employee->payrollReadiness(),
@@ -557,13 +571,15 @@ class EmployeeController extends Controller
         $user = $request->user();
         $role = $this->roleOf($user);
         
-        $isSelf = (string) $user->employee_id === (string) $employee->id;
+        $isSelf = (string) $user->employee_id === (string) $employee->id
+            || ((int) ($employee->user_id ?? 0) === (int) $user->id);
         
         if (! in_array($role, ['hcga', 'fat', 'director'], true) && !$isSelf) {
             return $this->forbid();
         }
 
-        $canSeeNominal = in_array($role, ['fat', 'director'], true) || $isSelf;
+        $canSeeNominal = in_array($role, ['fat', 'director'], true)
+            || ($role === 'staff' && $isSelf);
 
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
         $employeePosition = $employee->Position;

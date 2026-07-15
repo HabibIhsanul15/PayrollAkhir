@@ -10,6 +10,7 @@ class PayrollPeriodController extends Controller
 {
     public function index()
     {
+        PayrollPeriod::ensureUpcoming(12);
         $periods = PayrollPeriod::orderBy('start_date', 'desc')->get();
         return response()->json($periods);
     }

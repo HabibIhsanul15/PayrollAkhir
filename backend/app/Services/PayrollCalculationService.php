@@ -41,15 +41,9 @@ class PayrollCalculationService
             }
         }
 
-        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
-        if ($payrollPeriod) {
-            $start = Carbon::parse($payrollPeriod->start_date);
-            $end = Carbon::parse($payrollPeriod->end_date);
-        } else {
-            // Fallback to calendar month
-            $start = Carbon::createFromFormat('Y-m', $periodMonth)->startOfMonth();
-            $end = $start->copy()->endOfMonth();
-        }
+        $payrollPeriod = \App\Models\PayrollPeriod::forMonth($periodMonth);
+        $start = Carbon::parse($payrollPeriod->start_date);
+        $end = Carbon::parse($payrollPeriod->end_date);
 
         // Resolve profiles for each recap
         $profilesData = [];
@@ -87,6 +81,7 @@ class PayrollCalculationService
                     'base_salary_amount' => $baseSalary['amount'],
                     'base_salary_basis' => $baseSalary['basis'],
                     'position_id' => $activePositionId,
+                    'position_name' => $Position?->name,
                     'effective_from' => $profile->effective_from->toDateString(),
                 ],
             ];
@@ -130,6 +125,13 @@ class PayrollCalculationService
         // (like base position allowance rate for display, though we use prorata for math)
         $primaryProfileData = end($profilesData);
         $profile = $primaryProfileData['profile'];
+        $positionNames = collect($profilesData)
+            ->pluck('profile.position_name')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $positionName = implode(' / ', $positionNames);
 
         $blocking_warnings = [];
         $non_blocking_warnings = [];
@@ -261,7 +263,8 @@ class PayrollCalculationService
         $deductions_list = [];
 
         // Fetch Special Deductions
-        $specialDeductions = \App\Models\SpecialDeduction::where('employee_id', $employee->id)
+        $specialDeductions = \App\Models\SpecialDeduction::with('deductionType')
+            ->where('employee_id', $employee->id)
             ->where('period_month', $periodMonth)
             ->get();
 
@@ -270,7 +273,8 @@ class PayrollCalculationService
             $total_deductions += $sdAmount;
             $deductions_list[] = [
                 'deduction_type' => $sd->type,
-                'deduction_label' => $sd->description ?: ucfirst($sd->type),
+                'deduction_type_id' => $sd->deduction_type_id,
+                'deduction_label' => $sd->deductionType?->name ?: ($sd->description ?: ucfirst($sd->type)),
                 'amount' => $sdAmount,
                 'calculation_detail' => ['special_deduction_id' => $sd->id],
             ];
@@ -332,6 +336,7 @@ class PayrollCalculationService
             'non_blocking_warnings' => $non_blocking_warnings,
             'employee_id' => $employee->id,
             'employee_name' => $employee->name,
+            'position_name' => $positionName ?: 'Belum ditentukan',
             'period_month' => $periodMonth,
             'period_from' => $prereq['periodFrom'],
             'period_to' => $prereq['periodTo'],
@@ -494,12 +499,8 @@ class PayrollCalculationService
                   ->where('is_finalized', true);
             })
             ->get();
-        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
-        if ($payrollPeriod) {
-            $periodeDate = \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString();
-        } else {
-            $periodeDate = $periodMonth . '-01';
-        }
+        $payrollPeriod = \App\Models\PayrollPeriod::forMonth($periodMonth);
+        $periodeDate = Carbon::parse($payrollPeriod->start_date)->toDateString();
         $payrolls = Payroll::whereDate('periode', $periodeDate)->get()->keyBy('employee_id');
 
         $results = [];

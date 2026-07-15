@@ -5,7 +5,7 @@ import { getUser } from "@/lib/auth";
 import { Table } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { monthLabel } from "@/lib/utils";
+import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 
 function emptyRecap(salaryProfileId = "") {
@@ -58,7 +58,7 @@ export default function MonthlyRecapPage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
   const isHCGA = role === "hcga";
-  const [period, setPeriod] = useState(new Date().toISOString().substring(0, 7));
+  const [period, setPeriod] = useState(() => currentPayrollMonth());
   const [showModal, setShowModal] = useState(false);
   const [notice, setNotice] = useState(null);
   const [formRecaps, setFormRecaps] = useState([emptyRecap()]);

@@ -52,12 +52,8 @@ class PayrollController extends Controller
         }
 
         if ($request->filled('period_month')) {
-            $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $request->period_month)->first();
-            if ($payrollPeriod) {
-                $query->whereDate('periode', \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString());
-            } else {
-                $query->whereDate('periode', $request->period_month . '-01');
-            }
+            $payrollPeriod = \App\Models\PayrollPeriod::forMonth($request->period_month);
+            $query->whereDate('periode', \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString());
         } elseif ($request->filled('periode')) {
             $query->whereDate('periode', $request->periode);
         }
@@ -111,9 +107,7 @@ class PayrollController extends Controller
                 }
             }
 
-                $periodeDateString = optional($p->periode)->toDateString();
-                $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', $periodeDateString)->first();
-                $periodMonth = $payrollPeriod ? $payrollPeriod->period_month : optional($p->periode)->format('Y-m');
+                $periodMonth = \App\Models\PayrollPeriod::forDate($p->periode)->period_month;
                 
                 $total_mandays = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
                     ->where('period_month', $periodMonth)->sum('total_mandays');
@@ -339,9 +333,7 @@ class PayrollController extends Controller
             // ignore
         }
 
-        $periodeDateString = optional($payroll->periode)->toDateString();
-        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', $periodeDateString)->first();
-        $periodMonth = $payrollPeriod ? $payrollPeriod->period_month : optional($payroll->periode)->format('Y-m');
+        $periodMonth = \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
 
         $employeePayload = $payroll->employee ? [
             'join_date' => optional($payroll->employee->join_date)->toDateString(),
@@ -745,7 +737,7 @@ class PayrollController extends Controller
             'auto_request' => ['nullable', 'boolean'],
         ]);
 
-        $periode = Carbon::parse($data['periode'])->startOfMonth();
+        $periode = \App\Models\PayrollPeriod::forDate($data['periode'])->start_date->startOfDay();
         $data['periode'] = $periode->toDateString();
         $autoRequest = (bool) ($request->input('auto_request', false));
 
@@ -760,8 +752,7 @@ class PayrollController extends Controller
 
         // cek duplikat periode
         $exists = Payroll::where('employee_id', $data['employee_id'])
-            ->whereYear('periode', $periode->year)
-            ->whereMonth('periode', $periode->month)
+            ->whereDate('periode', $periode)
             ->exists();
 
         if ($exists) {
@@ -971,16 +962,15 @@ class PayrollController extends Controller
 
         $total = $gaji + $tunj - $pot;
 
-        // 4) Handle periode (paksa awal bulan)
+        // 4) Handle periode
         $periode = null;
         if (array_key_exists('periode', $data)) {
-            $periode = Carbon::parse($data['periode'])->startOfMonth();
+            $periode = \App\Models\PayrollPeriod::forDate($data['periode'])->start_date->startOfDay();
             $data['periode'] = $periode->toDateString();
 
             // Cegah duplikat periode
             $exists = Payroll::where('employee_id', $payroll->employee_id)
-                ->whereYear('periode', $periode->year)
-                ->whereMonth('periode', $periode->month)
+                ->whereDate('periode', $periode)
                 ->where('id', '!=', $payroll->id)
                 ->exists();
 

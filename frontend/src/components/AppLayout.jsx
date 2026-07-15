@@ -31,6 +31,7 @@ function menuByRole(role) {
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
       { to: "/master/positions", label: "Gaji Jabatan", icon: FolderOpen },
       { to: "/master/allowance-types", label: "Jenis Tunjangan", icon: ClipboardList },
+      { to: "/master/deduction-types", label: "Jenis Potongan", icon: ClipboardList },
       { to: "/master/position-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];

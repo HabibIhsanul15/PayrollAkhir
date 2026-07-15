@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
-import { monthLabel } from "@/lib/utils";
+import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 
 import {
@@ -15,10 +15,7 @@ import {
 } from "lucide-react";
 
 function todayMonth() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
+  return currentPayrollMonth();
 }
 
 

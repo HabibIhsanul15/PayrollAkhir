@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Payroll;
+use App\Models\PayrollPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -27,7 +28,7 @@ class DashboardController extends Controller
         if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
             return $month;
         }
-        return now()->format('Y-m');
+        return PayrollPeriod::currentMonth();
     }
 
     /**
@@ -111,7 +112,7 @@ class DashboardController extends Controller
         try {
             [$start, $end] = $this->monthRange($month);
         } catch (\Throwable $e) {
-            $month = now()->format('Y-m');
+            $month = PayrollPeriod::currentMonth();
             [$start, $end] = $this->monthRange($month);
         }
 
@@ -245,8 +246,9 @@ class DashboardController extends Controller
 
     private function monthRange(string $yyyyMm): array
     {
-        $start = Carbon::createFromFormat('Y-m', $yyyyMm)->startOfMonth();
-        $end = (clone $start)->endOfMonth();
+        $period = PayrollPeriod::forMonth($yyyyMm);
+        $start = Carbon::parse($period->start_date);
+        $end = Carbon::parse($period->end_date);
         return [$start, $end];
     }
 

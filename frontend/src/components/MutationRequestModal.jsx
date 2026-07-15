@@ -2,65 +2,117 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { X } from "lucide-react";
 
+const parseLocalDate = (value) => {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const datePart = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+  return new Date(`${datePart}T00:00:00`);
+};
+
+const formatDate = (value) => {
+  const date = parseLocalDate(value);
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : "-";
+};
+
+const emptyForm = () => ({
+  employee_id: "",
+  mutation_type: "promotion",
+  position_id: "",
+  period_month: "",
+  notes: "",
+  document: null,
+});
+
+const getEditPeriodMonth = (editData) => {
+  if (!editData) return "";
+  if (editData.payroll_period?.period_month) return editData.payroll_period.period_month;
+  if (editData.period_month) return editData.period_month;
+
+  const effectiveDate = parseLocalDate(editData.effective_date);
+  return effectiveDate
+    ? `${effectiveDate.getFullYear()}-${String(effectiveDate.getMonth() + 1).padStart(2, "0")}`
+    : "";
+};
+
+const formFromEdit = (editData) => ({
+  employee_id: editData?.employee_id ? String(editData.employee_id) : "",
+  mutation_type: editData?.mutation_type || "promotion",
+  position_id: editData?.target_position_id ? String(editData.target_position_id) : "",
+  period_month: getEditPeriodMonth(editData),
+  notes: editData?.reason || "",
+  document: null,
+});
+
 export default function MutationRequestModal({ isOpen, onClose, onSuccess, editData }) {
   const [employees, setEmployees] = useState([]);
   const [positions, setPositions] = useState([]);
   const [periods, setPeriods] = useState([]);
+  const [mutationRequests, setMutationRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  const [form, setForm] = useState({
-    employee_id: "",
-    mutation_type: "promotion",
-    position_id: "",
-    period_choice: "current",
-    notes: "",
-    document: null,
-  });
+  const [form, setForm] = useState(() => formFromEdit(editData));
 
   useEffect(() => {
     let active = true;
     if (isOpen) {
+      setForm(formFromEdit(editData));
+      setErr("");
+
       const fetchData = async () => {
         setLoading(true);
         try {
-          const [employeesRes, positionsRes, periodsRes] = await Promise.all([
+          if (editData) {
+            // Saat edit, data karyawan dan pengajuan sudah tersedia dari detail.
+            // Cukup ambil master jabatan dan periode yang diperlukan oleh form.
+            const [positionsRes, periodsRes] = await Promise.all([
+              api("/master/positions?active_only=1"),
+              api("/payroll-periods"),
+            ]);
+
+            if (!active) return;
+
+            setPositions(Array.isArray(positionsRes) ? positionsRes : []);
+            const periodList = Array.isArray(periodsRes) ? periodsRes : (periodsRes?.data || []);
+            setPeriods(periodList);
+            return;
+          }
+
+          const [employeesRes, positionsRes, periodsRes, mutationRequestsRes] = await Promise.all([
             api("/employees?status=active"),
             api("/master/positions?active_only=1"),
-            api("/payroll-periods")
+            api("/payroll-periods"),
+            api("/mutation-requests"),
           ]);
-          
+
           if (active) {
-            // Check if response has data property (paginated) or is array
             setEmployees(employeesRes?.data || (Array.isArray(employeesRes) ? employeesRes : []));
             setPositions(Array.isArray(positionsRes) ? positionsRes : []);
-            setPeriods(Array.isArray(periodsRes) ? periodsRes : (periodsRes?.data || []));
-            
-            if (editData) {
-              const eDate = new Date(editData.effective_date);
-              const now = new Date();
-              const isNextMonth = eDate.getMonth() !== now.getMonth();
-              
-              setForm({
-                employee_id: editData.employee_id.toString(),
-                mutation_type: editData.mutation_type,
-                position_id: editData.target_position_id.toString(),
-                period_choice: isNextMonth ? "next" : "current",
-                notes: editData.reason || "",
-                document: null,
-              });
-            } else {
-              setForm({
-                employee_id: "",
-                mutation_type: "promotion",
-                position_id: "",
-                period_choice: "current",
-                notes: "",
-                document: null,
-              });
-            }
-            setErr("");
+            const periodList = Array.isArray(periodsRes) ? periodsRes : (periodsRes?.data || []);
+            setPeriods(periodList);
+            setMutationRequests(Array.isArray(mutationRequestsRes) ? mutationRequestsRes : (mutationRequestsRes?.data || []));
+
+            const today = new Date();
+            const currentPeriod = periodList.find((period) => {
+              const start = parseLocalDate(period.start_date);
+              const end = parseLocalDate(period.end_date);
+              return period.status === "open" && start && end && today >= start && today <= end;
+            });
+            const firstAvailablePeriod = currentPeriod || periodList.find((period) => {
+              const end = parseLocalDate(period.end_date);
+              return period.status === "open" && end && end >= today;
+            });
+
+            setForm({
+              ...emptyForm(),
+              period_month: firstAvailablePeriod?.period_month || "",
+            });
           }
         } catch {
           if (active) setErr("Gagal memuat data master.");
@@ -81,8 +133,9 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
 
   const selectedEmployee = useMemo(() => {
     if (!form.employee_id) return null;
-    return employees.find(e => e.id.toString() === form.employee_id.toString());
-  }, [form.employee_id, employees]);
+    return employees.find(e => e.id.toString() === form.employee_id.toString())
+      || (editData && Number(editData.employee_id) === Number(form.employee_id) ? editData.employee : null);
+  }, [form.employee_id, employees, editData]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -101,29 +154,29 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       return;
     }
     
-    // Hitung tanggal efektif yang dikirim (sama dengan yg ditampilkan ke user)
-    const effectiveDate = calculatedEffectiveDate;
-
     try {
 
       const formData = new FormData();
       formData.append("employee_id", form.employee_id);
       formData.append("mutation_type", form.mutation_type);
       formData.append("position_id", form.position_id);
-      formData.append("effective_from", effectiveDate.toISOString().split("T")[0]);
+      if (!form.period_month) {
+        setErr("Bulan payroll harus dipilih.");
+        setSaving(false);
+        return;
+      }
+      formData.append("period_month", form.period_month);
       if (form.notes) formData.append("reason", form.notes);
       if (form.document) formData.append("document", form.document);
 
       const url = editData ? `/mutation-requests/${editData.id}` : "/mutation-requests";
-      const method = editData ? "PUT" : "POST";
       
-      // FormData doesn't natively support PUT easily with files in some frameworks without _method
       if (editData) {
         formData.append("_method", "PUT");
       }
 
-      const res = await api(url, {
-        method: "POST", // we use POST with _method=PUT for Laravel file uploads
+      await api(url, {
+        method: "POST",
         body: formData,
       });
 
@@ -159,32 +212,25 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
     });
   }, [positions, form.mutation_type, hascurrentPositionLevel, currentPositionId, currentPositionLevel]);
 
-  // Hitung tanggal efektif untuk ditampilkan
-  const calculatedEffectiveDate = useMemo(() => {
-    const today = new Date();
-    const targetDate = new Date(today);
-    if (form.period_choice === "next") {
-      targetDate.setMonth(targetDate.getMonth() + 1);
-    }
+  const activeMutation = useMemo(() => {
+    if (!form.employee_id) return null;
 
-    // Cari periode yang aktif untuk bulan tsb jika ada
-    if (periods.length > 0) {
-      // Sort periode dari yang terbaru (start_date descending)
-      const sortedPeriods = [...periods].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
-      // Cari periode yang mengcover targetDate
-      const matched = sortedPeriods.find(p => {
-        const start = new Date(p.start_date);
-        const end = new Date(p.end_date);
-        return targetDate >= start && targetDate <= end;
-      });
-      if (matched) {
-        return new Date(matched.start_date);
-      }
-    }
-    
-    // Fallback: awal bulan dari targetDate
-    return new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-  }, [form.period_choice, periods]);
+    return mutationRequests.find((item) => {
+      if (Number(item.employee_id) !== Number(form.employee_id)) return false;
+      if (editData && Number(item.id) === Number(editData.id)) return false;
+      if (item.status === "pending") return true;
+      return item.status === "approved" && parseLocalDate(item.effective_date) > new Date();
+    }) || null;
+  }, [mutationRequests, form.employee_id, editData]);
+
+  const selectedPeriod = useMemo(
+    () => periods.find((period) => period.period_month === form.period_month) || null,
+    [form.period_month, periods]
+  );
+
+  const calculatedEffectiveDate = useMemo(() => {
+    return selectedPeriod ? parseLocalDate(selectedPeriod.start_date) : null;
+  }, [selectedPeriod]);
 
   if (!isOpen) return null;
 
@@ -248,6 +294,14 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                   </div>
                 </div>
 
+                {activeMutation && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+                    {activeMutation.status === "pending"
+                      ? "Pengajuan mutasi masih aktif."
+                      : `Mutasi aktif sampai ${formatDate(activeMutation.effective_date)}.`}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700">Jenis Perubahan Jabatan</label>
@@ -259,34 +313,40 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                       <option value="promotion">Promosi (Naik Jabatan)</option>
                       <option value="demotion">Demosi (Turun Jabatan)</option>
                     </select>
-                    <p className="text-[10px] text-slate-500">
-                      {form.mutation_type === "promotion" 
-                        ? "Promosi hanya menampilkan jabatan dengan level lebih tinggi. Karena level 1 paling tinggi, target promosi memakai angka level yang lebih kecil."
-                        : "Demosi hanya menampilkan jabatan dengan level lebih rendah (angka level lebih besar)."
-                      }
-                    </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700">Pilih Opsi Keberlakuan</label>
+                    <label className="text-xs font-semibold text-slate-700">Bulan Payroll</label>
                     <select
-                      value={form.period_choice}
-                      onChange={(e) => setForm((current) => ({ ...current, period_choice: e.target.value }))}
+                      value={form.period_month}
+                      onChange={(e) => setForm((current) => ({ ...current, period_month: e.target.value }))}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
                     >
-                      <option value="current">Mulai Periode Berjalan (Gaji Bulan Ini)</option>
-                      <option value="next">Mulai Bulan Depan</option>
+                      <option value="">-- Pilih Bulan Payroll --</option>
+                      {periods.map((period) => (
+                        <option key={period.id} value={period.period_month} disabled={period.status !== "open"}>
+                          {period.period_month}
+                        </option>
+                      ))}
                     </select>
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 mt-2">
-                      <p className="text-[11px] text-emerald-800 font-medium flex justify-between items-center">
-                        <span>Akan berlaku mulai:</span>
-                        <span className="font-bold bg-emerald-200/50 px-2 py-0.5 rounded text-emerald-900">
-                          {calculatedEffectiveDate.toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
-                        </span>
-                      </p>
-                      <p className="text-[9px] text-emerald-600 mt-1 italic">
-                        * Mengikuti tanggal mulai (cutoff) periode penggajian
-                      </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <div className="text-[10px] uppercase text-slate-500">Bulan Payroll</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{selectedPeriod?.period_month || "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-slate-500">Periode Gaji</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {selectedPeriod ? `${formatDate(selectedPeriod.start_date)} - ${formatDate(selectedPeriod.end_date)}` : "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-slate-500">Efektif Sejak</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {calculatedEffectiveDate ? formatDate(calculatedEffectiveDate) : "-"}
                     </div>
                   </div>
                 </div>
@@ -356,7 +416,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
           <button
             form="mutation-form"
             type="submit"
-            disabled={saving || loading || !form.employee_id || !form.position_id || !hascurrentPositionLevel}
+            disabled={saving || loading || !form.employee_id || !form.position_id || !hascurrentPositionLevel || !!activeMutation || selectedPeriod?.status === "closed"}
             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-4 focus:ring-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Mengajukan..." : editData ? "Simpan Perubahan" : `Ajukan ${mutationLabel}`}

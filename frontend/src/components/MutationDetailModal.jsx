@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { X, Download, AlertCircle, FileText, CheckCircle, XCircle } from "lucide-react";
+import { X, Download, AlertCircle, AlertTriangle, FileText, CheckCircle, XCircle } from "lucide-react";
 import MutationRequestModal from "./MutationRequestModal";
+import ConfirmModal from "./ConfirmModal";
+
+const formatDate = (value) => {
+  const datePart = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return "-";
+  const date = new Date(`${datePart}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+};
 
 export default function MutationDetailModal({ isOpen, onClose, onSuccess, requestId, userRole }) {
   const [request, setRequest] = useState(null);
@@ -11,6 +21,7 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [err, setErr] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -36,27 +47,8 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
     return () => { active = false; };
   }, [isOpen, requestId]);
 
-  const handleAction = async (action) => {
+  const executeAction = async (action) => {
     setErr("");
-    
-    if (action === "reject" && !showRejectInput) {
-      setShowRejectInput(true);
-      return;
-    }
-    
-    if (action === "reject" && !rejectionReason.trim()) {
-      setErr("Alasan penolakan harus diisi.");
-      return;
-    }
-
-    if (action === "cancel") {
-      if (!confirm("Yakin ingin membatalkan pengajuan ini?")) return;
-    }
-
-    if (action === "approve") {
-      if (!confirm("Yakin ingin menyetujui pengajuan ini? Perubahan jabatan akan langsung dijadwalkan.")) return;
-    }
-
     setActionLoading(true);
     try {
       const payload = action === "reject" ? { rejection_reason: rejectionReason } : undefined;
@@ -66,6 +58,27 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
       setErr(e.message || `Gagal memproses aksi: ${action}`);
       setActionLoading(false);
     }
+  };
+
+  const handleAction = async (action) => {
+    setErr("");
+
+    if (action === "reject" && !showRejectInput) {
+      setShowRejectInput(true);
+      return;
+    }
+
+    if (action === "reject" && !rejectionReason.trim()) {
+      setErr("Alasan penolakan harus diisi.");
+      return;
+    }
+
+    if (action === "cancel" || action === "approve") {
+      setConfirmation(action);
+      return;
+    }
+
+    await executeAction(action);
   };
 
   if (!isOpen) return null;
@@ -121,7 +134,7 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tipe Mutasi</p>
                     <p className="font-semibold text-slate-900">
@@ -129,9 +142,21 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                     </p>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bulan Payroll</p>
+                    <p className="font-semibold text-slate-900">{request.payroll_period?.period_month || '-'}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Efektif Sejak</p>
                     <p className="font-semibold text-slate-900">
-                      {new Date(request.effective_date).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
+                      {formatDate(request.effective_date)}
+                    </p>
+                  </div>
+                  <div className="col-span-3 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Periode Gaji</p>
+                    <p className="font-semibold text-slate-900">
+                      {request.payroll_period
+                        ? `${formatDate(request.payroll_period.start_date)} - ${formatDate(request.payroll_period.end_date)}`
+                        : '-'}
                     </p>
                   </div>
                 </div>
@@ -222,8 +247,9 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                   <button
                     onClick={() => handleAction('cancel')}
                     disabled={actionLoading}
-                    className="text-sm font-semibold text-rose-600 hover:text-rose-800 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    <AlertTriangle size={16} />
                     {actionLoading ? "Memproses..." : "Batalkan Pengajuan"}
                   </button>
                 )}
@@ -284,6 +310,21 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
           editData={request}
         />
       )}
+
+      <ConfirmModal
+        isOpen={!!confirmation}
+        title={confirmation === "approve" ? "Setujui pengajuan?" : "Batalkan pengajuan?"}
+        message={confirmation === "approve" ? "Perubahan jabatan akan dijadwalkan sesuai periode payroll." : "Pengajuan akan dibatalkan dan tidak dapat diproses kembali."}
+        confirmLabel={confirmation === "approve" ? "Ya, setujui" : "Ya, batalkan"}
+        tone={confirmation === "approve" ? "success" : "danger"}
+        loading={actionLoading}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={async () => {
+          const action = confirmation;
+          setConfirmation(null);
+          await executeAction(action);
+        }}
+      />
     </>
   );
 }

@@ -9,6 +9,7 @@ import {
   updateMe,
   updatePassword,
 } from "@/lib/meApi";
+import EmployeeHistoryHub from "@/components/EmployeeHistoryHub";
 
 const EMPTY_EMP_FORM = {
   name: "",
@@ -69,6 +70,7 @@ export default function MyProfilePage() {
 
   const [isEditingEmp, setIsEditingEmp] = useState(false);
   const [empInitialForm, setEmpInitialForm] = useState(null);
+  const [staffHistoryTab, setStaffHistoryTab] = useState("profile");
 
   const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
   const [meta, setMeta] = useState(EMPTY_META);
@@ -359,79 +361,110 @@ export default function MyProfilePage() {
       {/* EMPLOYEE SECTION (STAFF ONLY) */}
       {isStaff && (
         <>
-          <div className="bg-white border border-border rounded shadow-sm p-4">
-            <div className="text-sm font-medium text-foreground">Info Karyawan (read-only)</div>
-            <div className="mt-4 grid md:grid-cols-3 gap-4">
-              <Field label="Employee Code" value={meta.employee_code} />
-              <Field label="Position" value={meta.position} />
-              <Field label="Status" value={meta.status || "-"} />
-            </div>
+          <div className="flex items-center gap-1 border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setStaffHistoryTab("profile")}
+              className={`border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                staffHistoryTab === "profile"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Informasi Karyawan
+            </button>
+            <button
+              type="button"
+              onClick={() => setStaffHistoryTab("history")}
+              className={`border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                staffHistoryTab === "history"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Riwayat Jabatan & Gaji
+            </button>
           </div>
 
-          <div className="bg-white border border-border rounded shadow-sm p-4">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <div className="text-sm font-medium text-foreground">Private / Sensitive Info</div>
-                <div className="mt-1 text-sm text-slate-600">
-                  {isEditingEmp ? "Mode edit aktif. Ubah data lalu simpan." : "Lihat data pribadi & rekening. Klik Edit untuk mengubah."}
+          {staffHistoryTab === "history" ? (
+            rawEmp?.id ? <EmployeeHistoryHub employeeId={rawEmp.id} role={role} /> : null
+          ) : (
+            <>
+              <div className="bg-white border border-border rounded shadow-sm p-4">
+                <div className="text-sm font-medium text-foreground">Info Karyawan (read-only)</div>
+                <div className="mt-4 grid md:grid-cols-3 gap-4">
+                  <Field label="Employee Code" value={meta.employee_code} />
+                  <Field label="Position" value={meta.position} />
+                  <Field label="Status" value={meta.status || "-"} />
                 </div>
               </div>
 
-              {!isEditingEmp ? (
-                <Button
-                  onClick={() => {
-                    setEmpErr("");
-                    setEmpOk("");
-                    setIsEditingEmp(true);
-                  }}
-                  className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-                >
-                  Edit
-                </Button>
-              ) : (
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={onCancelEmp} disabled={empSaving} className="rounded font-extrabold">
-                    Cancel
-                  </Button>
+              <div className="bg-white border border-border rounded shadow-sm p-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">Private / Sensitive Info</div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      {isEditingEmp ? "Mode edit aktif. Ubah data lalu simpan." : "Lihat data pribadi & rekening. Klik Edit untuk mengubah."}
+                    </div>
+                  </div>
 
-                  <Button
-                    onClick={onSaveEmp}
-                    disabled={empSaving || !empDirty}
-                    className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-                  >
-                    {empSaving ? "Menyimpan..." : "Simpan"}
-                  </Button>
+                  {!isEditingEmp ? (
+                    <Button
+                      onClick={() => {
+                        setEmpErr("");
+                        setEmpOk("");
+                        setIsEditingEmp(true);
+                      }}
+                      className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                    >
+                      Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={onCancelEmp} disabled={empSaving} className="rounded font-extrabold">
+                        Cancel
+                      </Button>
+
+                      <Button
+                        onClick={onSaveEmp}
+                        disabled={empSaving || !empDirty}
+                        className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                      >
+                        {empSaving ? "Menyimpan..." : "Simpan"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <AlertMessage type="error" message={empErr} className="mt-4" />
-            <AlertMessage type="success" message={empOk} className="mt-4" />
+                <AlertMessage type="error" message={empErr} className="mt-4" />
+                <AlertMessage type="success" message={empOk} className="mt-4" />
 
-            <div className="mt-5 grid md:grid-cols-2 gap-5">
-              <Input label="Nama" value={empForm.name} onChange={onChangeEmp("name")} disabled={!isEditingEmp} />
-              <Input label="Phone" value={empForm.phone} onChange={onChangeEmpDigits("phone", 30)} disabled={!isEditingEmp} inputMode="numeric" maxLength={30} autoComplete="off" />
-              <Input label="NIK" value={empForm.nik} onChange={onChangeEmpDigits("nik", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
-              <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmpDigits("npwp", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
-              <Input label="Bank Name" value={empForm.bank_name} onChange={onChangeEmp("bank_name")} disabled={!isEditingEmp} />
-              <Input
-                label="Bank Account Name"
-                value={empForm.bank_account_name}
-                onChange={onChangeEmp("bank_account_name")}
-                disabled={!isEditingEmp}
-              />
-              <Input
-                label="Bank Account Number"
-                value={empForm.bank_account_number}
-                onChange={onChangeEmpDigits("bank_account_number", 50)}
-                disabled={!isEditingEmp}
-                inputMode="numeric"
-                maxLength={50}
-                autoComplete="off"
-              />
-              <Textarea label="Address" value={empForm.address} onChange={onChangeEmp("address")} disabled={!isEditingEmp} />
-            </div>
-          </div>
+                <div className="mt-5 grid md:grid-cols-2 gap-5">
+                  <Input label="Nama" value={empForm.name} onChange={onChangeEmp("name")} disabled={!isEditingEmp} />
+                  <Input label="Phone" value={empForm.phone} onChange={onChangeEmpDigits("phone", 30)} disabled={!isEditingEmp} inputMode="numeric" maxLength={30} autoComplete="off" />
+                  <Input label="NIK" value={empForm.nik} onChange={onChangeEmpDigits("nik", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
+                  <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmpDigits("npwp", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
+                  <Input label="Bank Name" value={empForm.bank_name} onChange={onChangeEmp("bank_name")} disabled={!isEditingEmp} />
+                  <Input
+                    label="Bank Account Name"
+                    value={empForm.bank_account_name}
+                    onChange={onChangeEmp("bank_account_name")}
+                    disabled={!isEditingEmp}
+                  />
+                  <Input
+                    label="Bank Account Number"
+                    value={empForm.bank_account_number}
+                    onChange={onChangeEmpDigits("bank_account_number", 50)}
+                    disabled={!isEditingEmp}
+                    inputMode="numeric"
+                    maxLength={50}
+                    autoComplete="off"
+                  />
+                  <Textarea label="Address" value={empForm.address} onChange={onChangeEmp("address")} disabled={!isEditingEmp} />
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

@@ -3,6 +3,7 @@ import { X, User, Calendar, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchEmployeesLite } from "@/lib/payrollsApi";
 import { api } from "@/lib/api";
+import { currentPayrollMonth } from "@/lib/utils";
 
 export default function PayrollCreateModal({ open, onClose, onSuccess }) {
   const [loadingEmp, setLoadingEmp] = useState(false);
@@ -20,7 +21,7 @@ export default function PayrollCreateModal({ open, onClose, onSuccess }) {
     if (open) {
       setForm({
         employee_id: "",
-        periode: new Date().toISOString().substring(0, 7),
+        periode: currentPayrollMonth(),
       });
       const load = async () => {
         setLoadingEmp(true);

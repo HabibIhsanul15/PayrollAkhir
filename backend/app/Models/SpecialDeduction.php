@@ -20,6 +20,11 @@ class SpecialDeduction extends Model
         return $this->belongsTo(Employee::class);
     }
 
+    public function deductionType()
+    {
+        return $this->belongsTo(DeductionType::class);
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');

@@ -66,6 +66,14 @@ class MeController extends Controller
             return response()->json(['message' => 'Akun ini belum terhubung ke data employee.'], 404);
         }
 
+        // Posisi aktif ditentukan dari profil gaji yang sudah efektif hari ini.
+        // Kolom position pada employee hanya menjadi data referensi lama.
+        $currentProfile = $emp->currentSalaryProfile();
+        if ($currentProfile) {
+            $emp->position_id = $currentProfile->position_id;
+            $emp->position = $currentProfile->position ?: $emp->position;
+        }
+
         $alg = strtoupper((string) ($emp->pii_alg ?? 'AES'));
 
         $emp->nik = CryptoService::readEncryptedOrPlain($emp->nik_enc, $emp->nik, $alg);

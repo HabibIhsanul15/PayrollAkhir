@@ -63,15 +63,7 @@ class MutationController extends Controller
 
         $effectiveDateInput = Carbon::parse($data['effective_from'])->startOfDay();
         
-        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', '<=', $effectiveDateInput)
-            ->where('end_date', '>=', $effectiveDateInput)
-            ->first();
-
-        if ($payrollPeriod) {
-            $effectiveDate = Carbon::parse($payrollPeriod->start_date)->startOfDay();
-        } else {
-            $effectiveDate = $effectiveDateInput->copy()->startOfMonth();
-        }
+        $effectiveDate = \App\Models\PayrollPeriod::forDate($effectiveDateInput)->start_date->startOfDay();
 
         $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
@@ -103,6 +95,11 @@ class MutationController extends Controller
 
         DB::transaction(function () use ($data, $employee, $effectiveDate, $currentProfile, $targetPosition) {
             $salaryConfig = $this->resolveBaseSalaryPayload($targetPosition, $data);
+            if ($salaryConfig['amount'] <= 0) {
+                throw ValidationException::withMessages([
+                    'position_id' => 'Gaji pokok jabatan tujuan belum diatur pada master jabatan.',
+                ]);
+            }
             $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position', $effectiveDate);
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']

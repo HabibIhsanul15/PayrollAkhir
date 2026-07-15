@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { getUser, isAuthed } from "@/lib/auth";
-import { formatRupiah } from "@/lib/utils";
+import { currentPayrollMonth, formatRupiah } from "@/lib/utils";
 import AlertMessage from "@/components/AlertMessage";
 import { Search, FileText, CheckCircle2, Calculator, Trash2, Send, CheckCircle, CreditCard, AlertTriangle } from "lucide-react";
 import PayrollPreviewModal from "@/components/PayrollPreviewModal";
@@ -92,7 +92,7 @@ export default function PayrollList() {
   const role = String(user?.role || "").toLowerCase();
   const { confirm } = useConfirm();
 
-  const [period, setPeriod] = useState(new Date().toISOString().substring(0, 7));
+  const [period, setPeriod] = useState(() => currentPayrollMonth());
   const [q, setQ] = useState("");
   
   const [previewModal, setPreviewModal] = useState({

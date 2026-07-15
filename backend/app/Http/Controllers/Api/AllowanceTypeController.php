@@ -54,7 +54,7 @@ class AllowanceTypeController extends Controller
 
         $data = $request->validate([
             'code' => ['required', 'string', 'max:50', 'unique:allowance_types,code'],
-            'name' => ['required', 'string', 'max:150'],
+            'name' => ['required', 'string', 'max:150', 'unique:allowance_types,name'],
             'calculation_type' => ['required', 'in:per_mandays,per_trip,flat'],
             'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['required', 'integer', 'min:0'],
@@ -75,7 +75,13 @@ class AllowanceTypeController extends Controller
         }
 
         $data = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:150'],
+            'name' => [
+                'sometimes',
+                'required',
+                'string',
+                'max:150',
+                Rule::unique('allowance_types', 'name')->ignore($allowanceType->id),
+            ],
             'calculation_type' => ['sometimes', 'required', 'in:per_mandays,per_trip,flat'],
             'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['sometimes', 'required', 'integer', 'min:0'],

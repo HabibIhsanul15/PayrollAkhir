@@ -31,6 +31,7 @@ import PayrollReportPage from "./pages/PayrollReportPage";
 // Master data pages (Phase 1)
 import PositionManagementPage from "./pages/PositionManagementPage";
 import AllowanceTypePage from "./pages/AllowanceTypePage";
+import DeductionTypePage from "./pages/DeductionTypePage";
 import PositionRatePage from "./pages/PositionRatePage";
 
 // Phase 3 UI
@@ -176,6 +177,14 @@ export default function App() {
             element={
               <RoleRoute allow={["fat"]}>
                 <AllowanceTypePage />
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/master/deduction-types"
+            element={
+              <RoleRoute allow={["fat"]}>
+                <DeductionTypePage />
               </RoleRoute>
             }
           />

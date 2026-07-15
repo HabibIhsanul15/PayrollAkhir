@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AllowanceTypeController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DeductionTypeController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmploymentTypeController;
 use App\Http\Controllers\Api\PositionAllowanceRateController;
@@ -66,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('/special-deductions', \App\Http\Controllers\Api\SpecialDeductionController::class)
         ->only(['index', 'store', 'destroy']);
+
+    Route::apiResource('/master/deduction-types', DeductionTypeController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
 
     // Legacy workflow actions kept only where they do not conflict with the current payroll flow.
     Route::post('/payrolls/{payroll}/request-approval', [PayrollController::class, 'requestPayment']);
