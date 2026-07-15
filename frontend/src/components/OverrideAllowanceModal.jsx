@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-
+import { formatRupiah } from "@/lib/utils";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 export default function OverrideAllowanceModal({ isOpen, onClose, data, onSave, isSaving }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -53,10 +54,9 @@ export default function OverrideAllowanceModal({ isOpen, onClose, data, onSave, 
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               New Amount (Rp) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number"
+            <CurrencyInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(value) => setAmount(value)}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               required
             />

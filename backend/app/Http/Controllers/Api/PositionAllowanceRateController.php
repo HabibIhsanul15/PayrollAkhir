@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PositionAllowanceRate;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PositionAllowanceRateController extends Controller
@@ -31,14 +29,14 @@ class PositionAllowanceRateController extends Controller
         }
 
         $query = PositionAllowanceRate::query();
-        if ($request->boolean('active_on')) {
-            $query->activeOn($request->query('active_on'));
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
         }
 
         return response()->json(
-            $query->with(['Position', 'allowanceType'])
+            $query->with(['position', 'allowanceType'])
                 ->orderBy('position_id')
-                ->orderByDesc('effective_from')
                 ->get()
         );
     }
@@ -49,7 +47,7 @@ class PositionAllowanceRateController extends Controller
             return $this->forbid();
         }
 
-        return response()->json($PositionAllowanceRate->load(['Position', 'allowanceType']));
+        return response()->json($PositionAllowanceRate->load(['position', 'allowanceType']));
     }
 
     public function store(Request $request)
@@ -62,35 +60,21 @@ class PositionAllowanceRateController extends Controller
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'allowance_type_id' => ['required', Rule::exists('allowance_types', 'id')->where('is_active', true)],
             'rate_amount' => ['nullable', 'numeric', 'min:0'],
-            'effective_from' => ['required', 'date'],
-            'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $rate = DB::transaction(function () use ($data) {
-            $previous = PositionAllowanceRate::query()
-                ->where('position_id', $data['position_id'])
-                ->where('allowance_type_id', $data['allowance_type_id'])
-                ->whereDate('effective_from', '<', $data['effective_from'])
-                ->orderByDesc('effective_from')
-                ->first();
+        $rate = PositionAllowanceRate::updateOrCreate(
+            [
+                'position_id' => $data['position_id'],
+                'allowance_type_id' => $data['allowance_type_id'],
+            ],
+            [
+                'rate_amount' => $data['rate_amount'] ?? null,
+                'is_active' => $data['is_active'] ?? true,
+            ]
+        );
 
-            if ($previous && ($previous->effective_to === null || $previous->effective_to->gte($data['effective_from']))) {
-                $previous->update([
-                    'effective_to' => Carbon::parse($data['effective_from'])->subDay()->toDateString(),
-                ]);
-            }
-
-            if ($this->overlaps($data)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'effective_from' => ['Periode tarif bertumpang tindih dengan tarif yang sudah ada.'],
-                ]);
-            }
-
-            return PositionAllowanceRate::create($data);
-        });
-
-        return response()->json($rate->load(['Position', 'allowanceType']), 201);
+        return response()->json($rate->load(['position', 'allowanceType']), 201);
     }
 
     public function update(Request $request, PositionAllowanceRate $PositionAllowanceRate)
@@ -100,31 +84,16 @@ class PositionAllowanceRateController extends Controller
         }
 
         $data = $request->validate([
-            'position_id' => ['sometimes', 'required', Rule::exists('positions', 'id')->where('is_active', true)],
-            'allowance_type_id' => ['sometimes', 'required', Rule::exists('allowance_types', 'id')->where('is_active', true)],
             'rate_amount' => ['nullable', 'numeric', 'min:0'],
-            'effective_from' => ['sometimes', 'required', 'date'],
-            'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
-            'is_active' => ['sometimes', 'required', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $positionId = $data['position_id'] ?? $PositionAllowanceRate->position_id;
-        $allowanceTypeId = $data['allowance_type_id'] ?? $PositionAllowanceRate->allowance_type_id;
-        $effectiveFrom = $data['effective_from'] ?? ($PositionAllowanceRate->effective_from ? $PositionAllowanceRate->effective_from->toDateString() : null);
-
-        $candidate = array_merge($PositionAllowanceRate->toArray(), $data, [
-            'position_id' => $positionId,
-            'allowance_type_id' => $allowanceTypeId,
-            'effective_from' => $effectiveFrom,
+        $PositionAllowanceRate->update([
+            'rate_amount' => $data['rate_amount'] ?? null,
+            'is_active' => $data['is_active'] ?? $PositionAllowanceRate->is_active,
         ]);
 
-        if ($this->overlaps($candidate, $PositionAllowanceRate->id)) {
-            return response()->json(['message' => 'Periode tarif bertumpang tindih dengan tarif yang sudah ada.'], 422);
-        }
-
-        $PositionAllowanceRate->update($data);
-
-        return response()->json($PositionAllowanceRate->load(['Position', 'allowanceType']));
+        return response()->json($PositionAllowanceRate->load(['position', 'allowanceType']));
     }
 
     public function destroy(Request $request, PositionAllowanceRate $PositionAllowanceRate)
@@ -135,23 +104,7 @@ class PositionAllowanceRateController extends Controller
 
         $PositionAllowanceRate->delete();
 
-        return response()->json(['message' => 'Position Allowance Rate deleted successfully']);
-    }
-
-    private function overlaps(array $data, ?int $ignoreId = null): bool
-    {
-        $start = $data['effective_from'];
-        $end = $data['effective_to'] ?? null;
-
-        return PositionAllowanceRate::query()
-            ->where('position_id', $data['position_id'])
-            ->where('allowance_type_id', $data['allowance_type_id'])
-            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
-            ->where(function ($query) use ($start) {
-                $query->whereNull('effective_to')
-                    ->orWhereDate('effective_to', '>=', $start);
-            })
-            ->when($end, fn ($query) => $query->whereDate('effective_from', '<=', $end))
-            ->exists();
+        return response()->json(['message' => 'Rate deleted successfully']);
     }
 }
+

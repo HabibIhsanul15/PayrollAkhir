@@ -68,9 +68,9 @@ class EmployeeController extends Controller
             ?? $Position->base_salary_basis
             ?? 'daily';
 
-        $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
+        $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null && $data['base_salary_amount'] !== ''
             ? (float) $data['base_salary_amount']
-            : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
+            : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null && $data['mandays_rate'] !== ''
                 ? (float) $data['mandays_rate']
                 : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
 
@@ -133,13 +133,12 @@ class EmployeeController extends Controller
         }
 
         return $query->with([
-            'Position:id,code,name,is_active',
+            'position:id,code,name,is_active,level',
             'employmentType:id,code,name',
         ])->get([
             'id',
             'employee_code',
             'name',
-            'position',
             'status',
             'user_id',
             'position_id',
@@ -302,7 +301,7 @@ class EmployeeController extends Controller
     public function createUser(Request $request, Employee $employee)
     {
         $user = $request->user();
-        if (! $this->inRoles($user, ['hcga', 'director'])) {
+        if (! $this->inRoles($user, ['hcga'])) {
             return $this->forbid();
         }
 
@@ -335,7 +334,7 @@ class EmployeeController extends Controller
     public function resetPassword(Request $request, Employee $employee)
     {
         $user = $request->user();
-        if (! $this->inRoles($user, ['hcga', 'director'])) {
+        if (! $this->inRoles($user, ['hcga'])) {
             return $this->forbid();
         }
 
@@ -557,11 +556,14 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
         $role = $this->roleOf($user);
-        if (! in_array($role, ['hcga', 'fat', 'director'], true)) {
+        
+        $isSelf = (string) $user->employee_id === (string) $employee->id;
+        
+        if (! in_array($role, ['hcga', 'fat', 'director'], true) && !$isSelf) {
             return $this->forbid();
         }
 
-        $canSeeNominal = in_array($role, ['fat', 'director'], true);
+        $canSeeNominal = in_array($role, ['fat', 'director'], true) || $isSelf;
 
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
         $employeePosition = $employee->Position;
@@ -754,9 +756,10 @@ class EmployeeController extends Controller
             'num_toddlers' => ['sometimes', 'integer', 'min:0'],
             'is_trainer' => ['sometimes', 'boolean'],
             'is_on_probation' => ['sometimes', 'boolean'],
+            'position_id' => ['sometimes', 'nullable', Rule::exists('positions', 'id')->where('is_active', true)],
         ], $this->digitFieldMessages());
 
-        // ✅ HARD BLOCK: jangan pernah update employee_code
+        // 🚨 HARD BLOCK: jangan pernah update employee_code
         unset($data['employee_code']);
 
         $piiAlg = strtoupper((string) ($employee->pii_alg ?? 'AES'));
@@ -794,7 +797,51 @@ class EmployeeController extends Controller
             $data['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
         }
 
-        $employee->update($data);
+        DB::transaction(function () use ($data, $employee, $piiAlg) {
+            // Jika employee belum punya jabatan dan dikirim position_id baru (Penempatan Awal)
+            if (empty($employee->position_id) && !empty($data['position_id'])) {
+                $Position = Position::findOrFail($data['position_id']);
+                $effectiveFrom = $data['join_date'] ?? $employee->join_date ?? now()->startOfMonth()->toDateString();
+                
+                // Gunakan default configurasi
+                $salaryConfig = $this->resolveBaseSalaryPayload($Position, []);
+                $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
+                $base = (float) ($positionRate?->rate_amount ?? 0);
+                $baseSalaryAmount = $salaryConfig['amount'];
+                
+                $encryptPii = fn (string $value) => $piiAlg === 'RSA'
+                    ? CryptoService::encryptRSA($value)
+                    : CryptoService::encryptAESGCM($value);
+
+                $employee->salaryProfiles()->create([
+                    'position_id' => $Position->id,
+                    'position' => $Position->name,
+                    'base_salary_basis' => $salaryConfig['basis'],
+                    'base_salary_amount' => 0,
+                    'position_allowance' => 0,
+                    'allowance_fixed' => 0,
+                    'deduction_fixed' => 0,
+                    'base_salary_amount_enc' => $encryptPii((string) $baseSalaryAmount),
+                    'position_allowance_enc' => $encryptPii((string) $base),
+                    'salary_alg' => $piiAlg,
+                    'salary_key_id' => $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                    'effective_from' => \Carbon\Carbon::parse($effectiveFrom)->startOfDay()->toDateString(),
+                ]);
+
+                $employee->jobHistories()->create([
+                    'position_id' => $Position->id,
+                    'position_name' => $Position->name,
+                    'start_date' => $effectiveFrom,
+                    'notes' => 'Penempatan awal (Update)',
+                ]);
+                $data['position'] = $Position->name;
+            } else {
+                // Jangan update position_id kalau sudah punya
+                unset($data['position_id']);
+            }
+
+            $employee->update($data);
+        });
 
         // sinkron nama user kalau employee punya akun
         if (array_key_exists('name', $data) && $employee->user_id) {

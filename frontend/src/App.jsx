@@ -35,6 +35,7 @@ import PositionRatePage from "./pages/PositionRatePage";
 
 // Phase 3 UI
 import MonthlyRecapPage from "./pages/MonthlyRecapPage";
+import MutationApprovalPage from "./pages/MutationApprovalPage";
 
 function getHomePath(user) {
   const role = String(user?.role || "").toLowerCase();
@@ -128,7 +129,7 @@ export default function App() {
           <Route
             path="/employees"
             element={
-              <RoleRoute allow={["hcga"]}>
+              <RoleRoute allow={["hcga", "director"]}>
                 <EmployeesPage />
               </RoleRoute>
             }
@@ -136,7 +137,7 @@ export default function App() {
           <Route
             path="/employees/:id"
             element={
-              <RoleRoute allow={["hcga"]}>
+              <RoleRoute allow={["hcga", "director"]}>
                 <EmployeeDetailPage />
               </RoleRoute>
             }
@@ -203,6 +204,14 @@ export default function App() {
             element={
               <RoleRoute allow={["hcga", "fat", "director"]}>
                 <MonthlyRecapPage />
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/mutation-approvals"
+            element={
+              <RoleRoute allow={["director", "hcga"]}>
+                <MutationApprovalPage />
               </RoleRoute>
             }
           />

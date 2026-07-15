@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { monthLabel } from "@/lib/utils";
+import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AlertMessage from "@/components/AlertMessage";
 
@@ -192,7 +193,7 @@ export default function PayrollReportPage() {
         <div className="bg-white border border-border rounded p-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Jumlah Payroll</div>
           <div className="text-xl font-semibold text-foreground">{loading ? "…" : summary.count ?? 0}</div>
-          <div className="text-[10px] text-muted-foreground mt-1">{monthLabel(month)}</div>
+          <div className="text-[10px] text-muted-foreground mt-1"><PeriodDisplay period={month} /></div>
         </div>
         <div className="bg-white border border-border rounded p-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Total Gaji Pokok</div>
@@ -222,7 +223,7 @@ export default function PayrollReportPage() {
           <div>
             <span className="text-sm font-medium text-foreground">Detail Payroll</span>
             <span className="text-[10px] text-muted-foreground ml-2">
-              Periode {monthLabel(month)} • {status ? `Status: ${status.toUpperCase()}` : "Semua status"}
+              Periode <PeriodDisplay period={month} /> • {status ? `Status: ${status.toUpperCase()}` : "Semua status"}
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground">

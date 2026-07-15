@@ -92,7 +92,6 @@ class PositionAllowanceRateSeeder extends Seeder
                 PositionAllowanceRate::updateOrCreate([
                     'position_id' => $positionId,
                     'allowance_type_id' => $allowanceId,
-                    'effective_from' => '2026-01-01',
                 ], [
                     'rate_amount' => $rate['rate_amount'] ?? null,
                     'is_active' => true,

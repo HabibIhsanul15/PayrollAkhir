@@ -29,7 +29,7 @@ class AllowanceCalculationService
             ->get();
 
         foreach ($types as $type) {
-            $rate = $this->rateResolver->resolve($positionId, $type->id, $date);
+            $rate = $this->rateResolver->resolve($positionId, $type->id);
             if (! $rate) {
                 continue;
             }

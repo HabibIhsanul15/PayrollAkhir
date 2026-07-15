@@ -69,7 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Legacy workflow actions kept only where they do not conflict with the current payroll flow.
     Route::post('/payrolls/{payroll}/request-approval', [PayrollController::class, 'requestPayment']);
-    Route::post('/payrolls/{payroll}/reject', [PayrollController::class, 'rejectPayment']);
+    Route::post('/payrolls/{payroll}/reject', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'reject']);
     Route::post('/payrolls/{payroll}/mark-paid', [PayrollController::class, 'markPaid']);
 
     // export
@@ -107,6 +107,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/employees/{employee}/salary-profiles', [EmployeeController::class, 'storeSalaryProfile']);
     Route::get('/employees/{employee}/job-histories', [EmployeeController::class, 'jobHistories']);
     Route::post('/employees/{employee}/mutate', [\App\Http\Controllers\Api\MutationController::class, 'store']);
+
+    // Mutation Requests (Approvals)
+    Route::get('/mutation-requests', [\App\Http\Controllers\Api\MutationRequestController::class, 'index']);
+    Route::post('/mutation-requests', [\App\Http\Controllers\Api\MutationRequestController::class, 'store']);
+    Route::get('/mutation-requests/{id}', [\App\Http\Controllers\Api\MutationRequestController::class, 'show']);
+    Route::put('/mutation-requests/{id}', [\App\Http\Controllers\Api\MutationRequestController::class, 'update']);
+    Route::post('/mutation-requests/{id}/cancel', [\App\Http\Controllers\Api\MutationRequestController::class, 'cancel']);
+    Route::post('/mutation-requests/{id}/approve', [\App\Http\Controllers\Api\MutationRequestController::class, 'approve']);
+    Route::post('/mutation-requests/{id}/reject', [\App\Http\Controllers\Api\MutationRequestController::class, 'reject']);
 
     /*
     |--------------------------------------------------------------------------

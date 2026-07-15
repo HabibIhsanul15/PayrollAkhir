@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import AlertMessage from "@/components/AlertMessage";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -56,9 +57,6 @@ export default function PositionRatePage() {
     position_id: "",
     allowance_type_id: "",
     rate_amount: "",
-    effective_from: today,
-    effective_to: "",
-    is_active: true,
   });
 
   // Create lookup map: garMap[position_id][allowance_type_id] = RateObject
@@ -84,9 +82,6 @@ export default function PositionRatePage() {
         position_id: existing.position_id,
         allowance_type_id: existing.allowance_type_id,
         rate_amount: existing.rate_amount !== null ? String(existing.rate_amount) : "",
-        effective_from: existing.effective_from ? existing.effective_from.split("T")[0] : today,
-        effective_to: existing.effective_to ? existing.effective_to.split("T")[0] : "",
-        is_active: existing.is_active,
       });
       setEditId(existing.id);
       setIsEdit(true);
@@ -95,9 +90,6 @@ export default function PositionRatePage() {
         position_id: position.id,
         allowance_type_id: allowance.id,
         rate_amount: "",
-        effective_from: today,
-        effective_to: "",
-        is_active: true,
       });
       setIsEdit(false);
     }
@@ -114,9 +106,6 @@ export default function PositionRatePage() {
       position_id: parseInt(form.position_id),
       allowance_type_id: parseInt(form.allowance_type_id),
       rate_amount: form.rate_amount !== "" ? parseFloat(form.rate_amount) : null,
-      effective_from: form.effective_from,
-      effective_to: form.effective_to || null,
-      is_active: form.is_active,
     };
 
     try {
@@ -218,7 +207,6 @@ export default function PositionRatePage() {
                     {allowances.map((allowance) => (
                       <TableHead key={allowance.id} className="text-slate-700 text-center font-bold px-2 py-3 text-xs w-[140px]">
                         <div>{allowance.name}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">({allowance.code})</div>
                       </TableHead>
                     ))}
                   </TableRow>
@@ -315,55 +303,15 @@ export default function PositionRatePage() {
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Rate Amount (Rp)
                   </label>
-                  <input
-                    type="number"
-                    min="0"
+                  <CurrencyInput
                     value={form.rate_amount}
-                    onChange={(e) => setForm({ ...form, rate_amount: e.target.value })}
-                    placeholder="e.g. 25000"
+                    onChange={(value) => setForm({ ...form, rate_amount: value })}
+                    placeholder="Contoh: 150000"
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Effective From
-                  </label>
-                  <input
-                    type="date"
-                    value={form.effective_from}
-                    onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
-                    required
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Effective To
-                  </label>
-                  <input
-                    type="date"
-                    value={form.effective_to}
-                    onChange={(e) => setForm({ ...form, effective_to: e.target.value })}
-                    className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 py-1">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={form.is_active}
-                    onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
-                  />
-                  <label htmlFor="is_active" className="text-xs font-semibold text-slate-800 cursor-pointer select-none">
-                    Rate is Active
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-6">
                   <div>
                     {isEdit && (
                       <Button

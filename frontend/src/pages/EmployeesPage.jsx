@@ -59,7 +59,7 @@ export default function EmployeesPage() {
     return rows.filter((r) => {
       const code = String(r?.employee_code ?? "").toLowerCase();
       const name = String(r?.name ?? "").toLowerCase();
-      const pos = String(r?.position ?? "").toLowerCase();
+      const pos = String(r?.position?.name || r?.position || "").toLowerCase();
       const hasAccount = !!r?.has_account;
 
       const matchQ =

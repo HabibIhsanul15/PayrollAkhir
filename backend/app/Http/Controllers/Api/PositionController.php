@@ -86,7 +86,8 @@ class PositionController extends Controller
             unset(
                 $data['allowance_rates'],
                 $data['default_base_salary_amount'],
-                $data['default_mandays_rate']
+                $data['default_mandays_rate'],
+                $data['default_late_penalty_amount']
             );
         }
 
@@ -107,9 +108,8 @@ class PositionController extends Controller
         }
 
         if ($this->inRoles($request->user(), ['fat'])) {
-            $query->with(['allowanceRates' => function ($rates) use ($date) {
-                $rates->activeOn($date)
-                    ->whereHas('allowanceType', fn ($type) => $type->where('is_active', true))
+            $query->with(['allowanceRates' => function ($rates) {
+                $rates->whereHas('allowanceType', fn ($type) => $type->where('is_active', true))
                     ->with('allowanceType');
             }]);
         }
@@ -150,6 +150,7 @@ class PositionController extends Controller
         $data['base_salary_basis'] = 'daily';
         $data['default_base_salary_amount'] = 0;
         $data['default_mandays_rate'] = 0;
+        $data['default_late_penalty_amount'] = 0;
         $Position = Position::create($data);
 
         return response()->json($this->positionPayloadFor($request->user(), $Position), 201);
@@ -186,12 +187,13 @@ class PositionController extends Controller
         $structureFields = ['name', 'code', 'level', 'description', 'is_active', 'base_salary_basis'];
         foreach ($structureFields as $field) {
             if ($request->exists($field)) {
-                return $this->forbid('Finance hanya boleh mengubah nominal gaji pokok harian.');
+                return $this->forbid('Finance hanya boleh mengubah nominal gaji dan denda keterlambatan.');
             }
         }
 
         $data = $request->validate([
             'default_base_salary_amount' => ['sometimes', 'required', 'integer', 'min:0'],
+            'default_late_penalty_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
         $data = $this->normalizeBaseSalaryPayload($data);

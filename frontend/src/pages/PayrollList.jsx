@@ -116,7 +116,7 @@ export default function PayrollList() {
   const payrollKey = !isAuthed()
     ? null
     : isStaff
-      ? `/payrolls?periode=${period}-01&status=paid`
+      ? `/payrolls?period_month=${period}&status=paid`
       : `/payrolls/batch-preview?period_month=${period}`;
 
   // Fetch Processing Grid Data
@@ -141,7 +141,7 @@ export default function PayrollList() {
         status: "generated",
         payroll_id: row.id,
         payroll_status: row.status,
-        total_mandays: null,
+        total_mandays: row.total_mandays,
         gaji_pokok: Number(row.gaji_pokok || 0),
         total_allowances: Number(row.tunjangan || 0),
         total_deductions: Number(row.potongan || 0),
@@ -272,12 +272,22 @@ export default function PayrollList() {
     let confirmMsg = "";
     if (action === "submit") confirmMsg = "Ajukan payroll ini ke Direktur?";
     if (action === "approve") confirmMsg = "Setujui payroll ini?";
+    if (action === "reject") confirmMsg = "Tolak payroll ini?";
     
     const ok = await confirm(confirmMsg);
     if (!ok) return;
 
+    let body = {};
+    if (action === "reject") {
+        const reason = window.prompt("Alasan penolakan:");
+        if (reason === null) return; // User cancelled prompt
+        if (reason.trim()) {
+            body.note = reason.trim();
+        }
+    }
+
     try {
-      await api(`/payrolls/${id}/${action}`, { method: "POST" });
+      await api(`/payrolls/${id}/${action}`, { method: "POST", body });
       load();
     } catch (e) {
       alert(e?.message || `Gagal melakukan aksi ${action}`);
@@ -508,9 +518,14 @@ export default function PayrollList() {
                                   </button>
                                 )}
                                 {isDirector && r.payroll_status === 'submitted' && (
-                                  <button onClick={() => handleAction(r.payroll_id, 'approve')} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded">
-                                    Setujui
-                                  </button>
+                                  <>
+                                    <button onClick={() => handleAction(r.payroll_id, 'approve')} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded">
+                                      Setujui
+                                    </button>
+                                    <button onClick={() => handleAction(r.payroll_id, 'reject')} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 rounded">
+                                      Tolak
+                                    </button>
+                                  </>
                                 )}
                                 {isFAT && r.payroll_status === 'approved' && (
                                   <button onClick={() => openTransferModal(r)} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded">

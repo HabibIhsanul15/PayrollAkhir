@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import SecurityInspectionTab from "../components/SecurityInspectionTab";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { monthLabel } from "@/lib/utils";
+import PeriodDisplay from "@/components/PeriodDisplay";
 import { Building2, Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard } from "lucide-react";
 
 import OverrideAllowanceModal from "@/components/OverrideAllowanceModal";
 import RecalculateConfirmModal from "@/components/RecalculateConfirmModal";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatIDR(n) {
   const num = Number(n ?? 0);
@@ -39,18 +42,17 @@ function periodKey(value) {
   return s.length >= 7 ? s.slice(0, 7) : s;
 }
 
-function monthLabel(yyyyMM) {
-  if (!/^\d{4}-\d{2}$/.test(yyyyMM)) return yyyyMM || "-";
-  const [y, m] = yyyyMM.split("-");
-  const map = {
-    "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr", "05": "Mei", "06": "Jun",
-    "07": "Jul", "08": "Agu", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des",
-  };
-  return `${map[m] || m} ${y}`;
-}
+function formatDetail(detail, mandays, rate_amount, allowanceName = "") {
+  let defaultTypeLabel = " (Bulanan)";
+  const nameLower = String(allowanceName || "").toLowerCase();
+  if (nameLower.includes("trip") || nameLower.includes("perjalanan dinas")) {
+    defaultTypeLabel = " (Per Perjalanan Dinas)";
+  } else if (nameLower.includes("harian") || nameLower.includes("makan")) {
+    defaultTypeLabel = " (Harian)";
+  }
 
-function formatDetail(detail, mandays, rate_amount) {
-  if (!detail || typeof detail !== "object") return "";
+  if (!detail || typeof detail !== "object") return defaultTypeLabel.trim();
+  
   const parts = [];
   if (detail.num_trips != null) parts.push(`${formatPlainNumber(detail.num_trips)} Trip`);
   if (detail.project_assignments_mandays != null) parts.push(`${formatPlainNumber(detail.project_assignments_mandays)} Hr Project`);
@@ -74,6 +76,15 @@ function formatDetail(detail, mandays, rate_amount) {
   }
 
   let desc = parts.join(" | ");
+  
+  // Determine Type Label (Harian/Bulanan/Trip) based on inputs
+  let typeLabel = defaultTypeLabel;
+  if (detail.num_trips != null) {
+      typeLabel = " (Per Perjalanan Dinas)";
+  } else if (mandays > 0 || detail.total_mandays != null || wfo != null || wfh != null || detail.mandays_outside_city != null || detail.out_of_town_days != null) {
+      typeLabel = " (Harian)";
+  }
+
   if (rate_amount > 0 && (detail.num_trips != null || mandays > 0)) {
       const multiplier = mandays > 0 ? mandays : (detail.num_trips || 1);
       desc += (desc ? " • " : "") + new Intl.NumberFormat("id-ID").format(rate_amount) + " x " + formatPlainNumber(multiplier);
@@ -81,7 +92,7 @@ function formatDetail(detail, mandays, rate_amount) {
           desc += " x " + formatPlainNumber(detail.multiplier);
       }
   }
-  return desc ? `(${desc})` : "";
+  return (desc ? `(${desc}) ` : "") + typeLabel.trim();
 }
 
 export default function PayrollDetailPage() {
@@ -89,6 +100,8 @@ export default function PayrollDetailPage() {
   const nav = useNavigate();
   const user = getUser();
   const isFat = user?.role?.toLowerCase() === "fat";
+  const isDirector = user?.role?.toLowerCase() === "director";
+  const { confirm } = useConfirm();
 
   const { data: rawRow, error: errRow, isLoading, mutate } = useSWR(`/payrolls/${id}`);
 
@@ -104,6 +117,14 @@ export default function PayrollDetailPage() {
   const [overrideData, setOverrideData] = useState(null);
   const [recalcOpen, setRecalcOpen] = useState(false);
   const [recalcMsg, setRecalcMsg] = useState("");
+
+  const [transferModal, setTransferModal] = useState({
+    open: false,
+    proofFile: null,
+    paidRef: "",
+    paidNote: "",
+    submitting: false,
+  });
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -176,7 +197,7 @@ export default function PayrollDetailPage() {
 
   const loadDetail = () => mutate();
 
-  const periodeLabel = useMemo(() => monthLabel(periodKey(row?.periode)), [row?.periode]);
+  const periodeLabel = <PeriodDisplay period={periodKey(row?.periode)} />;
 
   const computedTotal = useMemo(() => {
     if (!row) return 0;
@@ -224,6 +245,95 @@ export default function PayrollDetailPage() {
     }
   };
 
+  const handleAction = async (action) => {
+    let confirmMsg = "";
+    if (action === "submit") confirmMsg = "Ajukan payroll ini ke Direktur?";
+    if (action === "approve") confirmMsg = "Setujui payroll ini?";
+    if (action === "reject") confirmMsg = "Tolak payroll ini?";
+    
+    const ok = await confirm(confirmMsg);
+    if (!ok) return;
+
+    let body = {};
+    if (action === "reject") {
+        const reason = window.prompt("Alasan penolakan:");
+        if (reason === null) return; 
+        if (reason.trim()) {
+            body.approval_note = reason.trim();
+        }
+    }
+
+    try {
+      await api(`/payrolls/${id}/${action}`, { method: "POST", body });
+      loadDetail();
+    } catch (e) {
+      alert(e?.message || `Gagal melakukan aksi ${action}`);
+    }
+  };
+
+  const openTransferModal = () => {
+    const periodKey = String(row?.periode || "").replace("-", "").slice(0, 6) || "000000";
+    const payrollIdStr = String(row?.id || 0).padStart(5, "0");
+    const defaultRef = `TRF-${periodKey}-${payrollIdStr}`;
+
+    setTransferModal({
+      open: true,
+      proofFile: null,
+      paidRef: defaultRef,
+      paidNote: "",
+      submitting: false,
+    });
+  };
+
+  const closeTransferModal = () => {
+    if (transferModal.submitting) return;
+    setTransferModal({ open: false, proofFile: null, paidRef: "", paidNote: "", submitting: false });
+  };
+
+  const submitTransfer = async (e) => {
+    e.preventDefault();
+    if (!transferModal.proofFile) {
+      await confirm("Bukti transfer wajib di-upload terlebih dahulu.", {
+        title: "Bukti Transfer Kosong",
+        isAlert: true,
+        icon: "warning",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("proof", transferModal.proofFile);
+    
+    const periodKey = String(row?.periode || "").replace("-", "").slice(0, 6) || "000000";
+    const payrollIdStr = String(row?.id || 0).padStart(5, "0");
+    const defaultRef = `TRF-${periodKey}-${payrollIdStr}`;
+    
+    formData.append("paid_ref", transferModal.paidRef.trim() || defaultRef);
+    if (transferModal.paidNote.trim()) formData.append("paid_note", transferModal.paidNote.trim());
+
+    setTransferModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      await api(`/payrolls/${id}/mark-paid`, {
+        method: "POST",
+        body: formData,
+      });
+      closeTransferModal();
+      loadDetail();
+      await confirm("Transfer gaji berhasil dicatat. Slip gaji sudah tersedia untuk staff terkait.", {
+        title: "Transfer Tercatat",
+        isAlert: true,
+        icon: "success",
+      });
+    } catch (err) {
+      setTransferModal((prev) => ({ ...prev, submitting: false }));
+      await confirm(err?.message || "Gagal mencatat transfer gaji.", {
+        title: "Error",
+        isAlert: true,
+        icon: "warning",
+      });
+    }
+  };
+
   return (
     <div className="pb-20 animate-in fade-in duration-500">
       {/* Header Actions */}
@@ -255,6 +365,42 @@ export default function PayrollDetailPage() {
             <Download size={14} className="mr-2" />
             {pdfLoading ? "Menyiapkan PDF..." : "Unduh PDF"}
           </Button>
+
+          {isFat && row?.status === "draft" && (
+            <Button
+              onClick={() => handleAction("submit")}
+              className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+            >
+              Ajukan ke Direktur
+            </Button>
+          )}
+
+          {isDirector && row?.status === "submitted" && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => handleAction("reject")}
+                className="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 hover:text-rose-800 shadow-sm"
+              >
+                Tolak
+              </Button>
+              <Button
+                onClick={() => handleAction("approve")}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+              >
+                Setujui
+              </Button>
+            </>
+          )}
+
+          {isFat && row?.status === "approved" && (
+            <Button
+              onClick={openTransferModal}
+              className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+            >
+              Catat Transfer
+            </Button>
+          )}
 
           {row?.id && isPaid && (
             <Button
@@ -450,7 +596,7 @@ export default function PayrollDetailPage() {
                                     {al.is_manual_override && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">OVERRIDE</Badge>}
                                   </div>
                                   <span className="text-xs text-slate-500 mt-1">
-                                    {al.is_manual_override ? `Alasan: ${al.condition_notes || al.override_reason || '-'}` : formatDetail(al.calculation_detail, al.mandays, al.rate_amount)}
+                                    {al.is_manual_override ? `Alasan: ${al.condition_notes || al.override_reason || '-'}` : formatDetail(al.calculation_detail, al.mandays, al.rate_amount, al.allowance_type?.name || al.allowance_type)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
@@ -548,6 +694,93 @@ export default function PayrollDetailPage() {
 
       <OverrideAllowanceModal isOpen={!!overrideData} onClose={() => setOverrideData(null)} data={overrideData} onSave={handleSaveOverride} isSaving={isSaving} />
       <RecalculateConfirmModal isOpen={recalcOpen} onClose={() => setRecalcOpen(false)} message={recalcMsg} onConfirm={(force) => handleRecalculate(force)} isSaving={isSaving} />
+
+      {/* Catat Transfer Modal */}
+      {transferModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <CreditCard className="text-emerald-600" size={20} />
+                Catat Transfer Gaji
+              </h2>
+            </div>
+            
+            <form onSubmit={submitTransfer} className="p-6 space-y-5">
+              <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div className="text-sm">
+                  <span className="text-slate-500">Penerima:</span>
+                  <div className="font-semibold text-slate-900">{row?.employee_name}</div>
+                </div>
+                <div className="text-sm">
+                  <span className="text-slate-500">Rekening:</span>
+                  <div className="font-mono text-slate-700 font-medium bg-white px-2 py-1 rounded border mt-1">
+                    Bank {row?.bank_name || "-"} - {row?.bank_account_number || "-"}
+                  </div>
+                </div>
+                <div className="text-sm pt-2 border-t border-slate-200 border-dashed flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Total Transfer:</span>
+                  <span className="font-bold text-blue-700">{formatIDR(computedTotal)}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Bukti Transfer (PDF/Img) <span className="text-rose-500">*</span></label>
+                <input
+                  type="file"
+                  required
+                  accept=".pdf,image/*"
+                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-slate-200 rounded-xl p-1 cursor-pointer"
+                  disabled={transferModal.submitting}
+                  onChange={(e) => setTransferModal((prev) => ({ ...prev, proofFile: e.target.files?.[0] || null }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nomor Referensi (Opsional)</label>
+                <input
+                  type="text"
+                  placeholder={transferModal.paidRef}
+                  className="w-full border-slate-200 rounded-lg text-sm px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={transferModal.paidRef}
+                  disabled={transferModal.submitting}
+                  onChange={(e) => setTransferModal((prev) => ({ ...prev, paidRef: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Catatan Tambahan (Opsional)</label>
+                <textarea
+                  className="w-full border-slate-200 rounded-lg text-sm px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 min-h-[80px]"
+                  placeholder="Contoh: Ditransfer batch sore..."
+                  value={transferModal.paidNote}
+                  disabled={transferModal.submitting}
+                  onChange={(e) => setTransferModal((prev) => ({ ...prev, paidNote: e.target.value }))}
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 border-slate-200 hover:bg-slate-50 text-slate-600"
+                  onClick={closeTransferModal}
+                  disabled={transferModal.submitting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={transferModal.submitting}
+                >
+                  {transferModal.submitting ? "Menyimpan..." : "Simpan Transfer"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

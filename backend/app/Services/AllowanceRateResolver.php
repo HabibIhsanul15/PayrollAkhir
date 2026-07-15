@@ -11,7 +11,6 @@ class AllowanceRateResolver
     public function resolveByCode(
         int $positionId,
         string $allowanceCode,
-        CarbonInterface|string $date,
         ?string $employmentTypeCode = null
     ): ?PositionAllowanceRate {
         $type = AllowanceType::query()
@@ -23,27 +22,18 @@ class AllowanceRateResolver
             return null;
         }
 
-        return $this->resolve($positionId, $type->id, $date);
+        return $this->resolve($positionId, $type->id);
     }
 
     public function resolve(
         int $positionId,
-        int $allowanceTypeId,
-        CarbonInterface|string $date
+        int $allowanceTypeId
     ): ?PositionAllowanceRate {
-        $date = $date instanceof CarbonInterface ? $date->toDateString() : $date;
-
         return PositionAllowanceRate::query()
             ->with('allowanceType')
             ->where('position_id', $positionId)
             ->where('allowance_type_id', $allowanceTypeId)
             ->where('is_active', true)
-            ->whereDate('effective_from', '<=', $date)
-            ->where(function ($query) use ($date) {
-                $query->whereNull('effective_to')
-                    ->orWhereDate('effective_to', '>=', $date);
-            })
-            ->orderByDesc('effective_from')
             ->first();
     }
 

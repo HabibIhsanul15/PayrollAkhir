@@ -6,6 +6,7 @@ import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import AlertMessage from "@/components/AlertMessage";
@@ -83,6 +84,7 @@ export default function PositionManagementPage() {
     name: "",
     level: "",
     default_base_salary_amount: "",
+    default_late_penalty_amount: "",
     description: "",
     is_active: true,
   });
@@ -121,6 +123,7 @@ export default function PositionManagementPage() {
       name: "",
       level: rows.length > 0 ? String(Math.max(...rows.map((row) => Number(row.level) || 1)) + 1) : "1",
       default_base_salary_amount: "",
+      default_late_penalty_amount: "",
       description: "",
       is_active: true,
     });
@@ -138,6 +141,10 @@ export default function PositionManagementPage() {
       default_base_salary_amount:
         row.default_base_salary_amount !== null && row.default_base_salary_amount !== undefined
           ? String(Math.trunc(Number(row.default_base_salary_amount)))
+          : "",
+      default_late_penalty_amount:
+        row.default_late_penalty_amount !== null && row.default_late_penalty_amount !== undefined
+          ? String(Math.trunc(Number(row.default_late_penalty_amount)))
           : "",
       description: row.description || "",
       is_active: !!row.is_active,
@@ -161,6 +168,7 @@ export default function PositionManagementPage() {
 
     const level = Number(form.level || 0);
     const salary = Number(form.default_base_salary_amount || 0);
+    const penalty = Number(form.default_late_penalty_amount || 0);
 
     if (isHCGA && !form.name.trim()) {
       setErr("Nama jabatan wajib diisi.");
@@ -178,10 +186,15 @@ export default function PositionManagementPage() {
       setErr("Nominal gaji pokok harian harus angka dan tidak boleh minus.");
       return;
     }
+    if (isFinance && (!Number.isFinite(penalty) || penalty < 0)) {
+      setErr("Nominal denda keterlambatan harus angka dan tidak boleh minus.");
+      return;
+    }
 
     const payload = isFinance
       ? {
           default_base_salary_amount: salary,
+          default_late_penalty_amount: penalty,
         }
       : {
           code: form.code || makeUniqueJobCode(form.name, rows, isEdit ? editId : null),
@@ -293,7 +306,10 @@ export default function PositionManagementPage() {
                 <TableHead className="pl-5 text-slate-700">Jabatan</TableHead>
                 <TableHead className="w-[120px] text-slate-700">Level</TableHead>
                 {isFinance ? (
-                  <TableHead className="w-[190px] text-slate-700">Gaji Pokok Harian</TableHead>
+                  <>
+                    <TableHead className="w-[190px] text-slate-700">Gaji Pokok Harian</TableHead>
+                    <TableHead className="w-[170px] text-slate-700">Denda Terlambat</TableHead>
+                  </>
                 ) : null}
                 <TableHead className="w-[110px] text-slate-700">Status</TableHead>
                 <TableHead className="w-[180px] pr-5 text-right text-slate-700">Aksi</TableHead>
@@ -303,7 +319,7 @@ export default function PositionManagementPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={isFinance ? 5 : 4} className="py-10 text-center text-slate-500">
+                  <TableCell colSpan={isFinance ? 6 : 4} className="py-10 text-center text-slate-500">
                     Memuat data jabatan...
                   </TableCell>
                 </TableRow>
@@ -311,7 +327,7 @@ export default function PositionManagementPage() {
 
               {!isLoading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isFinance ? 5 : 4} className="py-10 text-center text-slate-500">
+                  <TableCell colSpan={isFinance ? 6 : 4} className="py-10 text-center text-slate-500">
                     Belum ada jabatan yang terdaftar.
                   </TableCell>
                 </TableRow>
@@ -339,9 +355,14 @@ export default function PositionManagementPage() {
                       </TableCell>
 
                       {isFinance ? (
-                        <TableCell className="py-4 font-semibold text-slate-900">
-                          {formatRupiah(row.default_base_salary_amount)}
-                        </TableCell>
+                        <>
+                          <TableCell className="py-4 font-semibold text-slate-900">
+                            {formatRupiah(row.default_base_salary_amount)}
+                          </TableCell>
+                          <TableCell className="py-4 font-semibold text-rose-600">
+                            {formatRupiah(row.default_late_penalty_amount)}
+                          </TableCell>
+                        </>
                       ) : null}
 
                       <TableCell className="py-4">
@@ -475,14 +496,23 @@ export default function PositionManagementPage() {
                     <div>Level: {form.level || "-"}</div>
                   </div>
                   <Field label="Nominal Gaji Pokok Harian" helper="Hanya angka, tidak boleh minus." required>
-                    <input
-                      type="text"
-                      inputMode="numeric"
+                    <CurrencyInput
                       value={form.default_base_salary_amount}
-                      onChange={(event) =>
-                        setForm({ ...form, default_base_salary_amount: digitsOnly(event.target.value, 14) })
+                      onChange={(value) =>
+                        setForm({ ...form, default_base_salary_amount: value })
                       }
                       placeholder="Contoh: 75000"
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Denda per Keterlambatan (Rp)" helper="Potongan otomatis per kali terlambat." required>
+                    <CurrencyInput
+                      value={form.default_late_penalty_amount}
+                      onChange={(value) =>
+                        setForm({ ...form, default_late_penalty_amount: value })
+                      }
+                      placeholder="Contoh: 50000"
                       required
                       className={inputClass}
                     />

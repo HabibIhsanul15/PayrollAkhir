@@ -185,8 +185,81 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
         </div>
       )}
 
-      {/* Tables Section */}
+      {/* Tables & Timeline Section */}
       <div className="grid grid-cols-1 gap-6">
+        
+        {/* Timeline Riwayat Jabatan */}
+        <Card className="bg-white border border-border shadow-sm">
+          <CardHeader className="pb-4 border-b border-slate-100">
+            <CardTitle className="text-sm font-bold text-slate-800">Perjalanan Karir & Jabatan</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            {salaryProfiles.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 font-medium">Belum ada profil jabatan</div>
+            ) : (
+              <div className="relative border-l-2 border-indigo-100 ml-3 md:ml-6 space-y-8">
+                {salaryProfiles.map((sp, index) => {
+                  const isLatest = index === 0;
+                  return (
+                    <div key={sp.id} className="relative pl-6 md:pl-8">
+                      {/* Timeline Dot */}
+                      <div className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 bg-white ${
+                        isLatest ? 'border-indigo-600 ring-4 ring-indigo-50' : 'border-slate-300'
+                      }`} />
+                      
+                      {/* Content Card */}
+                      <div className={`rounded-xl border p-4 transition-all ${
+                        isLatest ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : 'bg-white border-slate-200 hover:border-indigo-100 hover:shadow-sm'
+                      }`}>
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className={`text-base font-bold ${isLatest ? 'text-indigo-900' : 'text-slate-800'}`}>
+                                {sp.position || "-"}
+                              </h4>
+                              {isLatest && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-600 text-white">
+                                  Posisi Saat Ini
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                              Berlaku sejak: {new Date(sp.effective_from).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                          </div>
+
+                          {!isHCGA && (
+                            <div className="flex flex-wrap gap-3">
+                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tunj. Jabatan</div>
+                                <div className="text-sm font-mono font-bold text-indigo-600">
+                                  {sp.position_allowance != null ? formatRupiah(sp.position_allowance) : '-'}
+                                </div>
+                              </div>
+                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tunj. Tetap</div>
+                                <div className="text-sm font-mono font-bold text-emerald-600">
+                                  {sp.allowance_fixed != null && sp.allowance_fixed > 0 ? formatRupiah(sp.allowance_fixed) : '-'}
+                                </div>
+                              </div>
+                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Potongan Tetap</div>
+                                <div className="text-sm font-mono font-bold text-rose-600">
+                                  {sp.deduction_fixed != null && sp.deduction_fixed > 0 ? formatRupiah(sp.deduction_fixed) : '-'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
         {/* Table Gaji Bulanan */}
         <Card className="bg-white border border-border shadow-sm">
           <CardHeader>
@@ -249,56 +322,6 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
           </CardContent>
         </Card>
 
-        {/* Table Riwayat Jabatan */}
-        <Card className="bg-white border border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-bold text-slate-800">Riwayat Jabatan {isHCGA ? "" : "& Komponen"}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse">
-              <thead className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">Berlaku Sejak</th>
-                  <th className="px-4 py-3">Posisi</th>
-                  {!isHCGA && <th className="px-4 py-3 text-right">Tunjangan Jabatan</th>}
-                  {!isHCGA && <th className="px-4 py-3 text-right">Tunjangan Tetap</th>}
-                  {!isHCGA && <th className="px-4 py-3 text-right">Potongan Tetap</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {salaryProfiles.length === 0 ? (
-                  <tr>
-                    <td colSpan={isHCGA ? "2" : "5"} className="text-center py-8 text-slate-400 font-medium">Belum ada profil jabatan</td>
-                  </tr>
-                ) : (
-                  salaryProfiles.map((sp) => (
-                    <tr key={sp.id} className="text-slate-700 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        {new Date(sp.effective_from).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-700">
-                        {sp.position || "-"}
-                      </td>
-                      {!isHCGA && (
-                        <>
-                          <td className="px-4 py-3 text-right font-mono text-purple-600 font-medium">
-                            {sp.position_allowance != null ? formatRupiah(sp.position_allowance) : <span className="text-slate-300 italic">-</span>}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-teal-600">
-                            {sp.allowance_fixed != null && sp.allowance_fixed > 0 ? formatRupiah(sp.allowance_fixed) : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-rose-600">
-                            {sp.deduction_fixed != null && sp.deduction_fixed > 0 ? formatRupiah(sp.deduction_fixed) : "-"}
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
       </div>
 
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { monthLabel } from "@/lib/utils";
+import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +66,7 @@ export default function PayrollDetail() {
 
   const view = useMemo(() => {
     const p = data || {};
-    const periodeLabel = monthLabel(periodKey(p.periode));
+    const periodeLabel = <PeriodDisplay period={periodKey(p.periode)} />;
     const total =
       p.total ??
       (Number(p.gaji_pokok ?? 0) + Number(p.tunjangan ?? 0) - Number(p.potongan ?? 0));

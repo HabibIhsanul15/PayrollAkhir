@@ -6,6 +6,7 @@ import { Table } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { monthLabel } from "@/lib/utils";
+import PeriodDisplay from "@/components/PeriodDisplay";
 
 function emptyRecap(salaryProfileId = "") {
   return {
@@ -41,10 +42,7 @@ function decimalInputValue(value) {
   return String(Math.max(number, 0));
 }
 
-function getDaysInMonth(yearMonth) {
-  const [year, month] = yearMonth.split("-");
-  return new Date(Number(year), Number(month), 0).getDate();
-}
+
 
 function recapPaidDays(recap) {
   return (
@@ -130,11 +128,77 @@ export default function MonthlyRecapPage() {
   ), [groupedRecaps]);
   const employees = Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || []);
   const selectedEmployee = employees.find((employee) => String(employee.id) === String(selectedEmployeeId));
-  const maxDays = useMemo(() => getDaysInMonth(period), [period]);
+  const maxDays = useMemo(() => {
+    if (!period) return 0;
+    const [yearStr, monthStr] = period.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const periodEnd = new Date(year, month - 1, 27);
+    const periodStart = new Date(year, month - 2, 28);
+    
+    let effectiveStart = periodStart;
+    
+    if (selectedEmployee && selectedEmployee.join_date) {
+      const joinDate = new Date(selectedEmployee.join_date);
+      joinDate.setHours(0, 0, 0, 0);
+      if (joinDate > periodEnd) return 0;
+      if (joinDate > periodStart) {
+        effectiveStart = joinDate;
+      }
+    }
+    
+    const diffTime = periodEnd.getTime() - effectiveStart.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  }, [period, selectedEmployee]);
   const totalPaidDays = useMemo(
     () => formRecaps.reduce((total, recap) => total + recapPaidDays(recap), 0),
     [formRecaps]
   );
+
+  // Per-segment validation warnings
+  const segmentWarnings = useMemo(() => {
+    return formRecaps.map((recap) => {
+      const warnings = [];
+      const paidDays = recapPaidDays(recap);
+      const wfo = Number(recap.wfo_days || 0);
+      const wfh = Number(recap.wfh_days || 0);
+      const lk = Number(recap.out_of_town_days || 0);
+      const training = Number(recap.training_days || 0);
+      const attendanceDays = wfo + wfh + lk; // hari yang "hadir" fisik/remote
+      const lateCount = Number(recap.late_count || 0);
+      const businessTrips = Number(recap.business_trips || 0);
+      const overtimeHours = Number(recap.overtime_hours || 0);
+
+      // 1. Terlambat tidak boleh melebihi hari hadir (WFO + WFH + Luar Kota)
+      if (lateCount > attendanceDays) {
+        warnings.push(`Jumlah terlambat (${lateCount}) melebihi total hari hadir (${attendanceDays}). Karyawan hanya bisa terlambat pada hari dimana dia hadir.`);
+      }
+
+      // 2. Perjalanan dinas tidak boleh melebihi hari luar kota
+      if (businessTrips > lk) {
+        warnings.push(`Jumlah perjalanan dinas (${businessTrips}) melebihi hari luar kota (${lk}). Perjalanan dinas hanya terjadi saat berada di luar kota.`);
+      }
+
+      // 4. Training days seharusnya 0 jika bukan trainer (TODO: kalau ada flag trainer)
+      // 5. Semua field individual tidak boleh melebihi maxDays
+      if (wfo > maxDays) {
+        warnings.push(`Hari WFO (${wfo}) melebihi maksimal hari periode (${maxDays}).`);
+      }
+      if (wfh > maxDays) {
+        warnings.push(`Hari WFH (${wfh}) melebihi maksimal hari periode (${maxDays}).`);
+      }
+      if (lk > maxDays) {
+        warnings.push(`Hari Luar Kota (${lk}) melebihi maksimal hari periode (${maxDays}).`);
+      }
+      if (training > maxDays) {
+        warnings.push(`Hari Training (${training}) melebihi maksimal hari periode (${maxDays}).`);
+      }
+
+      return warnings;
+    });
+  }, [formRecaps, maxDays]);
+
+  const hasAnyWarning = useMemo(() => segmentWarnings.some(w => w.length > 0), [segmentWarnings]);
 
   const fetchRecaps = () => mutateRecaps();
 
@@ -147,7 +211,6 @@ export default function MonthlyRecapPage() {
         out_of_town_days: wholeInputValue(recap.out_of_town_days),
         business_trips: wholeInputValue(recap.business_trips),
         training_days: wholeInputValue(recap.training_days),
-        overtime_hours: decimalInputValue(recap.overtime_hours),
         late_count: wholeInputValue(recap.late_count),
       })));
       return;
@@ -233,6 +296,15 @@ export default function MonthlyRecapPage() {
       return;
     }
 
+    if (hasAnyWarning) {
+      setNotice({
+        type: "error",
+        title: "Data Tidak Konsisten",
+        message: segmentWarnings.flat().join(" "),
+      });
+      return;
+    }
+
     try {
       await api("/monthly-recaps", { 
         method: "POST", 
@@ -308,7 +380,7 @@ export default function MonthlyRecapPage() {
   
   const handleRecapChange = (index, field, value) => {
     const newRecaps = [...formRecaps];
-    newRecaps[index][field] = field === "overtime_hours" ? value : value.replace(/\D/g, "");
+    newRecaps[index][field] = value.replace(/\D/g, "");
     setFormRecaps(newRecaps);
   };
   
@@ -337,7 +409,7 @@ export default function MonthlyRecapPage() {
         <SummaryBox label="Karyawan Direkap" value={cleanNumber(summary.employees)} />
         <SummaryBox label="Total Hari Dibayar" value={`${cleanNumber(summary.total_mandays)} hari`} />
         <SummaryBox label="Total Perjalanan" value={`${cleanNumber(summary.business_trips)} kali`} />
-        <SummaryBox label="Lembur / Terlambat" value={`${cleanNumber(summary.overtime_hours)} jam / ${cleanNumber(summary.late_count)} kali`} />
+        <SummaryBox label="Terlambat" value={`${cleanNumber(summary.late_count)} kali`} />
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">
@@ -357,7 +429,7 @@ export default function MonthlyRecapPage() {
             {groupedRecaps.map((r) => (
               <tr key={r.key} className="border-t align-top">
                 <td className="px-4 py-3">{r.employee?.name}</td>
-                <td className="px-4 py-3">{monthLabel(r.period_month)}</td>
+                <td className="px-4 py-3"><PeriodDisplay period={r.period_month} /></td>
                 <td className="px-4 py-3 text-right text-sm text-slate-700">
                   <div className="font-semibold">{cleanNumber(
                     Number(r.wfo_days || 0) +
@@ -368,8 +440,7 @@ export default function MonthlyRecapPage() {
                   <div className="text-xs text-slate-500">Detail di tombol aksi</div>
                 </td>
                 <td className="px-4 py-3 text-right text-sm text-slate-700">
-                  <div>Perjalanan: <strong>{cleanNumber(r.business_trips)}</strong></div>
-                  <div className="text-xs text-slate-500">Lembur {cleanNumber(r.overtime_hours)} jam</div>
+                  <div>Terlambat: <strong>{cleanNumber(r.late_count)}</strong></div>
                 </td>
                 <td className="px-4 py-3 text-right font-semibold">{cleanNumber(r.total_mandays)}</td>
                 <td className="px-4 py-2 text-center">
@@ -404,11 +475,11 @@ export default function MonthlyRecapPage() {
               </tr>
             ))}
             {groupedRecaps.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
-                  Belum ada data rekap bulan {period}.
-                </td>
-              </tr>
+                <tr>
+                  <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
+                    Belum ada data rekap untuk periode <PeriodDisplay period={period} />.
+                  </td>
+                </tr>
             )}
           </tbody>
           {groupedRecaps.length > 0 && (
@@ -457,7 +528,10 @@ export default function MonthlyRecapPage() {
                 <div className="rounded border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
                   <div className="font-semibold text-blue-950">{selectedEmployee?.name || "Karyawan terpilih"}</div>
                   <div className="mt-1">
-                    Periode {monthLabel(period)} memiliki maksimal <strong>{maxDays} hari</strong>.
+                    {selectedEmployee?.join_date && new Date(selectedEmployee.join_date) > new Date(Number(period.split("-")[0]), Number(period.split("-")[1]) - 2, 28)
+                      ? <>Periode <PeriodDisplay period={period} /> (masuk {new Date(selectedEmployee.join_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}) memiliki maksimal </> 
+                      : <>Periode <PeriodDisplay period={period} /> memiliki maksimal </>}
+                    <strong>{maxDays} hari</strong>.
                     Total hari dibayar yang sedang diinput: <strong>{totalPaidDays} hari</strong>.
                   </div>
                   <div className="mt-1 text-blue-800">
@@ -539,31 +613,37 @@ export default function MonthlyRecapPage() {
                       <label className="block text-xs font-medium mb-1">Jumlah Perjalanan Dinas</label>
                       <input
                         type="text" inputMode="numeric" required
-                        className="w-full border p-2 rounded text-sm"
+                        className={`w-full border p-2 rounded text-sm ${Number(recap.business_trips || 0) > Number(recap.out_of_town_days || 0) ? 'border-rose-400 bg-rose-50' : ''}`}
                         value={recap.business_trips}
                         onChange={(e) => handleRecapChange(index, "business_trips", e.target.value)}
                       />
+                      <p className="mt-1 text-[11px] text-slate-500">Maks: {recap.out_of_town_days || 0} (= hari luar kota)</p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Lembur (Jam)</label>
-                      <input
-                        type="number" step="0.5" min="0" required
-                        className="w-full border p-2 rounded text-sm"
-                        value={recap.overtime_hours}
-                        onChange={(e) => handleRecapChange(index, "overtime_hours", e.target.value)}
-                      />
-                    </div>
+
                     <div>
                       <label className="block text-xs font-medium mb-1">Jumlah Terlambat</label>
                       <input
                         type="text" inputMode="numeric" required
-                        className="w-full border p-2 rounded text-sm"
+                        className={`w-full border p-2 rounded text-sm ${Number(recap.late_count || 0) > (Number(recap.wfo_days || 0) + Number(recap.wfh_days || 0) + Number(recap.out_of_town_days || 0)) ? 'border-rose-400 bg-rose-50' : ''}`}
                         value={recap.late_count}
                         onChange={(e) => handleRecapChange(index, "late_count", e.target.value)}
                       />
-                      <p className="mt-1 text-[11px] text-slate-500">Dipakai Finance sebagai acuan potongan keterlambatan.</p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Maks: {Number(recap.wfo_days || 0) + Number(recap.wfh_days || 0) + Number(recap.out_of_town_days || 0)} (= hari hadir WFO+WFH+LK).
+                        Dipakai Finance sebagai acuan potongan keterlambatan.
+                      </p>
                     </div>
                   </div>
+
+                  {segmentWarnings[index]?.length > 0 && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <strong className="block mb-1">⚠ Peringatan:</strong>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {segmentWarnings[index].map((w, wi) => <li key={wi}>{w}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="rounded bg-white px-3 py-2 text-xs text-slate-600">
                     Total hari dibayar segmen ini: <strong>{recapPaidDays(recap)} hari</strong>
                   </div>
@@ -584,7 +664,7 @@ export default function MonthlyRecapPage() {
                 <Button type="button" variant="outline" className="mr-2" onClick={() => setShowModal(false)}>
                   Batal
                 </Button>
-                <Button type="submit" disabled={totalPaidDays > maxDays}>Simpan Rekap</Button>
+                <Button type="submit" disabled={totalPaidDays > maxDays || hasAnyWarning}>Simpan Rekap</Button>
               </div>
             </form>
           </div>
@@ -627,7 +707,7 @@ function RecapDetailModal({ group, onClose }) {
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-900">Detail Rekap Bulanan</h2>
           <p className="mt-1 text-xs text-slate-500">
-            {group.employee?.name || "-"} · {monthLabel(group.period_month)}
+            {group.employee?.name || "-"} • <PeriodDisplay period={group.period_month} />
           </p>
         </div>
 
@@ -635,7 +715,7 @@ function RecapDetailModal({ group, onClose }) {
           <div className="grid gap-3 md:grid-cols-3">
             <SummaryBox label="Total Hari Dibayar" value={`${cleanNumber(group.total_mandays)} hari`} />
             <SummaryBox label="Perjalanan Dinas" value={`${cleanNumber(group.business_trips)} kali`} />
-            <SummaryBox label="Lembur / Terlambat" value={`${cleanNumber(group.overtime_hours)} jam / ${cleanNumber(group.late_count)} kali`} />
+            <SummaryBox label="Terlambat" value={`${cleanNumber(group.late_count)} kali`} />
           </div>
 
           <div className="rounded border border-slate-200 overflow-hidden">
@@ -668,14 +748,10 @@ function RecapDetailModal({ group, onClose }) {
             </table>
           </div>
 
-          <div className="grid gap-3 text-sm md:grid-cols-3">
+          <div className="grid gap-3 text-sm md:grid-cols-2">
             <div className="rounded border border-slate-200 px-3 py-2">
               <div className="text-xs text-slate-500">Jumlah Perjalanan</div>
               <div className="font-semibold">{cleanNumber(group.business_trips)} kali</div>
-            </div>
-            <div className="rounded border border-slate-200 px-3 py-2">
-              <div className="text-xs text-slate-500">Lembur</div>
-              <div className="font-semibold">{cleanNumber(group.overtime_hours)} jam</div>
             </div>
             <div className="rounded border border-slate-200 px-3 py-2">
               <div className="text-xs text-slate-500">Terlambat</div>

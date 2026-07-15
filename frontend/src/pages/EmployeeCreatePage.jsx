@@ -308,6 +308,24 @@ export default function EmployeeCreatePage() {
                 </select>
                 {errors.position_id ? <p className="text-xs text-rose-500">{errors.position_id}</p> : null}
               </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600">Jumlah Balita</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Isi jika relevan"
+                  value={form.num_toddlers}
+                  onChange={(event) => setNumToddlersField(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+                />
+                <p className="text-[11px] text-slate-500">
+                  {hasChildcare
+                    ? "Dipakai oleh tunjangan yang mensyaratkan jumlah balita pada jabatan ini."
+                    : "Tetap boleh diisi lebih dulu. Nilai ini akan dipakai jika ada tunjangan yang mensyaratkannya."}
+                </p>
+                {errors.num_toddlers ? <p className="text-xs text-rose-500">{errors.num_toddlers}</p> : null}
+              </div>
             </div>
 
             {selectedPosition ? (
@@ -320,52 +338,7 @@ export default function EmployeeCreatePage() {
           </div>
         </EmployeeSectionCard>
 
-        <EmployeeSectionCard
-          title="Kondisi Khusus Payroll"
-          description="Nilai di bagian ini boleh diisi lebih awal. Efeknya baru dipakai jika jabatan punya aturan tunjangan yang terkait."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600">Jumlah Balita</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="Isi jika relevan"
-                value={form.num_toddlers}
-                onChange={(event) => setNumToddlersField(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
-              />
-              <p className="text-[11px] text-slate-500">
-                {hasChildcare
-                  ? "Dipakai oleh tunjangan yang mensyaratkan jumlah balita pada jabatan ini."
-                  : "Tetap boleh diisi lebih dulu. Nilai ini akan dipakai jika ada tunjangan yang mensyaratkannya."}
-              </p>
-              {errors.num_toddlers ? <p className="text-xs text-rose-500">{errors.num_toddlers}</p> : null}
-            </div>
 
-            <div className="space-y-3">
-              <label className="text-xs font-medium text-slate-600">Flag Payroll</label>
-              <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3">
-                <input
-                  type="checkbox"
-                  id="is_trainer"
-                  checked={form.is_trainer}
-                  onChange={(event) => setField("is_trainer", event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
-                />
-                <span className="text-xs font-semibold text-slate-800">
-                  Karyawan adalah Trainer
-                  <span className="mt-1 block text-[11px] font-normal text-slate-500">
-                    {hasTraining
-                      ? "Dipakai untuk aturan tunjangan training pada jabatan ini."
-                      : "Tetap boleh ditandai. Efeknya akan terasa saat jabatan punya aturan trainer."}
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-        </EmployeeSectionCard>
 
         <EmployeeSectionCard
           title="Data Pribadi"

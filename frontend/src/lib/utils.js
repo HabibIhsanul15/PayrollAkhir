@@ -24,11 +24,23 @@ export function formatRupiah(val, { decimals = 0 } = {}) {
  * @param {string} ym - contoh: "2026-07"
  * @returns {string} contoh: "Juli 2026"
  */
-export function monthLabel(ym) {
-  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "—";
+export function monthLabel(ym, withRange = false) {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "-";
   const [y, m] = ym.split("-");
-  const date = new Date(Number(y), Number(m) - 1, 1);
-  return date.toLocaleString("id-ID", { month: "long", year: "numeric" });
+  const year = Number(y);
+  const month = Number(m);
+  const date = new Date(year, month - 1, 1);
+  let label = date.toLocaleString("id-ID", { month: "long", year: "numeric" });
+
+  if (withRange) {
+    const start = new Date(year, month - 2, 28);
+    const end = new Date(year, month - 1, 27);
+    const startStr = start.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+    const endStr = end.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+    label += ` (${startStr} - ${endStr})`;
+  }
+
+  return label;
 }
 
 /**

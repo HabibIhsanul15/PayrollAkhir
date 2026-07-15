@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
 import { monthLabel } from "@/lib/utils";
+import PeriodDisplay from "@/components/PeriodDisplay";
 
 import {
   DollarSign,
@@ -201,7 +202,7 @@ export default function DashboardPage() {
                 icon: DollarSign,
                 accent: "#2563EB",
                 accentLight: "#EFF6FF",
-                trend: monthLabel(month),
+                trend: <PeriodDisplay period={month} />,
               },
               {
                 label: "Karyawan Aktif",
@@ -298,7 +299,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded border border-border overflow-hidden" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
               <div className="px-5 py-3.5 border-b border-border">
                 <div className="text-xs font-semibold text-foreground">Status Payroll</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{monthLabel(month)}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5"><PeriodDisplay period={month} /></div>
               </div>
               <div className="p-5">
                 {loading ? (
@@ -329,7 +330,7 @@ export default function DashboardPage() {
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
               <div>
                 <div className="text-xs font-semibold text-foreground">Payroll Terbaru</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Data terbaru pada {monthLabel(month)}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Data terbaru pada <PeriodDisplay period={month} /></div>
               </div>
               <span className="text-[10px] px-2.5 py-1 rounded border border-border text-muted-foreground">
                 {recent.length} data

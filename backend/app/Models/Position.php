@@ -15,6 +15,7 @@ class Position extends Model
         'default_base_salary_amount',
         'is_active',
         'default_mandays_rate',
+        'default_late_penalty_amount',
     ];
 
     protected $casts = [
@@ -22,6 +23,7 @@ class Position extends Model
         'is_active' => 'boolean',
         'default_base_salary_amount' => 'float',
         'default_mandays_rate' => 'float',
+        'default_late_penalty_amount' => 'float',
     ];
 
     public function employees()

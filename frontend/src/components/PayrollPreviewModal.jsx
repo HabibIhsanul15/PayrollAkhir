@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { X, AlertCircle, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatRupiah } from "@/lib/utils";
+import { formatRupiah, monthLabel } from "@/lib/utils";
 import { specialDeductionsApi } from "@/lib/specialDeductionsApi";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import PeriodDisplay from "@/components/PeriodDisplay";
 
 export default function PayrollPreviewModal({
   isOpen,
@@ -103,19 +105,42 @@ export default function PayrollPreviewModal({
             </div>
           )}
 
-          {!loading && !error && data && (
+          {!loading && !error && data && data.is_calculable === false && (
+            <div className="bg-amber-50 text-amber-700 p-4 rounded text-sm mb-4">
+              <h4 className="font-bold mb-1">Simulasi tidak dapat dilanjutkan:</h4>
+              <ul className="list-disc pl-5">
+                {data.blocking_warnings?.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!loading && !error && data && data.is_calculable !== false && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
+              <div className="grid grid-cols-3 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
                 <div>
                   <span className="text-slate-500 block mb-1">Karyawan</span>
                   <strong className="text-slate-800">{data.employee_name}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500 block mb-1">Periode</span>
-                  <strong className="text-slate-800">{data.period_month}</strong>
-                  {data.period_from && data.period_to && (
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      {new Date(data.period_from).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} - {new Date(data.period_to).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  <strong className="text-slate-800"><PeriodDisplay period={data.period_month} /></strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block mb-1">Kehadiran (Dibayar)</span>
+                  <strong className="text-slate-800">{Math.round(data.total_mandays || 0)} Hari</strong>
+                  {data.recaps && data.recaps.length > 0 && (
+                    <div className="text-[10px] text-slate-500 mt-1 space-y-0.5">
+                      {data.recaps.map((r, idx) => (
+                        <div key={idx} className="leading-tight">
+                          {Number(r.wfo_days) > 0 && <span>WFO: {Math.round(r.wfo_days)} </span>}
+                          {Number(r.wfh_days) > 0 && <span>WFH: {Math.round(r.wfh_days)} </span>}
+                          {Number(r.out_of_town_days) > 0 && <span>LK: {Math.round(r.out_of_town_days)} </span>}
+                          {Number(r.training_days) > 0 && <span>Trn: {Math.round(r.training_days)} </span>}
+                          {Number(r.late_count) > 0 && <span>Terlambat: {Math.round(r.late_count)}× </span>}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -228,15 +253,13 @@ export default function PayrollPreviewModal({
                         placeholder="Keterangan (Cth: Denda)"
                         className="flex-1 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
                       />
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="Nominal (Rp)"
-                        className="w-full md:w-32 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
-                      />
+                        <CurrencyInput
+                          value={amount}
+                          onChange={(value) => setAmount(value)}
+                          placeholder="Nominal (Rp)"
+                          className="w-full md:w-32 border rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-red-200 bg-white"
+                          required
+                        />
                       <button
                         type="submit"
                         disabled={savingDeduction}

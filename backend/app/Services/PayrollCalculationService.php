@@ -233,7 +233,7 @@ class PayrollCalculationService
             foreach ($calculatedAllowances as $calculated) {
                 $type = $calculated['type'];
                 $rate = $calculated['rate'];
-                $mandays = in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days', 'overtime_hours'], true)
+                $mandays = in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days'], true)
                     ? $calculated['units']
                     : null;
 
@@ -276,7 +276,54 @@ class PayrollCalculationService
             ];
         }
 
+        // Auto Late Penalty Deduction (per position)
+        $totalLateCount = 0;
+        $totalLatePenalty = 0;
+        foreach ($profilesData as $pd) {
+            $r = $pd['recap'];
+            $p = $pd['profile'];
+            $lateCount = (int) ($r->late_count ?? 0);
+            if ($lateCount <= 0) continue;
+
+            $totalLateCount += $lateCount;
+            $positionId = $p['position_id'] ?? null;
+            $position = $positionId ? \App\Models\Position::find($positionId) : null;
+            $penaltyPerCount = (float) ($position->default_late_penalty_amount ?? 0);
+
+            if ($penaltyPerCount > 0) {
+                $penaltyAmount = $lateCount * $penaltyPerCount;
+                $totalLatePenalty += $penaltyAmount;
+            }
+        }
+
+        if ($totalLatePenalty > 0) {
+            $total_deductions += $totalLatePenalty;
+            $deductions_list[] = [
+                'deduction_type' => 'late_penalty',
+                'deduction_label' => "Potongan Keterlambatan ({$totalLateCount} kali)",
+                'amount' => $totalLatePenalty,
+                'calculation_detail' => [
+                    'late_count' => $totalLateCount,
+                    'total_penalty' => $totalLatePenalty,
+                ],
+            ];
+        }
+
         $total_nett = $gaji_pokok + $total_allowances - $total_deductions;
+
+        // Build simplified recaps for frontend display
+        $recapsSummary = [];
+        foreach ($prereq['recaps'] as $rc) {
+            $recapsSummary[] = [
+                'wfo_days' => $rc->wfo_days ?? 0,
+                'wfh_days' => $rc->wfh_days ?? 0,
+                'out_of_town_days' => $rc->out_of_town_days ?? 0,
+                'training_days' => $rc->training_days ?? 0,
+                'total_mandays' => $rc->total_mandays ?? 0,
+                'late_count' => $rc->late_count ?? 0,
+                'business_trip_count' => $rc->business_trip_count ?? 0,
+            ];
+        }
 
         return [
             'is_calculable' => count($blocking_warnings) === 0,
@@ -296,6 +343,8 @@ class PayrollCalculationService
             'total_allowances' => $total_allowances,
             'total_deductions' => $total_deductions,
             'total_nett' => $total_nett,
+            'total_mandays' => $prereq['total_mandays'],
+            'recaps' => $recapsSummary,
             'calculation_mode' => 'auto',
             'engine_version' => self::ENGINE_VERSION,
             'message' => 'PPh 21 dan BPJS belum dihitung.',
@@ -361,7 +410,12 @@ class PayrollCalculationService
 
     public function batchGenerate($periodMonth, $recordedBy)
     {
-        $employees = Employee::where('status', 'active')->get();
+        $employees = Employee::where('status', 'active')
+            ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
+                $q->where('period_month', $periodMonth)
+                  ->where('is_finalized', true);
+            })
+            ->get();
         $results = [];
         $success = 0;
         $failed = 0;
@@ -434,8 +488,19 @@ class PayrollCalculationService
 
     public function batchPreview($periodMonth)
     {
-        $employees = Employee::where('status', 'active')->get();
-        $payrolls = Payroll::whereDate('periode', $periodMonth . '-01')->get()->keyBy('employee_id');
+        $employees = Employee::where('status', 'active')
+            ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
+                $q->where('period_month', $periodMonth)
+                  ->where('is_finalized', true);
+            })
+            ->get();
+        $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $periodMonth)->first();
+        if ($payrollPeriod) {
+            $periodeDate = \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString();
+        } else {
+            $periodeDate = $periodMonth . '-01';
+        }
+        $payrolls = Payroll::whereDate('periode', $periodeDate)->get()->keyBy('employee_id');
 
         $results = [];
         $success = 0;
@@ -701,7 +766,7 @@ class PayrollCalculationService
 
             $rateDate = max($periodStart, $profile->effective_from->toDateString());
             $posRate = $Position
-                ? $this->rateResolver->resolveByCode($Position->id, 'position', $rateDate)
+                ? $this->rateResolver->resolveByCode($Position->id, 'position')
                 : null;
 
             return $posRate ? (string) $posRate->rate_amount : '0';

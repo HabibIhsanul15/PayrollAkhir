@@ -67,4 +67,22 @@ class PayrollWorkflowController extends Controller
 
         return response()->json(['message' => 'Payroll berhasil ditandai sebagai dibayar.', 'payroll' => $payroll]);
     }
+
+    public function reject(Request $request, Payroll $payroll)
+    {
+        if ($request->user()->role !== 'director') {
+            abort(403, 'Hanya direktur yang berhak menolak payroll.');
+        }
+
+        if ($payroll->status !== 'submitted') {
+            return response()->json(['message' => 'Hanya payroll yang sedang diajukan yang dapat ditolak.'], 422);
+        }
+
+        $payroll->update([
+            'status' => 'draft',
+            'approval_note' => 'Ditolak: ' . ($request->note ?? 'Tanpa alasan'),
+        ]);
+
+        return response()->json(['message' => 'Payroll berhasil ditolak dan dikembalikan ke Draft.', 'payroll' => $payroll]);
+    }
 }

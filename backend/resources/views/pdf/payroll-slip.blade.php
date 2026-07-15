@@ -79,79 +79,67 @@
         'is_subrow' => false
     ];
     
-    // Fetch all available allowance types to ensure they always show up
-    $allAllowanceTypes = \App\Models\AllowanceType::orderBy('id')->get();
-    $actualAllowances = isset($payroll->allowances) ? collect($payroll->allowances)->keyBy('allowance_type_id') : collect();
+    // Fetch actual allowances from payroll
+    $actualAllowances = isset($payroll->allowances) ? collect($payroll->allowances) : collect();
     
-    foreach ($allAllowanceTypes as $type) {
-        $al = $actualAllowances->get($type->id);
-        if ($al) {
-            $calcDetail = $al->calculation_detail;
-            if (is_string($calcDetail)) $calcDetail = json_decode($calcDetail, true);
-            
-            $hasSegments = isset($calcDetail['segments']) && count($calcDetail['segments']) > 0;
-            
-            $incomes[] = [
-                'name' => strtoupper($type->name),
-                'mandays' => (!$hasSegments && $al->mandays > 0) ? $unit($al->mandays) : '-',
-                'rate' => (!$hasSegments && $al->rate_amount > 0) ? $rupiah($al->rate_amount) : '-',
-                'amount' => $al->amount,
-                'is_subrow' => false
-            ];
-            
-            if ($hasSegments) {
-                foreach ($calcDetail['segments'] as $seg) {
-                    $incomes[] = [
-                        'name' => '   - ' . ($seg['grade'] ?? 'Jabatan'),
-                        'mandays' => (isset($seg['mandays']) && $seg['mandays'] > 0) ? $unit($seg['mandays']) : '-',
-                        'rate' => (isset($seg['rate']) && $seg['rate'] > 0) ? $rupiah($seg['rate']) : '-',
-                        'amount' => $seg['amount'],
-                        'is_subrow' => true
-                    ];
-                }
-            }
-        } else {
-            $incomes[] = [
-                'name' => strtoupper($type->name),
-                'mandays' => '-',
-                'rate' => '-',
-                'amount' => 0,
-                'is_subrow' => false
-            ];
+    foreach ($actualAllowances as $al) {
+        $type = $al->allowanceType;
+        $calcDetail = $al->calculation_detail;
+        if (is_string($calcDetail)) $calcDetail = json_decode($calcDetail, true);
+        
+        $hasSegments = isset($calcDetail['segments']) && count($calcDetail['segments']) > 0;
+        
+        // Generate details label string (Harian, Bulanan, dll)
+        $defaultTypeLabel = ' (Bulanan)';
+        $nameLower = strtolower($type ? $type->name : $al->allowance_type);
+        if (str_contains($nameLower, 'trip') || str_contains($nameLower, 'perjalanan dinas')) {
+            $defaultTypeLabel = ' (Per Perjalanan Dinas)';
+        } else if (str_contains($nameLower, 'harian') || str_contains($nameLower, 'makan')) {
+            $defaultTypeLabel = ' (Harian)';
         }
-    }
-    
-    $defaultDeductions = [
-        'PPH. PASAL 21',
-        'PINJAMAN KARYAWAN',
-        'BPJS KESEHATAN',
-        'BPJS TK - JHT',
-        'BPJS TK - JP'
-    ];
-    
-    $actualDeductions = isset($payroll->deductions) ? collect($payroll->deductions)->keyBy(function($d) {
-        return strtoupper($d->deduction_label);
-    }) : collect();
-    
-    $deductions = [];
-    foreach ($defaultDeductions as $label) {
-        $dd = $actualDeductions->get($label);
-        $deductions[] = [
-            'name' => $label,
-            'amount' => $dd ? $dd->amount : 0,
+
+        $typeLabel = $defaultTypeLabel;
+        $isTrip = isset($calcDetail['num_trips']);
+        $hasDaily = ($al->mandays > 0 || isset($calcDetail['total_mandays']) || isset($calcDetail['mandays_ho_wfo']) || isset($calcDetail['wfo_days']) || isset($calcDetail['mandays_ho_wfh']) || isset($calcDetail['wfh_days']) || isset($calcDetail['mandays_outside_city']) || isset($calcDetail['out_of_town_days']));
+        
+        if ($isTrip) {
+            $typeLabel = ' (Per Perjalanan Dinas)';
+        } else if ($hasDaily) {
+            $typeLabel = ' (Harian)';
+        }
+
+        $typeName = strtoupper($type ? $type->name : $al->allowance_type);
+
+        $incomes[] = [
+            'name' => $typeName . $typeLabel,
+            'mandays' => (!$hasSegments && $al->mandays > 0) ? $unit($al->mandays) : '-',
+            'rate' => (!$hasSegments && $al->rate_amount > 0) ? $rupiah($al->rate_amount) : '-',
+            'amount' => $al->amount,
             'is_subrow' => false
         ];
+        
+        if ($hasSegments) {
+            foreach ($calcDetail['segments'] as $seg) {
+                $incomes[] = [
+                    'name' => '   - ' . ($seg['grade'] ?? 'Jabatan'),
+                    'mandays' => (isset($seg['mandays']) && $seg['mandays'] > 0) ? $unit($seg['mandays']) : '-',
+                    'rate' => (isset($seg['rate']) && $seg['rate'] > 0) ? $rupiah($seg['rate']) : '-',
+                    'amount' => $seg['amount'],
+                    'is_subrow' => true
+                ];
+            }
+        }
     }
     
-    // Append any extra deductions not in the default list
-    foreach ($actualDeductions as $label => $dd) {
-        if (!in_array($label, $defaultDeductions)) {
-            $deductions[] = [
-                'name' => $label,
-                'amount' => $dd->amount,
-                'is_subrow' => false
-            ];
-        }
+    $actualDeductions = isset($payroll->deductions) ? collect($payroll->deductions)->filter(function($d) { return $d->amount > 0; }) : collect();
+    
+    $deductions = [];
+    foreach ($actualDeductions as $dd) {
+        $deductions[] = [
+            'name' => strtoupper($dd->deduction_label),
+            'amount' => $dd->amount,
+            'is_subrow' => false
+        ];
     }
     
     $rowCount = max(count($incomes), count($deductions));
@@ -273,10 +261,10 @@
         <div style="font-style: italic; font-weight: bold;">Pembayaran gaji telah ditransfer Ke :</div>
         <table style="width: 100%; margin-top: 5px;">
           <tr>
-            <td style="width: 15%;" class="bold">No. Rek. {{ $emp?->bank_name ?: '-' }}</td>
-            <td style="width: 25%;" class="bold">{{ $emp?->bank_account_number_decrypted ?: '-' }}</td>
+            <td style="width: 15%;" class="bold">No. Rek. {{ ($canSeeBank ?? false) ? ($emp?->bank_name ?: '-') : '-' }}</td>
+            <td style="width: 25%;" class="bold">{{ ($canSeeBank ?? false) ? ($emp?->bank_account_number_decrypted ?: '-') : '-' }}</td>
             <td style="width: 10%;">a.n</td>
-            <td style="width: 50%;">{{ strtoupper($emp?->bank_account_name ?: '-') }}</td>
+            <td style="width: 50%;">{{ ($canSeeBank ?? false) ? strtoupper($emp?->bank_account_name ?: '-') : '-' }}</td>
           </tr>
           <tr>
             <td class="bold">No. Ref.</td>

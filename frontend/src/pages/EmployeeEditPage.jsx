@@ -41,6 +41,7 @@ export default function EmployeeEditPage() {
     bank_account_number: "",
   });
   const [positions, setPositions] = useState([]);
+  const [formInitialized, setFormInitialized] = useState(false);
 
   useEffect(() => {
     if (!canManage) {
@@ -65,7 +66,7 @@ export default function EmployeeEditPage() {
       setErr(swrErr.message);
     }
 
-    if (!swrData) return;
+    if (!swrData || formInitialized) return;
 
     const positionsList = Array.isArray(swrData.positionsList) ? swrData.positionsList : [];
     const data = swrData.data;
@@ -94,7 +95,8 @@ export default function EmployeeEditPage() {
       bank_account_name: data.bank_account_name ?? "",
       bank_account_number: data.bank_account_number ?? "",
     });
-  }, [swrData, swrErr]);
+    setFormInitialized(true);
+  }, [swrData, swrErr, formInitialized]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -211,8 +213,11 @@ export default function EmployeeEditPage() {
                   <label className="text-xs font-medium text-slate-600">Jabatan Aktif</label>
                   <select
                     value={form.position_id}
-                    disabled
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-900"
+                    disabled={!!swrData?.data?.position_id}
+                    onChange={(e) => setForm({ ...form, position_id: e.target.value })}
+                    className={`w-full rounded-xl border px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40 ${
+                      !!swrData?.data?.position_id ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-300'
+                    }`}
                   >
                     <option value="">-- Pilih Jabatan --</option>
                     {positions.map((position) => (
@@ -222,10 +227,29 @@ export default function EmployeeEditPage() {
                     ))}
                   </select>
                 </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">Jumlah Balita</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Isi jika relevan"
+                    value={form.num_toddlers}
+                    onChange={(event) => setNumToddlersField(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    {hasChildcare
+                      ? "Dipakai oleh tunjangan yang mensyaratkan jumlah balita pada jabatan ini."
+                      : "Tetap boleh diisi lebih dulu. Nilai ini akan dipakai jika ada tunjangan yang mensyaratkannya."}
+                  </p>
+                </div>
               </div>
 
               <EmployeeNotice>
-                Jabatan aktif diubah melalui proses promosi atau demosi supaya histori jabatan dan perubahan payroll tetap konsisten.
+                {!!swrData?.data?.position_id 
+                  ? "Jabatan aktif diubah melalui proses promosi atau demosi supaya histori jabatan dan perubahan payroll tetap konsisten."
+                  : "Pilih jabatan awal untuk karyawan ini. Setelah disimpan, perubahan selanjutnya harus melalui proses promosi atau demosi."}
               </EmployeeNotice>
 
               {selectedPosition ? (
@@ -238,51 +262,7 @@ export default function EmployeeEditPage() {
             </div>
           </EmployeeSectionCard>
 
-          <EmployeeSectionCard
-            title="Kondisi Khusus Payroll"
-            description="Field ini tetap bisa diperbarui kapan saja sesuai kondisi karyawan."
-          >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-600">Jumlah Balita</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Isi jika relevan"
-                  value={form.num_toddlers}
-                  onChange={(event) => setNumToddlersField(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
-                />
-                <p className="text-[11px] text-slate-500">
-                  {hasChildcare
-                    ? "Dipakai oleh tunjangan yang mensyaratkan jumlah balita pada jabatan ini."
-                    : "Tetap boleh diisi lebih dulu. Nilai ini akan dipakai jika ada tunjangan yang mensyaratkannya."}
-                </p>
-              </div>
 
-              <div className="space-y-3">
-                <label className="text-xs font-medium text-slate-600">Flag Payroll</label>
-                <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3">
-                  <input
-                    type="checkbox"
-                    id="is_trainer"
-                    checked={form.is_trainer}
-                    onChange={(event) => setField("is_trainer", event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-200 text-sky-600 focus:ring-sky-500/40"
-                  />
-                  <span className="text-xs font-semibold text-slate-800">
-                    Karyawan adalah Trainer
-                    <span className="mt-1 block text-[11px] font-normal text-slate-500">
-                      {hasTraining
-                        ? "Dipakai untuk aturan tunjangan training pada jabatan ini."
-                        : "Tetap boleh ditandai. Efeknya akan terasa saat jabatan punya aturan trainer."}
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
-          </EmployeeSectionCard>
 
           <EmployeeSectionCard
             title="Data Pribadi"

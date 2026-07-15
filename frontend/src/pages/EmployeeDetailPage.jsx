@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import AlertMessage from "@/components/AlertMessage";
 import StatusBadge from "@/components/StatusBadge";
 import EmployeeHistoryHub from "@/components/EmployeeHistoryHub";
-import EmployeeMutationModal from "@/components/EmployeeMutationModal";
 import {
   EmployeeDisplayField,
   EmployeeNotice,
@@ -81,7 +80,6 @@ export default function EmployeeDetailPage() {
 
   const [reveal, setReveal] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
-  const [isMutationModalOpen, setIsMutationModalOpen] = useState(false);
   const [confirmResetModalOpen, setConfirmResetModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -131,16 +129,12 @@ export default function EmployeeDetailPage() {
   const employmentFields = [
     {
       label: "Jabatan Aktif",
-      value: emp?.position ? `${emp.position.name} (${String(emp.position.code || "").toUpperCase()})` : emp?.position || "-",
-      helper: emp?.position?.level ? `Level ${emp.position.level}` : undefined,
+      value: emp?.Position ? `${emp.Position.name} (${String(emp.Position.code || "").toUpperCase()})` : (emp?.position || "-"),
+      helper: emp?.Position?.level ? `Level ${emp.Position.level}` : undefined,
     },
     {
       label: "Basis Gaji Pokok",
       value: formatBaseSalaryBasisValue(emp?.salary_profile_summary?.base_salary_basis),
-    },
-    {
-      label: "Nominal Gaji Pokok Default",
-      value: formatCurrencyValue(emp?.salary_profile_summary?.base_salary_amount),
     },
     {
       label: "Jumlah Balita",
@@ -189,12 +183,6 @@ export default function EmployeeDetailPage() {
                   onClick={() => nav(`/employees/${id}/edit`)}
                 >
                   Edit Data
-                </Button>
-                <Button
-                  className="rounded bg-indigo-600 text-white hover:bg-indigo-700"
-                  onClick={() => setIsMutationModalOpen(true)}
-                >
-                  Promosi / Demosi
                 </Button>
               </>
             ) : null}
@@ -275,27 +263,8 @@ export default function EmployeeDetailPage() {
                   />
                 ))}
 
-                <EmployeeDisplayField
-                  label="Kategori Trainer"
-                  value={
-                    emp.is_trainer ? (
-                      <Badge className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                        Trainer
-                      </Badge>
-                    ) : (
-                      <Badge className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                        Bukan Trainer
-                      </Badge>
-                    )
-                  }
-                  helper={
-                    emp.is_trainer
-                      ? "Dipakai pada tunjangan training jika jabatan punya aturan trainer."
-                      : "Belum ada flag trainer pada profil pegawai ini."
-                  }
-                />
-              </div>
-            </EmployeeSectionCard>
+                </div>
+              </EmployeeSectionCard>
 
             {canViewAccount ? (
               <EmployeeSectionCard
@@ -387,16 +356,6 @@ export default function EmployeeDetailPage() {
       ) : (
         <EmployeeHistoryHub employeeId={id} employeeName={emp?.name} role={role} />
       )}
-
-      <EmployeeMutationModal
-        isOpen={isMutationModalOpen}
-        onClose={() => setIsMutationModalOpen(false)}
-        employee={emp}
-        onSuccess={() => {
-          setIsMutationModalOpen(false);
-          mutate();
-        }}
-      />
 
       {/* Reset Password Modal */}
       {resetModalOpen && (

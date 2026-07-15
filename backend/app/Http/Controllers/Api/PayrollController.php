@@ -51,12 +51,20 @@ class PayrollController extends Controller
             }
         }
 
-        if ($request->filled('periode')) {
+        if ($request->filled('period_month')) {
+            $payrollPeriod = \App\Models\PayrollPeriod::where('period_month', $request->period_month)->first();
+            if ($payrollPeriod) {
+                $query->whereDate('periode', \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString());
+            } else {
+                $query->whereDate('periode', $request->period_month . '-01');
+            }
+        } elseif ($request->filled('periode')) {
             $query->whereDate('periode', $request->periode);
         }
 
         $rows = $query->get()->map(function (Payroll $p) use ($user) {
             $canSeeNominal = $this->canSeeNominal($user, $p);
+            $canSeeBank = $this->canSeeBank($user, $p);
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
 
             $gaji = $tunj = $pot = $total = null;
@@ -103,34 +111,47 @@ class PayrollController extends Controller
                 }
             }
 
-            return [
-                'id' => $p->id,
-                'user_id' => $p->user_id,
-                'employee_id' => $p->employee_id,
-                'employee_code' => $p->employee?->employee_code,
-                'employee_name' => $p->employee?->name,
-                'employee_status' => $p->employee?->status,
-                'bank_name' => $p->employee?->bank_name,
-                'bank_account_number' => $p->employee?->bank_account_number_enc ? CryptoService::readEncryptedOrPlainSafe($p->employee->bank_account_number_enc, $p->employee->bank_account_number, $p->employee->pii_alg ?? 'AES') : $p->employee?->bank_account_number,
+                $periodeDateString = optional($p->periode)->toDateString();
+                $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', $periodeDateString)->first();
+                $periodMonth = $payrollPeriod ? $payrollPeriod->period_month : optional($p->periode)->format('Y-m');
+                
+                $total_mandays = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
+                    ->where('period_month', $periodMonth)->sum('total_mandays');
 
-                'created_by' => $p->user?->name,
-                'periode' => optional($p->periode)->toDateString(),
+                return [
+                    'id' => $p->id,
+                    'user_id' => $p->user_id,
+                    'employee_id' => $p->employee_id,
+                    'employee_code' => $p->employee?->employee_code,
+                    'employee_name' => $p->employee?->name,
+                    'employee_status' => $p->employee?->status,
+                    ...($canSeeBank ? [
+                        'bank_name' => $p->employee?->bank_name,
+                        'bank_account_number' => $p->employee?->bank_account_number_enc
+                            ? CryptoService::readEncryptedOrPlainSafe($p->employee->bank_account_number_enc, $p->employee->bank_account_number, $p->employee->pii_alg ?? 'AES')
+                            : $p->employee?->bank_account_number,
+                    ] : []),
 
-                'status' => $p->status ?? null,
-                'salary_alg' => $p->salary_alg ?? null,
+                    'created_by' => $p->user?->name,
+                    'periode' => optional($p->periode)->toDateString(),
+                    'period_month' => $periodMonth,
 
-                'created_at' => optional($p->created_at)->toISOString(),
-                'updated_at' => optional($p->updated_at)->toISOString(),
+                    'status' => $p->status ?? null,
+                    'salary_alg' => $p->salary_alg ?? null,
 
-                'gaji_pokok' => $gaji,
-                'tunjangan' => $tunj,
-                'potongan' => $pot,
-                'total' => $total,
-                'catatan' => $cat,
+                    'created_at' => optional($p->created_at)->toISOString(),
+                    'updated_at' => optional($p->updated_at)->toISOString(),
 
-                'masked' => ! $canSeeNominal,
-            ];
-        });
+                    'gaji_pokok' => $gaji,
+                    'tunjangan' => $tunj,
+                    'potongan' => $pot,
+                    'total' => $total,
+                    'catatan' => $cat,
+                    'total_mandays' => (float) $total_mandays,
+
+                    'masked' => ! $canSeeNominal,
+                ];
+            });
 
         return response()->json($rows);
     }
@@ -177,11 +198,13 @@ class PayrollController extends Controller
 
         if ($payroll->employee) {
             $empAlg = strtoupper((string) ($payroll->employee->pii_alg ?? 'AES'));
-            $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
-                $payroll->employee->bank_account_number_enc,
-                $payroll->employee->bank_account_number,
-                $empAlg
-            );
+            if ($this->canSeeBank($user, $payroll)) {
+                $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
+                    $payroll->employee->bank_account_number_enc,
+                    $payroll->employee->bank_account_number,
+                    $empAlg
+                );
+            }
         }
 
         $gaji = $tunj = $pot = $total = null;
@@ -316,6 +339,29 @@ class PayrollController extends Controller
             // ignore
         }
 
+        $periodeDateString = optional($payroll->periode)->toDateString();
+        $payrollPeriod = \App\Models\PayrollPeriod::where('start_date', $periodeDateString)->first();
+        $periodMonth = $payrollPeriod ? $payrollPeriod->period_month : optional($payroll->periode)->format('Y-m');
+
+        $employeePayload = $payroll->employee ? [
+            'join_date' => optional($payroll->employee->join_date)->toDateString(),
+            'department' => $payroll->employee->department,
+            'position' => $payroll->employee->position,
+            'position_name' => $payroll->employee->Position?->name,
+            'base_salary_basis' => $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily'),
+            'base_salary_basis_label' => $this->baseSalaryBasisLabel(
+                $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily')
+            ),
+        ] : null;
+
+        if ($employeePayload && $this->canSeeBank($user, $payroll)) {
+            $employeePayload += [
+                'bank_name' => $payroll->employee->bank_name,
+                'bank_account_name' => $payroll->employee->bank_account_name,
+                'bank_account_number_decrypted' => $payroll->employee->bank_account_number_decrypted,
+            ];
+        }
+
         return response()->json([
             'id' => $payroll->id,
 
@@ -323,19 +369,7 @@ class PayrollController extends Controller
             'employee_code' => $payroll->employee?->employee_code,
             'employee_name' => $payroll->employee?->name,
             'employee_status' => $payroll->employee?->status,
-            'employee' => $payroll->employee ? [
-                'join_date' => optional($payroll->employee->join_date)->toDateString(),
-                'department' => $payroll->employee->department,
-                'position' => $payroll->employee->position,
-                'position_name' => $payroll->employee->Position?->name,
-                'base_salary_basis' => $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily'),
-                'base_salary_basis_label' => $this->baseSalaryBasisLabel(
-                    $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily')
-                ),
-                'bank_name' => $payroll->employee->bank_name,
-                'bank_account_name' => $payroll->employee->bank_account_name,
-                'bank_account_number_decrypted' => $payroll->employee->bank_account_number_decrypted,
-            ] : null,
+            'employee' => $employeePayload,
 
             'created_by' => $payroll->user?->name,
             'periode' => optional($payroll->periode)->toDateString(),
@@ -357,25 +391,30 @@ class PayrollController extends Controller
             'calculation_mode' => $payroll->calculation_mode,
             'calculated_at' => $payroll->calculated_at,
 
-            'allowances' => $canSeeNominal ? $payroll->allowances : [],
-            'deductions' => $canSeeNominal ? $payroll->deductions : [],
+            'allowances' => $canSeeNominal ? collect($payroll->allowances)->map(function ($al) {
+                // Ensure relation is loaded if possible, though React uses al.allowance_type as fallback
+                return $al;
+            })->values()->all() : [],
+            'deductions' => $canSeeNominal ? collect($payroll->deductions)->filter(function($dd) {
+                return $dd->amount > 0;
+            })->values()->all() : [],
 
             'mandays_summary' => [
                 'mandays_ho_wfo' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                    ->where('period_month', optional($payroll->periode)->format('Y-m'))->sum('wfo_days'),
+                    ->where('period_month', $periodMonth)->sum('wfo_days'),
                 'mandays_ho_wfh' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                    ->where('period_month', optional($payroll->periode)->format('Y-m'))->sum('wfh_days'),
+                    ->where('period_month', $periodMonth)->sum('wfh_days'),
                 'mandays_outside_city' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                    ->where('period_month', optional($payroll->periode)->format('Y-m'))->sum('out_of_town_days'),
+                    ->where('period_month', $periodMonth)->sum('out_of_town_days'),
                 'mandays_project' => 0, // deprecated
                 'mandays_training' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                    ->where('period_month', optional($payroll->periode)->format('Y-m'))->sum('training_days'),
+                    ->where('period_month', $periodMonth)->sum('training_days'),
                 'total_mandays' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                    ->where('period_month', optional($payroll->periode)->format('Y-m'))->sum('total_mandays'),
+                    ->where('period_month', $periodMonth)->sum('total_mandays'),
             ],
 
             'monthly_recaps' => \App\Models\MonthlyRecap::where('employee_id', $payroll->employee_id)
-                ->where('period_month', optional($payroll->periode)->format('Y-m'))
+                ->where('period_month', $periodMonth)
                 ->orderBy('id', 'asc')
                 ->get()
                 ->map(function ($r) use ($payroll) {
@@ -597,11 +636,13 @@ class PayrollController extends Controller
 
         if ($payroll->employee) {
             $empAlg = strtoupper((string) ($payroll->employee->pii_alg ?? 'AES'));
-            $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
-                $payroll->employee->bank_account_number_enc,
-                $payroll->employee->bank_account_number,
-                $empAlg
-            );
+            if ($this->canSeeBank($user, $payroll)) {
+                $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
+                    $payroll->employee->bank_account_number_enc,
+                    $payroll->employee->bank_account_number,
+                    $empAlg
+                );
+            }
         }
 
         try {
@@ -670,6 +711,7 @@ class PayrollController extends Controller
 
         $pdf = Pdf::loadView('pdf.payroll-slip', [
             'payroll' => $payroll,
+            'canSeeBank' => $this->canSeeBank($user, $payroll),
         ])->setPaper('A4', 'portrait');
 
         $filename = 'slip-gaji-'.
@@ -1162,6 +1204,27 @@ class PayrollController extends Controller
 
         // Setelah transfer dicatat, slip dianggap terkirim dan nominal boleh dibuka staff.
         return $payroll->status === 'paid';
+    }
+
+    private function canSeeBank($user, Payroll $payroll): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (($user->role ?? '') === 'fat') {
+            return true;
+        }
+
+        if (($user->role ?? '') !== 'staff') {
+            return false;
+        }
+
+        $payroll->loadMissing('employee:id,user_id');
+
+        return (
+            ! empty($user->employee_id) && (int) $user->employee_id === (int) $payroll->employee_id
+        ) || ((int) ($payroll->employee?->user_id) === (int) $user->id);
     }
 
     private function audit(Request $request, string $action, ?Payroll $payroll = null, array $meta = []): void
