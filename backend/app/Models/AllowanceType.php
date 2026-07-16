@@ -10,6 +10,7 @@ class AllowanceType extends Model
         'code',
         'name',
         'calculation_type',
+        'input_source',
         'applies_to',
         'display_order',
         'description',

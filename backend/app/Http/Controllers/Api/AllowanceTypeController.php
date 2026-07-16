@@ -10,6 +10,15 @@ use Illuminate\Validation\ValidationException;
 
 class AllowanceTypeController extends Controller
 {
+    private const INPUT_SOURCES = [
+        'total_mandays',
+        'training_days',
+        'out_of_town_days',
+        'wfo_days',
+        'wfh_days',
+        'business_trips',
+    ];
+
     private function forbid(string $msg = 'Forbidden')
     {
         return response()->json(['message' => $msg], 403);
@@ -56,6 +65,7 @@ class AllowanceTypeController extends Controller
             'code' => ['required', 'string', 'max:50', 'unique:allowance_types,code'],
             'name' => ['required', 'string', 'max:150', 'unique:allowance_types,name'],
             'calculation_type' => ['required', 'in:per_mandays,per_trip,flat'],
+            'input_source' => ['nullable', Rule::in(self::INPUT_SOURCES)],
             'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['required', 'integer', 'min:0'],
             'description' => ['nullable', 'string'],
@@ -63,6 +73,7 @@ class AllowanceTypeController extends Controller
         ]);
 
         $data['applies_to'] = 'all';
+        $data['input_source'] = $this->normalizeInputSource($data['calculation_type'], $data['input_source'] ?? null);
         $allowanceType = AllowanceType::create($data);
 
         return response()->json($allowanceType, 201);
@@ -83,6 +94,7 @@ class AllowanceTypeController extends Controller
                 Rule::unique('allowance_types', 'name')->ignore($allowanceType->id),
             ],
             'calculation_type' => ['sometimes', 'required', 'in:per_mandays,per_trip,flat'],
+            'input_source' => ['nullable', Rule::in(self::INPUT_SOURCES)],
             'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['sometimes', 'required', 'integer', 'min:0'],
             'description' => ['nullable', 'string'],
@@ -90,6 +102,12 @@ class AllowanceTypeController extends Controller
         ]);
 
         $data['applies_to'] = 'all';
+        if (array_key_exists('calculation_type', $data) || array_key_exists('input_source', $data)) {
+            $data['input_source'] = $this->normalizeInputSource(
+                $data['calculation_type'] ?? $allowanceType->calculation_type,
+                $data['input_source'] ?? $allowanceType->input_source
+            );
+        }
         $allowanceType->update($data);
 
         return response()->json($allowanceType);
@@ -110,5 +128,14 @@ class AllowanceTypeController extends Controller
         $allowanceType->delete();
 
         return response()->json(['message' => 'Allowance Type deleted successfully']);
+    }
+
+    private function normalizeInputSource(string $calculationType, ?string $inputSource): ?string
+    {
+        return match ($calculationType) {
+            'flat' => null,
+            'per_trip' => $inputSource ?: 'business_trips',
+            default => $inputSource ?: 'total_mandays',
+        };
     }
 }

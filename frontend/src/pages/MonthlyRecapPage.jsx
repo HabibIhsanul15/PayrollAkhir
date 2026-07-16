@@ -90,6 +90,7 @@ export default function MonthlyRecapPage() {
         overtime_hours: 0,
         late_count: 0,
         total_mandays: 0,
+        total_attendance: 0,
       };
 
       existing.items.push(recap);
@@ -102,6 +103,7 @@ export default function MonthlyRecapPage() {
       existing.overtime_hours += Number(recap.overtime_hours || 0);
       existing.late_count += Number(recap.late_count || 0);
       existing.total_mandays += Number(recap.total_mandays || 0);
+      existing.total_attendance += recapPaidDays(recap);
       map.set(key, existing);
     }
 
@@ -114,6 +116,7 @@ export default function MonthlyRecapPage() {
     (acc, group) => ({
       employees: acc.employees + 1,
       total_mandays: acc.total_mandays + Number(group.total_mandays || 0),
+      total_attendance: acc.total_attendance + Number(group.total_attendance || 0),
       business_trips: acc.business_trips + Number(group.business_trips || 0),
       overtime_hours: acc.overtime_hours + Number(group.overtime_hours || 0),
       late_count: acc.late_count + Number(group.late_count || 0),
@@ -121,6 +124,7 @@ export default function MonthlyRecapPage() {
     {
       employees: 0,
       total_mandays: 0,
+      total_attendance: 0,
       business_trips: 0,
       overtime_hours: 0,
       late_count: 0,
@@ -405,9 +409,8 @@ export default function MonthlyRecapPage() {
         </div>
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-4">
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
         <SummaryBox label="Karyawan Direkap" value={cleanNumber(summary.employees)} />
-        <SummaryBox label="Total Hari Dibayar" value={`${cleanNumber(summary.total_mandays)} hari`} />
         <SummaryBox label="Total Perjalanan" value={`${cleanNumber(summary.business_trips)} kali`} />
         <SummaryBox label="Terlambat" value={`${cleanNumber(summary.late_count)} kali`} />
       </div>
@@ -419,8 +422,8 @@ export default function MonthlyRecapPage() {
               <th className="px-4 py-2 text-left">Nama Karyawan</th>
               <th className="px-4 py-2 text-left">Periode</th>
               <th className="px-4 py-2 text-right">Total Kehadiran</th>
-              <th className="px-4 py-2 text-right">Total Tambahan</th>
-              <th className="px-4 py-2 text-right">Total Hari Dibayar</th>
+              <th className="px-4 py-2 text-right">Total Perjalanan</th>
+              <th className="px-4 py-2 text-right">Terlambat</th>
               <th className="px-4 py-2 text-center">Status</th>
               <th className="px-4 py-2 text-center">Aksi</th>
             </tr>
@@ -429,20 +432,14 @@ export default function MonthlyRecapPage() {
             {groupedRecaps.map((r) => (
               <tr key={r.key} className="border-t align-top">
                 <td className="px-4 py-3">{r.employee?.name}</td>
-                <td className="px-4 py-3"><PeriodDisplay period={r.period_month} /></td>
+                <td className="px-4 py-3">{monthLabel(r.period_month)}</td>
                 <td className="px-4 py-3 text-right text-sm text-slate-700">
-                  <div className="font-semibold">{cleanNumber(
-                    Number(r.wfo_days || 0) +
-                    Number(r.wfh_days || 0) +
-                    Number(r.out_of_town_days || 0) +
-                    Number(r.training_days || 0)
-                  )} hari</div>
-                  <div className="text-xs text-slate-500">Detail di tombol aksi</div>
+                  <div className="font-semibold">{cleanNumber(r.total_attendance)} hari</div>
                 </td>
                 <td className="px-4 py-3 text-right text-sm text-slate-700">
-                  <div>Terlambat: <strong>{cleanNumber(r.late_count)}</strong></div>
+                  <strong>{cleanNumber(r.business_trips)} kali</strong>
                 </td>
-                <td className="px-4 py-3 text-right font-semibold">{cleanNumber(r.total_mandays)}</td>
+                <td className="px-4 py-3 text-right font-semibold">{cleanNumber(r.late_count)} kali</td>
                 <td className="px-4 py-2 text-center">
                   {r.isSubmitted ? (
                     <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-sm">Terkirim</span>
@@ -486,11 +483,9 @@ export default function MonthlyRecapPage() {
             <tfoot>
               <tr className="border-t bg-slate-50 font-semibold">
                 <td colSpan={2} className="px-4 py-3 text-right">Total Keseluruhan</td>
-                <td className="px-4 py-3 text-right">{cleanNumber(summary.total_mandays)} hari</td>
-                <td className="px-4 py-3 text-right">
-                  {cleanNumber(summary.business_trips)} perjalanan
-                </td>
-                <td className="px-4 py-3 text-right">{cleanNumber(summary.total_mandays)}</td>
+                <td className="px-4 py-3 text-right">{cleanNumber(summary.total_attendance)} hari</td>
+                <td className="px-4 py-3 text-right">{cleanNumber(summary.business_trips)} kali</td>
+                <td className="px-4 py-3 text-right">{cleanNumber(summary.late_count)} kali</td>
                 <td colSpan={2}></td>
               </tr>
             </tfoot>
@@ -686,6 +681,7 @@ export default function MonthlyRecapPage() {
           onClose={() => setDetailGroup(null)}
         />
       )}
+
     </div>
   );
 }
@@ -713,7 +709,7 @@ function RecapDetailModal({ group, onClose }) {
 
         <div className="space-y-4 p-5">
           <div className="grid gap-3 md:grid-cols-3">
-            <SummaryBox label="Total Hari Dibayar" value={`${cleanNumber(group.total_mandays)} hari`} />
+            <SummaryBox label="Total Kehadiran" value={`${cleanNumber(group.total_attendance)} hari`} />
             <SummaryBox label="Perjalanan Dinas" value={`${cleanNumber(group.business_trips)} kali`} />
             <SummaryBox label="Terlambat" value={`${cleanNumber(group.late_count)} kali`} />
           </div>
@@ -727,7 +723,6 @@ function RecapDetailModal({ group, onClose }) {
                   <th className="px-3 py-2 text-right">WFH</th>
                   <th className="px-3 py-2 text-right">Luar Kota</th>
                   <th className="px-3 py-2 text-right">Training</th>
-                  <th className="px-3 py-2 text-right">Hari Dibayar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -741,7 +736,6 @@ function RecapDetailModal({ group, onClose }) {
                     <td className="px-3 py-2 text-right">{cleanNumber(item.wfh_days)}</td>
                     <td className="px-3 py-2 text-right">{cleanNumber(item.out_of_town_days)}</td>
                     <td className="px-3 py-2 text-right">{cleanNumber(item.training_days)}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{cleanNumber(item.total_mandays)}</td>
                   </tr>
                 ))}
               </tbody>

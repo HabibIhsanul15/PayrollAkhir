@@ -85,6 +85,14 @@ class AllowanceTypeSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
+            $type['input_source'] = $type['code'] === 'training'
+                ? 'training_days'
+                : match ($type['calculation_type']) {
+                    'per_trip' => 'business_trips',
+                    'per_mandays' => 'total_mandays',
+                    default => null,
+                };
+
             AllowanceType::updateOrCreate(['code' => $type['code']], $type);
         }
     }

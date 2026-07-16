@@ -20,7 +20,25 @@ const calculationLabels = {
   flat: "Tetap Bulanan",
 };
 
-// Deleted inputSourceLabels and recapInputSources
+const inputSourceLabels = {
+  total_mandays: "Total hari dibayar",
+  training_days: "Hari training",
+  out_of_town_days: "Hari luar kota",
+  wfo_days: "Hari WFO",
+  wfh_days: "Hari WFH",
+  business_trips: "Jumlah perjalanan dinas",
+};
+
+const inputSourceOptions = {
+  per_mandays: [
+    ["total_mandays", "Total hari dibayar"],
+    ["training_days", "Hari training"],
+    ["out_of_town_days", "Hari luar kota"],
+    ["wfo_days", "Hari WFO"],
+    ["wfh_days", "Hari WFH"],
+  ],
+  per_trip: [["business_trips", "Jumlah perjalanan dinas"]],
+};
 
 function sortByDisplayOrder(rows) {
   return [...rows].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
@@ -52,8 +70,18 @@ function calculationText(row) {
   return calculationLabels[row.calculation_type] || row.calculation_type;
 }
 
+function defaultInputSource(calculationType) {
+  if (calculationType === "per_trip") return "business_trips";
+  if (calculationType === "per_mandays") return "total_mandays";
+  return "";
+}
+
 function normalizeFormByCalculation(form, calculationType) {
-  return { ...form, calculation_type: calculationType };
+  return {
+    ...form,
+    calculation_type: calculationType,
+    input_source: defaultInputSource(calculationType),
+  };
 }
 
 export default function AllowanceTypePage() {
@@ -126,7 +154,7 @@ export default function AllowanceTypePage() {
       code: r.code,
       name: r.name,
       calculation_type: r.calculation_type,
-      input_source: r.input_source || (r.calculation_type === "per_trip" ? "business_trips" : null),
+      input_source: r.input_source || defaultInputSource(r.calculation_type),
       applies_to: "all",
       display_order: r.display_order,
       description: r.description || "",
@@ -286,6 +314,11 @@ export default function AllowanceTypePage() {
                           <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">
                             {calculationText(r)}
                           </Badge>
+                          {r.input_source && (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              Pemicu: {inputSourceLabels[r.input_source] || r.input_source}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="py-4">
                           {r.is_active ? (
@@ -369,23 +402,34 @@ export default function AllowanceTypePage() {
                   </select>
                 </div>
 
-                {form.calculation_type === "per_mandays" && (
-                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    Dasar perhitungan: <strong>Total Hari Kehadiran</strong>
+                {form.calculation_type !== "flat" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-800 mb-1">
+                      Sumber Pemicu
+                    </label>
+                    <select
+                      value={form.input_source}
+                      onChange={(e) => setForm((prev) => ({ ...prev, input_source: e.target.value }))}
+                      required
+                      className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                    >
+                      {(inputSourceOptions[form.calculation_type] || []).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Nilai kehadiran pada sumber ini akan menjadi pemicu perhitungan tunjangan.
+                    </p>
                   </div>
                 )}
 
-                {form.calculation_type === "per_trip" && (
-                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    Dasar perhitungan: <strong>Jumlah Perjalanan Dinas</strong>
-                  </div>
-                )}
-
-                {form.calculation_type === "flat" && (
-                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    Dasar perhitungan: <strong>Nominal tetap per bulan</strong>
-                  </div>
-                )}
+                <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Dasar perhitungan: <strong>
+                    {form.calculation_type === "flat"
+                      ? "Nominal tetap per bulan"
+                      : inputSourceLabels[form.input_source] || "Sumber kehadiran"}
+                  </strong>
+                </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">

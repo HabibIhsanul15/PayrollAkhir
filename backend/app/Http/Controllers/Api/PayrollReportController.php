@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Payroll;
+use App\Models\PayrollPeriod;
 use App\Models\PerfLog;
+use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use App\Services\CryptoService;
@@ -50,8 +52,9 @@ class PayrollReportController extends Controller
         $to    = $request->query('to');    // YYYY-MM-DD (opsional)
 
         if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
-            $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
-            $end   = (clone $start)->endOfMonth();
+            $payrollPeriod = PayrollPeriod::forMonth($month);
+            $start = Carbon::parse($payrollPeriod->start_date)->startOfDay();
+            $end   = Carbon::parse($payrollPeriod->end_date)->endOfDay();
         } else {
             $start = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
             $end   = $to   ? Carbon::parse($to)->endOfDay()     : now()->endOfMonth();
@@ -69,7 +72,10 @@ class PayrollReportController extends Controller
         $employeeId = $request->query('employee_id');
 
         $q = Payroll::query()
-            ->with(['employee:id,name,employee_code'])
+            ->with([
+                'employee:id,name,employee_code,position_id',
+                'employee.salaryProfiles',
+            ])
             ->whereBetween('periode', [$start->toDateString(), $end->toDateString()]);
 
         if (!in_array($status, ['all', 'semua'], true)) {
@@ -101,6 +107,7 @@ class PayrollReportController extends Controller
                 // plain optional
                 'gaji_pokok','tunjangan','potongan','total',
                 'total_allowances','total_deductions',
+                'period_from','period_to',
 
                 // meta
                 'calculation_mode','calculated_at',
@@ -116,6 +123,25 @@ class PayrollReportController extends Controller
 
         $rows = $payrollRows->map(function (Payroll $p) use (&$decryptTotalMs) {
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
+
+            $periodEnd = $p->period_to ?: $p->periode;
+            $profile = $p->employee?->salaryProfiles
+                ?->filter(fn ($profile) => $profile->effective_from && $profile->effective_from->lte($periodEnd))
+                ->sortByDesc('effective_from')
+                ->first();
+
+            $positionName = $profile?->getAttribute('position')
+                ?: Position::find($profile?->position_id)?->name;
+            $positionNames = $positionName ? [$positionName] : [];
+
+            if ($positionNames === []) {
+                $fallbackPosition = $p->employee?->getAttribute('position')
+                    ?: Position::find($p->employee?->position_id)?->name;
+
+                if ($fallbackPosition) {
+                    $positionNames = [$fallbackPosition];
+                }
+            }
 
             $tDec0 = microtime(true);
 
@@ -185,8 +211,11 @@ class PayrollReportController extends Controller
                 'employee_id' => $p->employee_id,
                 'employee_code' => $p->employee?->employee_code,
                 'employee_name' => $p->employee?->name,
+                'position_name' => implode(' / ', $positionNames) ?: 'Belum ditentukan',
 
                 'periode' => optional($p->periode)->toDateString(),
+                'period_from' => optional($p->period_from)->toDateString(),
+                'period_to' => optional($p->period_to)->toDateString(),
                 'status' => $p->status,
 
                 'gaji_pokok' => $gaji,

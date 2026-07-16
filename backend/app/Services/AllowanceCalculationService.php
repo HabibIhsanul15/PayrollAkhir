@@ -74,17 +74,24 @@ class AllowanceCalculationService
 
     private function units(Employee $employee, MonthlyRecap $recap, AllowanceType $type): float
     {
-        if ($type->calculation_type === 'per_trip') {
-            return (float) ($recap->business_trips ?? 0);
-        }
+        $source = $type->input_source ?: (
+            $type->code === 'training'
+                ? 'training_days'
+                : match ($type->calculation_type) {
+                    'per_trip' => 'business_trips',
+                    'per_mandays' => 'total_mandays',
+                    default => null,
+                }
+        );
 
-        if ($type->calculation_type === 'per_mandays') {
-            if ($type->code === 'training') {
-                return (float) ($recap->training_days ?? 0);
-            }
-            return (float) ($recap->total_mandays ?? 0);
-        }
-
-        return 1.0;
+        return match ($source) {
+            'training_days' => (float) ($recap->training_days ?? 0),
+            'out_of_town_days' => (float) ($recap->out_of_town_days ?? 0),
+            'wfo_days' => (float) ($recap->wfo_days ?? 0),
+            'wfh_days' => (float) ($recap->wfh_days ?? 0),
+            'business_trips' => (float) ($recap->business_trips ?? 0),
+            'total_mandays' => (float) ($recap->total_mandays ?? 0),
+            default => 1.0,
+        };
     }
 }

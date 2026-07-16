@@ -1,15 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { Link, useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
-import { currentPayrollMonth, monthLabel } from "@/lib/utils";
+import { currentPayrollMonth } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
-import AlertMessage from "@/components/AlertMessage";
-
-import { Button } from "@/components/ui/button";
-import { Download, RefreshCw, ChevronDown, FileText } from "lucide-react";
+import { ChevronDown, Download, FileText, X } from "lucide-react";
 
 function todayMonth() {
   return currentPayrollMonth();
@@ -89,16 +84,16 @@ function toCsv(rows) {
 }
 
 export default function PayrollReportPage() {
-  const nav = useNavigate();
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
 
   const [month, setMonth] = useState(() => todayMonth());
   const [status, setStatus] = useState("");
+  const [detailRow, setDetailRow] = useState(null);
 
   const qs = new URLSearchParams();
   qs.set("month", month);
-  if (status) qs.set("status", status);
+  qs.set("status", status || "all");
 
   const { data, error, isLoading, mutate } = useSWR(`/reports/payroll?${qs.toString()}`);
 
@@ -228,31 +223,45 @@ export default function PayrollReportPage() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[900px]">
+        <div className="overflow-hidden">
+          <table className="w-full min-w-0 table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[4%]" />
+              <col className="w-[14%]" />
+              <col className="w-[12%]" />
+              <col className="w-[9%]" />
+              <col className="w-[9%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
+              <col className="w-[10%]" />
+              <col className="w-[6%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-border bg-slate-50/50">
-                <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-[50px]">No</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pegawai</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Periode</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Gaji Pokok</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tunjangan</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Potongan</th>
-                <th className="text-right px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</th>
+                <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">No</th>
+                <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pegawai</th>
+                <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Jabatan</th>
+                <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Periode</th>
+                <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Gaji Pokok</th>
+                <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tunjangan</th>
+                <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Potongan</th>
+                <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total</th>
+                <th className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-muted-foreground">
+                  <td colSpan={10} className="py-8 text-center text-xs text-muted-foreground">
                     Memuat data...
                   </td>
                 </tr>
               )}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center">
+                  <td colSpan={10} className="py-8 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileText size={14} className="text-slate-300" />
                       <p className="text-xs text-muted-foreground">Tidak ada laporan payroll.</p>
@@ -265,52 +274,171 @@ export default function PayrollReportPage() {
                   key={r.id}
                   className="border-b border-border last:border-0 hover:bg-slate-50/70 transition-colors"
                 >
-                  <td className="px-5 py-4 text-xs font-medium text-foreground">
+                  <td className="px-2 py-4 text-xs font-medium text-foreground">
                     {idx + 1}
-                    <div className="text-[9px] text-muted-foreground font-normal mt-1">
-                      <Link to={`/payrolls/${r.id}`} className="text-blue-600 hover:underline">Lihat</Link>
-                    </div>
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-2 py-4">
                     <div className="text-xs font-medium text-foreground">{r.employee_name || "—"}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">{r.employee_code || "—"}</div>
                   </td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">
+                  <td className="break-words px-2 py-4 text-xs text-slate-700">
+                    {r.position_name || "Belum ditentukan"}
+                  </td>
+                  <td className="px-2 py-4 text-xs text-muted-foreground">
                     {r.periode ? new Date(r.periode).toLocaleString("id-ID", { month: "short", year: "numeric" }) : "—"}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-2 py-4">
                     <StatusBadge status={r.status} variant="text" />
                   </td>
-                  <td className="px-4 py-4 text-right text-xs font-medium text-slate-700">
+                  <td className="whitespace-nowrap px-2 py-4 text-right text-[11px] font-medium text-slate-700">
                     {fmtRp(r.gaji_pokok)}
                   </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="text-xs font-medium text-slate-700">{fmtRp(r.tunjangan)}</div>
-                    {r.allowances?.length > 0 && (
-                      <div className="text-[9px] text-muted-foreground mt-1">
-                        {r.allowances.map((a, i) => (
-                          <div key={i}>{a.allowance_type?.name}: {fmtRp(a.amount)}</div>
-                        ))}
-                      </div>
-                    )}
+                  <td className="whitespace-nowrap px-2 py-4 text-right text-[11px] font-medium text-slate-700">
+                    {fmtRp(r.tunjangan)}
                   </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="text-xs font-medium text-slate-700">{fmtRp(r.potongan)}</div>
-                    {r.deductions?.length > 0 && (
-                      <div className="text-[9px] text-muted-foreground mt-1">
-                        {r.deductions.map((d, i) => (
-                          <div key={i}>{d.deduction_label || 'Potongan'}: {fmtRp(d.amount)}</div>
-                        ))}
-                      </div>
-                    )}
+                  <td className="whitespace-nowrap px-2 py-4 text-right text-[11px] font-medium text-slate-700">
+                    {fmtRp(r.potongan)}
                   </td>
-                  <td className="px-5 py-4 text-right text-xs font-bold text-foreground">
+                  <td className="whitespace-nowrap px-2 py-4 text-right text-[11px] font-bold text-foreground">
                     {fmtRp(r.total)}
+                  </td>
+                  <td className="px-2 py-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setDetailRow(r)}
+                      className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      Detail
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <PayrollReportDetailModal
+        row={detailRow}
+        periodMonth={month}
+        onClose={() => setDetailRow(null)}
+      />
+    </div>
+  );
+}
+
+function detailFormula(item) {
+  const detail = item?.calculation_detail || {};
+  const units = detail.units ?? item?.mandays;
+  const rate = Number(item?.rate_amount || 0);
+
+  if (!units || !rate) return "";
+
+  const unitLabel = detail.calculation_type === "per_trip" ? "perjalanan" : "hari";
+  return `${Number(units).toLocaleString("id-ID")} ${unitLabel} × ${fmtRp(rate)}`;
+}
+
+function PayrollReportDetailModal({ row, periodMonth, onClose }) {
+  if (!row) return null;
+
+  const totalAllowances = Number(row.tunjangan || 0);
+  const totalDeductions = Number(row.potongan || 0);
+  const totalIncome = Number(row.gaji_pokok || 0) + totalAllowances;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm sm:p-6">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-white shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h3 className="text-lg font-bold text-slate-800">Detail Slip Gaji</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Tutup detail">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-y-auto p-5 sm:p-7">
+          <div className="grid grid-cols-1 gap-4 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <span className="mb-1 block text-slate-500">Karyawan</span>
+              <strong className="text-slate-800">{row.employee_name || "-"}</strong>
+              <div className="mt-1 text-xs text-slate-500">{row.employee_code || "-"}</div>
+            </div>
+            <div>
+              <span className="mb-1 block text-slate-500">Jabatan</span>
+              <strong className="text-slate-800">{row.position_name || "Belum ditentukan"}</strong>
+            </div>
+            <div>
+              <span className="mb-1 block text-slate-500">Periode</span>
+              <strong className="text-slate-800"><PeriodDisplay period={periodMonth} /></strong>
+              <div className="mt-1 text-xs text-slate-500">
+                {row.period_from && row.period_to
+                  ? `${new Date(row.period_from).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })} - ${new Date(row.period_to).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`
+                  : "Periode 28–27"}
+              </div>
+            </div>
+            <div>
+              <span className="mb-1 block text-slate-500">Status</span>
+              <StatusBadge status={row.status} variant="text" />
+            </div>
+          </div>
+
+          <section className="mt-6">
+            <h4 className="mb-3 border-b pb-2 font-semibold text-slate-800">Rincian Pendapatan</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-600">Gaji Pokok</span>
+                <span className="font-medium text-slate-800">{fmtRp(row.gaji_pokok)}</span>
+              </div>
+
+              {(row.allowances || []).map((allowance, index) => (
+                <div key={allowance.id || index} className="flex justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="break-words text-slate-600">
+                      {allowance.allowance_type?.name || allowance.allowance_type || "Tunjangan"}
+                    </div>
+                    {detailFormula(allowance) && (
+                      <div className="mt-0.5 text-xs text-slate-400">{detailFormula(allowance)}</div>
+                    )}
+                  </div>
+                  <span className="shrink-0 font-medium text-slate-800">{fmtRp(allowance.amount)}</span>
+                </div>
+              ))}
+
+              <div className="flex justify-between gap-4 border-t pt-2 font-semibold text-slate-800">
+                <span>Total Pendapatan</span>
+                <span>{fmtRp(totalIncome)}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-6">
+            <h4 className="mb-3 border-b pb-2 font-semibold text-slate-800">Rincian Potongan</h4>
+            <div className="space-y-2 text-sm">
+              {(row.deductions || []).length === 0 && (
+                <div className="italic text-slate-400">Belum ada potongan.</div>
+              )}
+              {(row.deductions || []).map((deduction, index) => (
+                <div key={deduction.id || index} className="flex justify-between gap-4 text-red-600">
+                  <span className="min-w-0 break-words">{deduction.deduction_label || "Potongan"}</span>
+                  <span className="shrink-0 font-medium">-{fmtRp(deduction.amount)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-4 border-t pt-2 font-semibold text-red-700">
+                <span>Total Potongan</span>
+                <span>-{fmtRp(totalDeductions)}</span>
+              </div>
+            </div>
+          </section>
+
+          <div className="mt-6 flex items-center justify-between rounded-lg bg-blue-50 p-4">
+            <span className="font-bold text-blue-900">Total Nett Diterima</span>
+            <span className="text-xl font-bold text-blue-700">{fmtRp(row.total)}</span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end border-t border-slate-100 bg-slate-50 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded border bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+            Tutup
+          </button>
         </div>
       </div>
     </div>
