@@ -134,8 +134,8 @@ export default function PayrollPreviewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white border border-border rounded-xl shadow-xl w-full max-w-4xl 2xl:max-w-5xl overflow-hidden flex flex-col max-h-[92vh] min-w-0">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-slate-950/50 backdrop-blur-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-4xl 2xl:max-w-5xl overflow-hidden flex flex-col max-h-[92vh] min-w-0">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
             Detail Slip Gaji

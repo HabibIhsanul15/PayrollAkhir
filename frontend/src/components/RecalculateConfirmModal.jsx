@@ -12,10 +12,10 @@ export default function RecalculateConfirmModal({ isOpen, onClose, message, onCo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="p-5 border-b">
-          <h2 className="text-lg font-bold text-red-600">Peringatan Recalculate</h2>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-lg font-semibold text-rose-600">Peringatan Recalculate</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">

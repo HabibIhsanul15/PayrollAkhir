@@ -1253,59 +1253,6 @@ class PayrollController extends Controller
         return "TRF-{$periodKey}-{$payrollId}";
     }
 
-    public function requestPayment(Request $request, Payroll $payroll)
-    {
-        $user = $request->user();
-        $this->ensureRole($user, ['fat']); // FAT saja
-
-        if ($payroll->status !== 'draft') {
-            return response()->json(['message' => 'Payroll tidak bisa di-request (status bukan draft).'], 422);
-        }
-
-        $payroll->update([
-            'status' => 'requested',
-            'requested_by' => $user->id,
-            'requested_at' => Carbon::now(),
-        ]);
-
-        $this->audit($request, 'PAYROLL_REQUEST_PAYMENT', $payroll, [
-            'from' => 'draft',
-            'to' => 'requested',
-        ]);
-
-        return response()->json([
-            'message' => 'Request pembayaran berhasil.',
-            'payroll' => $payroll->fresh(),
-        ]);
-    }
-
-    public function approvePayment(Request $request, Payroll $payroll)
-    {
-        $user = $request->user();
-        $this->ensureRole($user, ['director']); // Director saja
-
-        if ($payroll->status !== 'requested') {
-            return response()->json(['message' => 'Payroll tidak bisa di-approve (status bukan requested).'], 422);
-        }
-
-        $payroll->update([
-            'status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => Carbon::now(),
-            'approval_note' => $request->input('approval_note'),
-        ]);
-
-        $this->audit($request, 'PAYROLL_APPROVE_PAYMENT', $payroll, [
-            'from' => 'requested',
-            'to' => 'approved',
-        ]);
-
-        return response()->json([
-            'message' => 'Approve berhasil.',
-            'payroll' => $payroll->fresh(),
-        ]);
-    }
-
     public function markPaid(Request $request, Payroll $payroll)
     {
         $user = $request->user();

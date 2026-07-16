@@ -31,11 +31,11 @@ export default function OverrideAllowanceModal({ isOpen, onClose, data, onSave, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="p-5 border-b flex justify-between items-center">
-          <h2 className="text-lg font-bold">Override Allowance</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-black">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-slate-900">Override Allowance</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors text-2xl leading-none">
             &times;
           </button>
         </div>

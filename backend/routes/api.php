@@ -72,7 +72,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->only(['index', 'store', 'update', 'destroy']);
 
     // Legacy workflow actions kept only where they do not conflict with the current payroll flow.
-    Route::post('/payrolls/{payroll}/request-approval', [PayrollController::class, 'requestPayment']);
     Route::post('/payrolls/{payroll}/reject', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'reject']);
     Route::post('/payrolls/{payroll}/mark-paid', [PayrollController::class, 'markPaid']);
 
@@ -121,14 +120,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/mutation-requests/{id}/approve', [\App\Http\Controllers\Api\MutationRequestController::class, 'approve']);
     Route::post('/mutation-requests/{id}/reject', [\App\Http\Controllers\Api\MutationRequestController::class, 'reject']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN USERS (kalau masih dipakai)
-    |--------------------------------------------------------------------------
-    | Catatan: kalau create account sudah via /employees/{employee}/create-user,
-    | route ini bisa kamu hapus nanti biar nggak dobel.
-    */
-    Route::post('/admin/users', [AdminUserController::class, 'store']);
 
     /*
     |--------------------------------------------------------------------------
@@ -149,8 +140,6 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::prefix('master')->group(function () {
         Route::apiResource('positions', PositionController::class);
-        Route::get('employment-types', [EmploymentTypeController::class, 'index']);
-        Route::get('work-bases', [WorkBasisController::class, 'index']);
         Route::apiResource('allowance-types', AllowanceTypeController::class);
         Route::apiResource('position-allowance-rates', PositionAllowanceRateController::class);
     });
