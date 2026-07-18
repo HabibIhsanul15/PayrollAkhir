@@ -33,46 +33,30 @@ export default function MyProfilePage() {
   const role = authUser?.role || "";
   const isStaff = role === "staff" || role === "employee";
 
-  // ===== ACCOUNT (ALL ROLES) =====
-  const [accSaving, setAccSaving] = useState(false);
-  const [accErr, setAccErr] = useState("");
-  const [accOk, setAccOk] = useState("");
-
   const [account, setAccount] = useState({
     name: authUser?.name || "",
     email: authUser?.email || "",
     role: role || "",
   });
-  const [accountInitial, setAccountInitial] = useState(null);
-  const [accEditing, setAccEditing] = useState(false);
 
-  const accDirty = useMemo(() => {
-    if (!accountInitial) return false;
-    return accountInitial.name !== account.name;
-  }, [account, accountInitial]);
+  const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
+  const [empInitialForm, setEmpInitialForm] = useState(null);
+  const [isEditingEmp, setIsEditingEmp] = useState(false);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [empErr, setEmpErr] = useState("");
+  const [empOk, setEmpOk] = useState("");
 
-  // ===== PASSWORD (ALL ROLES) =====
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwErr, setPwErr] = useState("");
-  const [pwOk, setPwOk] = useState("");
-
-  // ✅ FIX: field sesuai backend Laravel (password + password_confirmation)
   const [pwForm, setPwForm] = useState({
     current_password: "",
     password: "",
     password_confirmation: "",
   });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwErr, setPwErr] = useState("");
+  const [pwOk, setPwOk] = useState("");
 
-  // ===== EMPLOYEE PROFILE (STAFF ONLY) =====
-  const [empSaving, setEmpSaving] = useState(false);
-  const [empErr, setEmpErr] = useState("");
-  const [empOk, setEmpOk] = useState("");
-
-  const [isEditingEmp, setIsEditingEmp] = useState(false);
-  const [empInitialForm, setEmpInitialForm] = useState(null);
   const [staffHistoryTab, setStaffHistoryTab] = useState("profile");
 
-  const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
   const [meta, setMeta] = useState(EMPTY_META);
 
   const empDirty = useMemo(() => {
@@ -94,11 +78,6 @@ export default function MyProfilePage() {
         role: rawMe.role || "",
       };
       setAccount(mapped);
-      setAccountInitial({ ...mapped });
-      updateAuthUser({ name: mapped.name, email: mapped.email, role: mapped.role });
-    }
-    if (errMe) {
-      setAccErr(errMe?.message || "Gagal memuat akun.");
     }
   }, [rawMe, errMe]);
 
@@ -129,49 +108,6 @@ export default function MyProfilePage() {
       setEmpErr(errEmp?.message || "Gagal memuat profil karyawan.");
     }
   }, [isStaff, rawEmp, errEmp]);
-
-  // ===== HANDLERS =====
-  const onChangeAccount = (k) => (e) => setAccount((p) => ({ ...p, [k]: e.target.value }));
-
-  const onSaveAccount = async () => {
-    if (!accEditing) return;
-
-    setAccErr("");
-    setAccOk("");
-
-    if (!accDirty) {
-      setAccEditing(false);
-      return;
-    }
-
-    setAccSaving(true);
-    try {
-      const res = await updateMe({ name: account.name });
-
-      const newName = res?.user?.name ?? res?.name ?? account.name;
-      const newEmail = res?.user?.email ?? res?.email ?? account.email;
-      const newRole = res?.user?.role ?? res?.role ?? account.role;
-
-      const mapped = { name: newName, email: newEmail, role: newRole };
-      setAccount(mapped);
-      setAccountInitial({ ...mapped });
-      setAccEditing(false);
-
-      updateAuthUser({ name: mapped.name, email: mapped.email, role: mapped.role });
-      setAccOk(res?.message || "Akun berhasil diperbarui.");
-    } catch (e) {
-      setAccErr(e?.message || "Gagal menyimpan akun.");
-    } finally {
-      setAccSaving(false);
-    }
-  };
-
-  const onCancelAccount = () => {
-    setAccErr("");
-    setAccOk("");
-    setAccEditing(false);
-    if (accountInitial) setAccount({ ...accountInitial });
-  };
 
   const onChangePw = (k) => (e) => setPwForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -271,43 +207,13 @@ export default function MyProfilePage() {
           <div>
             <div className="text-sm font-medium text-foreground">Account Settings</div>
             <div className="mt-1 text-sm text-slate-600">
-              {accEditing ? "Mode edit aktif. Ubah nama lalu simpan." : "Lihat info akun. Klik Edit untuk mengubah nama."}
+              Informasi akun Anda.
             </div>
           </div>
-
-          {!accEditing ? (
-            <Button
-              onClick={() => {
-                setAccErr("");
-                setAccOk("");
-                setAccEditing(true);
-              }}
-              className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              Edit
-            </Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onCancelAccount} disabled={accSaving} className="rounded font-extrabold">
-                Cancel
-              </Button>
-
-              <Button
-                onClick={onSaveAccount}
-                disabled={accSaving || !accDirty}
-                className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-              >
-                {accSaving ? "Menyimpan..." : "Simpan"}
-              </Button>
-            </div>
-          )}
         </div>
 
-        <AlertMessage type="error" message={accErr} className="mt-4" />
-        <AlertMessage type="success" message={accOk} className="mt-4" />
-
         <div className="mt-5 grid md:grid-cols-3 gap-5">
-          <Input label="Nama" value={account.name} onChange={onChangeAccount("name")} disabled={!accEditing} />
+          <Input label="Nama" value={account.name} disabled />
           <Input label="Email" value={account.email} disabled />
           <Input label="Role" value={account.role} disabled />
         </div>
@@ -340,6 +246,7 @@ export default function MyProfilePage() {
             value={pwForm.current_password}
             onChange={onChangePw("current_password")}
             placeholder="Password saat ini"
+            autoComplete="new-password"
           />
           <Input
             type="password"
@@ -347,6 +254,7 @@ export default function MyProfilePage() {
             value={pwForm.password}
             onChange={onChangePw("password")}
             placeholder="Minimal 8 karakter"
+            autoComplete="new-password"
           />
           <Input
             type="password"
@@ -354,6 +262,7 @@ export default function MyProfilePage() {
             value={pwForm.password_confirmation}
             onChange={onChangePw("password_confirmation")}
             placeholder="Ulangi password baru"
+            autoComplete="new-password"
           />
         </div>
       </div>
@@ -480,18 +389,46 @@ function Field({ label, value }) {
   );
 }
 
-function Input({ label, ...props }) {
+function Input({ label, type = "text", ...props }) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (show ? "text" : "password") : type;
+
   return (
     <div className="space-y-2">
       <div className="text-xs font-semibold text-slate-700">{label}</div>
-      <input
-        {...props}
-        className={[
-          "w-full rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition",
-          "focus:border-sky-300 focus:ring-4 focus:ring-sky-200/40",
-          props.disabled ? "opacity-70 cursor-not-allowed bg-slate-50" : "",
-        ].join(" ")}
-      />
+      <div className="relative">
+        <input
+          {...props}
+          type={inputType}
+          className={[
+            "w-full rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition",
+            "focus:border-sky-300 focus:ring-4 focus:ring-sky-200/40",
+            props.disabled ? "opacity-70 cursor-not-allowed bg-slate-50" : "",
+            isPassword ? "pr-10" : ""
+          ].join(" ")}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+            onClick={() => setShow(!show)}
+            tabIndex="-1"
+            title={show ? "Sembunyikan password" : "Lihat password"}
+          >
+            {show ? (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -116,6 +116,18 @@ export default function EmployeeEditPage() {
     setErr("");
     setSaving(true);
 
+    if (form.nik && form.nik.length !== 16) {
+      setErr("NIK harus berjumlah 16 digit angka.");
+      setSaving(false);
+      return;
+    }
+
+    if (form.npwp && (form.npwp.length < 15 || form.npwp.length > 16)) {
+      setErr("NPWP harus berjumlah 15-16 digit angka.");
+      setSaving(false);
+      return;
+    }
+
     try {
       await api(`/employees/${id}`, {
         method: "PUT",
@@ -272,17 +284,17 @@ export default function EmployeeEditPage() {
               <Input
                 label="NIK"
                 value={form.nik}
-                onChange={(value) => setDigitField("nik", value, 32)}
+                onChange={(value) => setDigitField("nik", value, 16)}
                 inputMode="numeric"
-                maxLength={32}
+                maxLength={16}
                 autoComplete="off"
               />
               <Input
                 label="NPWP"
                 value={form.npwp}
-                onChange={(value) => setDigitField("npwp", value, 32)}
+                onChange={(value) => setDigitField("npwp", value, 16)}
                 inputMode="numeric"
-                maxLength={32}
+                maxLength={16}
                 autoComplete="off"
               />
               <Input

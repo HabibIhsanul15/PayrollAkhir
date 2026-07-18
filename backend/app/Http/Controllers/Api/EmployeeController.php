@@ -56,7 +56,10 @@ class EmployeeController extends Controller
     {
         return [
             'nik.regex' => 'NIK hanya boleh berisi angka.',
+            'nik.digits' => 'NIK harus berjumlah 16 digit angka.',
             'npwp.regex' => 'NPWP hanya boleh berisi angka.',
+            'npwp.min' => 'NPWP minimal berjumlah 15 digit.',
+            'npwp.max' => 'NPWP maksimal berjumlah 16 digit.',
             'phone.regex' => 'Nomor telepon hanya boleh berisi angka.',
             'bank_account_number.regex' => 'Nomor rekening hanya boleh berisi angka.',
         ];
@@ -450,8 +453,8 @@ class EmployeeController extends Controller
             'join_date' => ['nullable', 'date'],
             'department' => ['nullable', 'string', 'max:255'],
 
-            'nik' => $this->digitStringRules(32),
-            'npwp' => $this->digitStringRules(32),
+            'nik' => ['nullable', 'string', 'digits:16'],
+            'npwp' => ['nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
             'phone' => $this->digitStringRules(20),
             'address' => ['nullable', 'string', 'max:500'],
 
@@ -759,8 +762,8 @@ class EmployeeController extends Controller
             'department' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
 
-            'nik' => $this->digitStringRules(32, true),
-            'npwp' => $this->digitStringRules(32, true),
+            'nik' => ['sometimes', 'nullable', 'string', 'digits:16'],
+            'npwp' => ['sometimes', 'nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
             'phone' => $this->digitStringRules(20, true),
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
 
@@ -777,6 +780,17 @@ class EmployeeController extends Controller
 
         // 🚨 HARD BLOCK: jangan pernah update employee_code
         unset($data['employee_code']);
+
+        $oldJoinDate = $employee->join_date;
+        $newJoinDate = array_key_exists('join_date', $data) ? $data['join_date'] : $oldJoinDate;
+
+        if ($newJoinDate !== $oldJoinDate) {
+            if ($employee->payrolls()->exists()) {
+                return response()->json([
+                    'message' => 'Tanggal masuk tidak bisa diubah karena karyawan sudah memiliki riwayat payroll.',
+                ], 422);
+            }
+        }
 
         $piiAlg = strtoupper((string) ($employee->pii_alg ?? 'AES'));
 
@@ -813,7 +827,7 @@ class EmployeeController extends Controller
             $data['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
         }
 
-        DB::transaction(function () use ($data, $employee, $piiAlg) {
+        DB::transaction(function () use ($data, $employee, $piiAlg, $oldJoinDate, $newJoinDate) {
             // Jika employee belum punya jabatan dan dikirim position_id baru (Penempatan Awal)
             if (empty($employee->position_id) && !empty($data['position_id'])) {
                 $Position = Position::findOrFail($data['position_id']);
@@ -857,6 +871,23 @@ class EmployeeController extends Controller
             }
 
             $employee->update($data);
+
+            // Sinkronisasi join_date ke profil dan riwayat pertama jika berubah
+            if ($newJoinDate !== $oldJoinDate) {
+                $firstProfile = $employee->salaryProfiles()->orderBy('id', 'asc')->first();
+                if ($firstProfile) {
+                    $firstProfile->update([
+                        'effective_from' => \Carbon\Carbon::parse($newJoinDate)->startOfDay()->toDateString(),
+                    ]);
+                }
+
+                $firstJob = $employee->jobHistories()->orderBy('id', 'asc')->first();
+                if ($firstJob) {
+                    $firstJob->update([
+                        'start_date' => \Carbon\Carbon::parse($newJoinDate)->startOfDay()->toDateString(),
+                    ]);
+                }
+            }
         });
 
         // sinkron nama user kalau employee punya akun

@@ -171,6 +171,13 @@ export default function EmployeeCreatePage() {
     if (!form.name.trim()) nextErrors.name = "Nama wajib diisi.";
     if (!form.position_id) nextErrors.position_id = "Jabatan wajib dipilih.";
 
+    if (form.nik && form.nik.length !== 16) {
+      nextErrors.nik = "NIK harus berjumlah 16 digit angka.";
+    }
+    if (form.npwp && (form.npwp.length < 15 || form.npwp.length > 16)) {
+      nextErrors.npwp = "NPWP harus berjumlah 15-16 digit angka.";
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
@@ -347,22 +354,22 @@ export default function EmployeeCreatePage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field
               label="NIK"
-              placeholder="Contoh: 3273xxxxxxxxxxxx"
+              placeholder="Contoh: 3171234567890001"
               value={form.nik}
-              onChange={(value) => setDigitField("nik", value, 32)}
+              onChange={(value) => setDigitField("nik", value, 16)}
               error={errors.nik}
               inputMode="numeric"
-              maxLength={32}
+              maxLength={16}
               autoComplete="off"
             />
             <Field
               label="NPWP"
-              placeholder="Contoh: 123456789012345"
+              placeholder="Contoh: 012345678912345"
               value={form.npwp}
-              onChange={(value) => setDigitField("npwp", value, 32)}
+              onChange={(value) => setDigitField("npwp", value, 16)}
               error={errors.npwp}
               inputMode="numeric"
-              maxLength={32}
+              maxLength={16}
               autoComplete="off"
             />
             <Field

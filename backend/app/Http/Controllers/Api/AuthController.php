@@ -31,6 +31,16 @@ class AuthController extends Controller
         // 🔗 ambil employee (kalau ada)
         $employee = Employee::where('user_id', $user->id)->first();
 
+        if ($employee) {
+            if ($employee->join_date && \Carbon\Carbon::parse($employee->join_date)->startOfDay()->isFuture()) {
+                $user->tokens()->delete();
+                Auth::logout();
+                return response()->json([
+                    'message' => 'Akun belum aktif (tanggal masuk belum terlewati).'
+                ], 403);
+            }
+        }
+
         /**
          * 🔒 RULE KEAMANAN
          * - Role 'staff' HARUS terhubung ke employee yang status-nya active
