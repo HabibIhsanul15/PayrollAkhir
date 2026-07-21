@@ -23,6 +23,8 @@ return new class extends Migration
             $table->text('notes')->nullable();
             
             $table->timestamps();
+
+            $table->index(['employee_id', 'start_date'], 'job_history_employee_start_index');
         });
     }
 

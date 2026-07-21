@@ -1,1 +1,0 @@
-<?php require __DIR__."/vendor/autoload.php"; $app = require_once __DIR__."/bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); $p = \App\Models\Payroll::first(); try { echo "AES: " . \App\Services\CryptoService::decryptAESGCM($p->total_allowances_enc); } catch (\Exception $e) { echo "AES FAILED: " . $e->getMessage(); }

@@ -33,7 +33,7 @@ return new class extends Migration {
             $table->date('effective_from')->default(now()); // mulai berlaku
             $table->timestamps();
 
-            $table->index(['employee_id','effective_from']);
+            $table->unique(['employee_id', 'effective_from'], 'salary_profile_employee_date_unique');
         });
     }
 

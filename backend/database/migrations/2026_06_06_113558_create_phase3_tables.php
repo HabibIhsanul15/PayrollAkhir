@@ -23,6 +23,7 @@ return new class extends Migration
             $table->decimal('training_days', 8, 2)->default(0);
             $table->decimal('overtime_hours', 8, 2)->default(0);
             $table->decimal('total_mandays', 8, 2)->default(0);
+            $table->unsignedInteger('late_count')->default(0);
             
             $table->boolean('is_finalized')->default(false);
             $table->foreignId('finalized_by')->nullable()->constrained('users')->nullOnDelete();
