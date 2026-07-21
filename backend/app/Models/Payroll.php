@@ -17,14 +17,10 @@ class Payroll extends Model
         'paid_by', 'paid_at',
         'approval_note',
 
-        // plaintext (kalau masih TRANSITION, kalau cipher-only biasanya null)
-        'gaji_pokok','tunjangan','potongan','total','catatan',
-
         // ciphertext
         'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc','catatan_enc',
         
         // breakdown fields
-        'total_allowances', 'total_deductions',
         'calculation_mode', 'calculated_at',
         'total_allowances_enc', 'total_deductions_enc',
         'engine_version', 'period_from', 'period_to',

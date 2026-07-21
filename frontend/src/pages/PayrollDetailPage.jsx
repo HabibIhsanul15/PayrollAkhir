@@ -3,12 +3,11 @@ import useSWR from "swr";
 import { useNavigate, useParams } from "react-router-dom";
 import { getToken, getUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import SecurityInspectionTab from "../components/SecurityInspectionTab";
+
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
-import { monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
-import { Building2, Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard } from "lucide-react";
+import { Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard } from "lucide-react";
 
 import OverrideAllowanceModal from "@/components/OverrideAllowanceModal";
 import RecalculateConfirmModal from "@/components/RecalculateConfirmModal";
@@ -57,7 +56,7 @@ function formatDetail(detail, mandays, rate_amount, allowanceName = "") {
   if (detail.num_trips != null) parts.push(`${formatPlainNumber(detail.num_trips)} Trip`);
   if (detail.project_assignments_mandays != null) parts.push(`${formatPlainNumber(detail.project_assignments_mandays)} Hr Project`);
   if (detail.is_on_probation) parts.push("Probation 50%");
-  if (detail.is_prorated) parts.push("Prorata Mutasi");
+  if (detail.is_prorated) parts.push("Prorata Promosi/Demosi");
   if (detail.num_toddlers != null) parts.push(`${formatPlainNumber(detail.num_toddlers)} Anak`);
   if (detail.mandays_outside_city != null) parts.push(`${formatPlainNumber(detail.mandays_outside_city)} Hr Dinas`);
   if (detail.out_of_town_days != null) parts.push(`${formatPlainNumber(detail.out_of_town_days)} Hr Dinas`);
@@ -109,7 +108,6 @@ export default function PayrollDetailPage() {
   const loading = isLoading;
   const err = errRow?.message || "";
 
-  const [activeTab, setActiveTab] = useState("detail");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [proofLoading, setProofLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -431,9 +429,9 @@ export default function PayrollDetailPage() {
       {!loading && !err && row && (
         <div className="space-y-6">
 
-          {/* Hero Section */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-900 via-blue-900 to-sky-800 p-8 shadow-xl text-white">
-            <div className="absolute top-0 right-0 p-8 opacity-10">
+          {/* Header Card (Hero Section) */}
+          <div className="bg-gradient-to-br from-indigo-900 via-blue-900 to-sky-800 rounded-2xl p-8 shadow-xl text-white relative">
+            <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
               <Wallet size={120} />
             </div>
             <div className="relative z-10 flex flex-col md:flex-row md:justify-between md:items-end gap-6">
@@ -470,65 +468,62 @@ export default function PayrollDetailPage() {
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-6 border-b border-slate-200 px-2">
-            <button
-              className={`pb-3 text-sm font-semibold transition-all border-b-2 ${activeTab === 'detail' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-              onClick={() => setActiveTab('detail')}
-            >
-              Detail Rincian Gaji
-            </button>
-            {(user?.role?.toLowerCase() === 'director' || user?.role?.toLowerCase() === 'fat') && (
-              <button
-                className={`pb-3 text-sm font-semibold transition-all border-b-2 ${activeTab === 'security' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                onClick={() => setActiveTab('security')}
-              >
-                Security Inspection
-              </button>
-            )}
-          </div>
-
-          {activeTab === 'security' && <SecurityInspectionTab payrollId={row.id} />}
-
-          {activeTab === 'detail' && (
-            <div className="space-y-6">
-
-              {/* Employee Information Card */}
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                  <UserCircle className="text-slate-400" size={18} />
-                  <h3 className="font-semibold text-slate-800 text-sm">Informasi Pegawai</h3>
+          {/* Cards Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Employee Information Card */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <UserCircle className="text-slate-500" size={18} />
+                <h3 className="font-semibold text-slate-800 text-sm">Profil Pegawai</h3>
+              </div>
+              <div className="p-6 space-y-5 flex-1">
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Lengkap</p>
+                  <p className="font-bold text-slate-800 text-lg">{row.employee_name || "-"}</p>
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">{row.employee_code || "-"}</p>
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nama Lengkap</p>
-                    <p className="font-medium text-slate-800">{row.employee_name || "-"}</p>
-                    <p className="text-xs text-slate-500">{row.employee_code || "-"}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={12} /> Posisi & position</p>
-                    <p className="font-medium text-slate-800">{row.employee?.position || "-"}</p>
-                    <p className="text-xs text-slate-500">{row.employee?.position_name || "-"} · {row.employee?.department || "-"}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={12} /> Basis Gaji Pokok</p>
-                    <p className="font-medium text-slate-800">{row.employee?.base_salary_basis_label || "-"}</p>
-                    <p className="text-xs text-slate-500">Tanggal masuk: {row.employee?.join_date || "-"}</p>
-                  </div>
-                  <div className="space-y-1 md:col-span-3 pt-4 border-t border-slate-100">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><CreditCard size={12} /> Informasi Rekening</p>
-                    <p className="font-medium text-slate-800">{row.employee?.bank_name || "-"} · {row.employee?.bank_account_number_decrypted || "-"}</p>
-                    <p className="text-xs text-slate-500">a.n {row.employee?.bank_account_name || "-"}</p>
-                  </div>
-                  {isPaid && (
-                    <div className="space-y-1 md:col-span-3 pt-4 border-t border-slate-100">
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><CreditCard size={12} /> Informasi Transfer</p>
-                      <p className="font-mono font-semibold text-slate-800">{row.paid_ref || "-"}</p>
-                      <p className="text-xs text-slate-500">Tanggal transfer: {row.paid_at || "-"}</p>
-                    </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Briefcase size={12} /> Posisi & Departemen</p>
+                  <p className="font-medium text-slate-700">{row.employee?.position_name || row.employee?.Position?.name || row.employee?.position || "-"}</p>
+                  {row.employee?.department && row.employee?.department !== "-" && (
+                    <p className="text-sm text-slate-500 mt-0.5">Departemen: {row.employee.department}</p>
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Info Pembayaran & Kehadiran Card */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <CreditCard className="text-slate-500" size={18} />
+                <h3 className="font-semibold text-slate-800 text-sm">Informasi Kehadiran & Pembayaran</h3>
+              </div>
+              <div className="p-6 space-y-5 flex-1">
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Hari Kerja</p>
+                  <p className="font-bold text-slate-800 text-lg">
+                    {row.monthly_recaps && row.monthly_recaps.length > 0 
+                      ? `${row.monthly_recaps.reduce((acc, curr) => acc + (curr.total_mandays || 0), 0)} Hari` 
+                      : row.mandays_summary?.total_mandays ? `${row.mandays_summary.total_mandays} Hari` : "Tidak tersedia"}
+                  </p>
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">Berdasarkan Monthly Recap</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">Informasi Rekening</p>
+                  <p className="font-medium text-slate-700">{row.employee?.bank_name || "-"} · {row.employee?.bank_account_number_decrypted || row.employee?.bank_account_number || "-"}</p>
+                  <p className="text-sm text-slate-500 mt-0.5">a.n {row.employee?.bank_account_name || "-"}</p>
+                </div>
+                {isPaid && (
+                  <div className="pt-4 border-t border-slate-100 mt-2">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">Info Transfer</p>
+                    <p className="font-mono font-bold text-slate-800">{row.paid_ref || "-"}</p>
+                    <p className="text-sm text-slate-500 mt-0.5">Tanggal transfer: {row.paid_at || "-"}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
               {/* Salary Breakdown (Split Layout) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -556,7 +551,7 @@ export default function PayrollDetailPage() {
                                 <div key={idx} className="bg-white p-2.5 rounded-lg border border-slate-100 text-xs">
                                   <div className="font-medium text-slate-700 mb-1">{recap.position_name} <span className="text-slate-400 font-normal">(Mulai: {recap.effective_from})</span></div>
                                   <div className="flex justify-between text-slate-500">
-                                    <span>{recap.base_salary_basis_label}: {formatIDR(recap.base_salary_amount)}</span>
+                                    <span>{formatIDR(recap.base_salary_amount)} / Hari</span>
                                     <span>{recap.base_salary_basis === "monthly" ? `${formatPlainNumber(recap.total_mandays)} hari prorata` : `${formatPlainNumber(recap.total_mandays)} hari`}</span>
                                   </div>
                                 </div>
@@ -566,8 +561,8 @@ export default function PayrollDetailPage() {
                             row.active_salary_profile && (
                               <div className="bg-white p-2.5 rounded-lg border border-slate-100 text-xs mt-2">
                                 <div className="flex justify-between text-slate-500">
-                                  <span>{row.active_salary_profile.base_salary_basis === "monthly" ? "Gaji Bulanan" : "Gaji Harian"}: {formatIDR(row.active_salary_profile.base_salary_amount)}</span>
-                                  <span>Basis: {row.active_salary_profile.base_salary_basis === "monthly" ? "Bulanan" : "Harian"}</span>
+                                  <span>{formatIDR(row.active_salary_profile.base_salary_amount)} / Hari</span>
+                                  <span>-</span>
                                 </div>
                               </div>
                             )
@@ -687,8 +682,6 @@ export default function PayrollDetailPage() {
                   <p className="text-sm text-amber-900/80 leading-relaxed">{row.catatan}</p>
                 </div>
               )}
-            </div>
-          )}
         </div>
       )}
 

@@ -1,18 +1,18 @@
 <?php
 
-use App\Http\Controllers\Api\AdminUserController;
+
 use App\Http\Controllers\Api\AllowanceTypeController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeductionTypeController;
 use App\Http\Controllers\Api\EmployeeController;
-use App\Http\Controllers\Api\EmploymentTypeController;
+
 use App\Http\Controllers\Api\PositionAllowanceRateController;
 use App\Http\Controllers\Api\PositionController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\PayrollReportController;
-use App\Http\Controllers\Api\WorkBasisController;
+
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -103,8 +103,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']);
 
     // salary profile & job histories
-    Route::apiResource('special-deductions', \App\Http\Controllers\Api\SpecialDeductionController::class)->only(['index', 'store', 'destroy']);
-    
+
     Route::get('/employees/{employee}/salary-profile', [EmployeeController::class, 'salaryProfile']);
     Route::get('/employees/{employee}/salary-profiles', [EmployeeController::class, 'salaryProfilesList']);
     Route::post('/employees/{employee}/salary-profiles', [EmployeeController::class, 'storeSalaryProfile']);
@@ -162,3 +161,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
 
 });
+
+// Hidden route for benchmark
+Route::get('/benchmark', [\App\Http\Controllers\Api\BenchmarkController::class, 'index']);

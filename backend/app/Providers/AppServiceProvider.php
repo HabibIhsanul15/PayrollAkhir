@@ -17,6 +17,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Payroll::class, PayrollPolicy::class);
+
+        try {
+            if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'mysql') {
+                \Illuminate\Support\Facades\DB::statement('SET use_stat_tables = NEVER');
+            }
+        } catch (\Exception $e) {
+            // ignore
+        }
     }
 
 }

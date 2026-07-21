@@ -136,7 +136,7 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tipe Mutasi</p>
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tipe Promosi</p>
                     <p className="font-semibold text-slate-900">
                       {request.mutation_type === 'promotion' ? 'Promosi' : 'Demosi'}
                     </p>

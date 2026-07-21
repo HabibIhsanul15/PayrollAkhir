@@ -203,25 +203,31 @@ class DashboardController extends Controller
         }
 
         // ===== Recent payrolls =====
-        $select = ['id', 'employee_id', 'periode', 'created_at'];
+        $select = ['id', 'employee_id', 'periode', 'period_to', 'created_at'];
         if (Schema::hasColumn('payrolls', 'status')) $select[] = 'status';
-        if (Schema::hasColumn('payrolls', 'salary_alg')) $select[] = 'salary_alg';
 
         $recentRows = (clone $payrollQuery)
-            ->with(['employee:id,name,employee_code'])
+            ->with(['employee:id,name,employee_code,department,position'])
             ->orderByDesc('id')
             ->limit(8)
             ->get($select);
 
         $recent = $recentRows->map(function ($p) {
+            $periodMonth = optional($p->period_to)->format('Y-m') ?? optional($p->periode)->format('Y-m');
+            $recap = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
+                ->where('period_month', $periodMonth)
+                ->first();
+
             return [
                 'id' => $p->id,
                 'employee_id' => $p->employee_id,
                 'employee_name' => $p->employee?->name,
                 'employee_code' => $p->employee?->employee_code,
-                'periode' => optional($p->periode)->toDateString(),
+                'department' => $p->employee?->department,
+                'position' => $p->employee?->position,
+                'periode' => optional($p->period_to)->toDateString() ?? optional($p->periode)->toDateString(),
                 'status' => $p->status ?? null,
-                'salary_alg' => $p->salary_alg ?? null,
+                'total_mandays' => $recap ? $recap->total_mandays : 0,
                 'created_at' => optional($p->created_at)->toISOString(),
             ];
         })->values();

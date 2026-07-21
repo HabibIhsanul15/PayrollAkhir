@@ -15,16 +15,10 @@ class Employee extends Model
         'position',
         'status',
 
-        // plaintext (transisi)
-        'nik',
-        'npwp',
-        'phone',
-        'address',
         'bank_name',
         'bank_account_name',
-        'bank_account_number',
 
-        // ciphertext
+        // data pribadi terenkripsi
         'nik_enc',
         'npwp_enc',
         'phone_enc',

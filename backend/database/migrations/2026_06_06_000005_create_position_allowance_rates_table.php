@@ -13,9 +13,6 @@ return new class extends Migration
             $table->foreignId('position_id')->constrained('positions')->cascadeOnDelete();
             $table->foreignId('allowance_type_id')->constrained('allowance_types')->cascadeOnDelete();
             $table->decimal('rate_amount', 14, 2)->nullable()->comment('Nominal per unit (per manday/trip/bulan). Null = tidak berlaku untuk jabatan ini');
-            $table->decimal('rate_multiplier', 8, 4)->nullable()->comment('Multiplier untuk formula, misal 1.5 untuk TRAINER');
-            $table->string('rate_formula', 200)->nullable()->comment('Deskripsi formula, misal: 1.5x mandays_rate');
-            $table->string('requires_condition', 100)->nullable()->comment('Kondisi tambahan, misal: num_toddlers>=3');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

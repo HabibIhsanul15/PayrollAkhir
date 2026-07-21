@@ -31,7 +31,7 @@ class CryptoService
     // =====================================================
     public static function salaryStorageMode(): string
     {
-        return strtoupper((string) config('crypto.salary_storage_mode', 'TRANSITION'));
+        return strtoupper((string) config('crypto.salary_storage_mode', 'CIPHER_ONLY'));
     }
 
     public static function writeAlg(): string
@@ -41,7 +41,7 @@ class CryptoService
 
     public static function readMode(): string
     {
-        return strtoupper((string) config('crypto.payroll_read_mode', 'TRANSITION'));
+        return strtoupper((string) config('crypto.payroll_read_mode', 'CIPHER_ONLY'));
     }
 
     // =====================================================
@@ -355,7 +355,11 @@ class CryptoService
         // Additive for new fields
         foreach (['total_allowances', 'total_deductions'] as $k) {
             if (!empty($row[$k . '_enc'])) {
-                $out[$k] = self::aesGcmDecryptWithKey($row[$k . '_enc'], $dek16);
+                try {
+                    $out[$k] = self::aesGcmDecryptWithKey($row[$k . '_enc'], $dek16);
+                } catch (\Exception $e) {
+                    $out[$k] = null;
+                }
             } else {
                 $out[$k] = null;
             }

@@ -11,10 +11,6 @@ class SpecialDeduction extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'amount' => 'float',
-    ];
-
     public function employee()
     {
         return $this->belongsTo(Employee::class);

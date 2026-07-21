@@ -559,7 +559,7 @@ export default function MonthlyRecapPage() {
                   {formRecaps.length > 1 && (
                     <div className="mb-2">
                       <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
-                        Segmen Mutasi: {(() => {
+                        Segmen Promosi/Demosi: {(() => {
                           const prof = employeeProfiles.find(p => String(p.id) === String(recap.salary_profile_id));
                           return prof ? `Mulai ${prof.effective_from} (Jabatan: ${prof.position_name})` : "Profil Tidak Ditemukan";
                         })()}

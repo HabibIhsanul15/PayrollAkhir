@@ -30,7 +30,9 @@ return new class extends Migration
             
             $table->timestamps();
 
-            $table->unique(['employee_id', 'period_month'], 'monthly_recap_emp_period_unique');
+            $table->foreignId('salary_profile_id')->nullable()->constrained('salary_profiles')->nullOnDelete();
+
+            $table->unique(['employee_id', 'period_month', 'salary_profile_id'], 'recap_emp_period_profile_unique');
         });
     }
 

@@ -19,6 +19,7 @@ function menuByRole(role) {
 
   // STAFF (default)
   const base = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/payrolls", label: "Payroll", icon: DollarSign },
     { to: "/my-profile", label: "Profil Saya", icon: User },
   ];
@@ -26,13 +27,10 @@ function menuByRole(role) {
   // FAT
   if (r === "fat") {
     return [
-      { to: "/dashboard", label: "Dasbor", icon: LayoutDashboard },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
       { to: "/master/positions", label: "Gaji Jabatan", icon: FolderOpen },
-      { to: "/master/allowance-types", label: "Jenis Tunjangan", icon: ClipboardList },
-      { to: "/master/deduction-types", label: "Jenis Potongan", icon: ClipboardList },
-      { to: "/master/position-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];
   }
@@ -40,7 +38,7 @@ function menuByRole(role) {
   // DIRECTOR
   if (r === "director") {
     return [
-      { to: "/dashboard", label: "Dasbor", icon: LayoutDashboard },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/employees", label: "Data Karyawan", icon: Users },
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
@@ -53,9 +51,12 @@ function menuByRole(role) {
   // HCGA
   if (r === "hcga") {
     return [
-      { to: "/dashboard", label: "Dasbor", icon: LayoutDashboard },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/employees", label: "Data Karyawan", icon: Users },
       { to: "/master/positions", label: "Jabatan", icon: FolderOpen },
+      { to: "/master/allowance-types", label: "Jenis Tunjangan", icon: ClipboardList },
+      { to: "/master/deduction-types", label: "Jenis Potongan", icon: ClipboardList },
+      { to: "/master/position-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
       { to: "/mutation-approvals", label: "Pengajuan Promosi", icon: Briefcase },
       { to: "/my-profile", label: "Profil Saya", icon: User },
@@ -216,7 +217,7 @@ export default function AppLayout() {
 
         {/* Content area */}
         <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-6xl mx-auto">
+          <div className="w-full h-full">
             <Outlet />
           </div>
         </main>

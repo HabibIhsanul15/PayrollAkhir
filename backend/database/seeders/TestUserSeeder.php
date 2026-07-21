@@ -23,7 +23,7 @@ class TestUserSeeder extends Seeder
         
         $staffPosition = Position::where('code', 'staff')->first();
         $managerPosition = Position::where('code', 'manager')->first();
-        $spvPosition = Position::where('code', 'spv')->first();
+        $spvPosition = Position::where('code', 'supervisor')->first();
         
         $projectEmployment = EmploymentType::where('code', 'project')->first();
         $officeEmployment = EmploymentType::where('code', 'office')->first();
@@ -94,13 +94,9 @@ class TestUserSeeder extends Seeder
                     [
                         'position_id' => $emp['Position']->id,
                         'position' => $emp['Position']->name,
-                        'position_allowance' => 0,
                         'position_allowance_enc' => CryptoService::encryptAESGCM('0'),
-                        'mandays_rate' => null,
-                        'mandays_rate_enc' => CryptoService::encryptAESGCM($emp['rate']),
-                        'allowance_fixed' => 0,
+                        'base_salary_amount_enc' => CryptoService::encryptAESGCM($emp['rate']),
                         'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
-                        'deduction_fixed' => 0,
                         'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
                         'salary_alg' => 'AES',
                         'salary_key_id' => CryptoService::keyId(),

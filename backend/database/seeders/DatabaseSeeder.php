@@ -22,6 +22,8 @@ class DatabaseSeeder extends Seeder
             AllowanceTypeSeeder::class,
             PositionAllowanceRateSeeder::class,
             TestUserSeeder::class,
+            DummyUserSeeder::class,
+            MutationRequestSeeder::class,
         ]);
     }
 }

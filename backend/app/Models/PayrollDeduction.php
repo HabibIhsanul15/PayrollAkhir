@@ -12,7 +12,6 @@ class PayrollDeduction extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'amount' => 'float',
         'calculation_detail' => 'array',
         'is_manual_override' => 'boolean',
     ];

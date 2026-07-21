@@ -30,8 +30,9 @@ function sortRows(rows) {
 
 export default function DeductionTypePage() {
   const user = getUser();
-  const isFinance = String(user?.role || "").toLowerCase() === "fat";
-  const { data, error, isLoading, mutate } = useSWR(isFinance ? "/master/deduction-types" : null);
+  const role = String(user?.role || "").toLowerCase();
+  const isHcga = role === "hcga";
+  const { data, error, isLoading, mutate } = useSWR(isHcga ? "/master/deduction-types" : null);
 
   const [rows, setRows] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -106,8 +107,10 @@ export default function DeductionTypePage() {
     }
   };
 
-  if (!isFinance) {
-    return <AlertMessage type="error" message="Halaman ini hanya dapat diakses oleh Finance." />;
+  if (!isHcga) {
+    return (
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
+    );
   }
 
   return (

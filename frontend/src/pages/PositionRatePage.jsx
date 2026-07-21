@@ -20,12 +20,12 @@ import {
 export default function PositionRatePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
-  const canManageCompensationMaster = role === "fat";
+  const isHcga = role === "hcga";
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: rawPositions, error: errPositions, isLoading: loadPositions } = useSWR(canManageCompensationMaster ? "/master/positions" : null);
-  const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(canManageCompensationMaster ? "/master/allowance-types" : null);
-  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(canManageCompensationMaster ? "/master/position-allowance-rates" : null);
+  const { data: rawPositions, error: errPositions, isLoading: loadPositions } = useSWR(isHcga ? "/master/positions" : null);
+  const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(isHcga ? "/master/allowance-types" : null);
+  const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(isHcga ? "/master/position-allowance-rates" : null);
 
   const { confirm } = useConfirm();
 
@@ -147,9 +147,9 @@ export default function PositionRatePage() {
     }
   };
 
-  if (!canManageCompensationMaster) {
+  if (!isHcga) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk Finance." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
     );
   }
 

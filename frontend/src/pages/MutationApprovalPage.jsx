@@ -32,13 +32,13 @@ export default function MutationApprovalPage() {
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-lg font-semibold text-foreground">
             {user?.role === 'hcga' ? 'Pengajuan Promosi' : 'Persetujuan Promosi'}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Daftar pengajuan promosi dan demosi karyawan.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Daftar pengajuan promosi dan demosi karyawan.</p>
         </div>
         {user?.role === 'hcga' && (
           <button

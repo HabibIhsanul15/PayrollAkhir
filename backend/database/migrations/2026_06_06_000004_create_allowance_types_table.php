@@ -12,7 +12,8 @@ return new class extends Migration
             $table->id();
             $table->string('code', 50)->unique();
             $table->string('name', 150);
-            $table->enum('calculation_type', ['per_mandays', 'per_trip', 'flat', 'formula']);
+            $table->enum('calculation_type', ['per_mandays', 'per_trip', 'flat', 'formula', 'per_hour']);
+            $table->string('input_source', 50)->nullable();
             $table->enum('applies_to', ['all', 'project_only', 'fix_rate_only'])->default('all');
             $table->unsignedTinyInteger('display_order')->default(0);
             $table->text('description')->nullable();

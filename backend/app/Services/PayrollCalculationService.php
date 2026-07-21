@@ -705,7 +705,6 @@ class PayrollCalculationService
         DB::beginTransaction();
         try {
             $allowance->update([
-                'amount' => null,
                 'amount_enc' => CryptoService::encryptAESGCM((string) round($amount)),
                 'salary_alg' => 'AES',
                 'salary_key_id' => CryptoService::keyId(),
@@ -828,13 +827,6 @@ class PayrollCalculationService
     private function cipherAttributes(array $cipher): array
     {
         return [
-            'gaji_pokok' => null,
-            'tunjangan' => null,
-            'potongan' => null,
-            'total' => null,
-            'total_allowances' => null,
-            'total_deductions' => null,
-            'catatan' => null,
             ...$cipher['fields'],
             'dek_enc' => $cipher['dek_enc'],
             'enc_meta' => $cipher['enc_meta'],
@@ -851,7 +843,6 @@ class PayrollCalculationService
                 'allowance_type_id' => $allowance['allowance_type_id'],
                 'rate_amount' => $allowance['rate_amount'],
                 'mandays' => $allowance['mandays'],
-                'amount' => null,
                 'amount_enc' => CryptoService::encryptAESGCM((string) round($allowance['amount'])),
                 'calculation_detail' => $allowance['calculation_detail'],
                 'salary_alg' => 'AES',
@@ -863,11 +854,10 @@ class PayrollCalculationService
     private function createDeductionRows(Payroll $payroll, array $deductions): void
     {
         foreach ($deductions as $deduction) {
-            \App\Models\PayrollDeduction::create([
+            PayrollDeduction::create([
                 'payroll_id' => $payroll->id,
                 'deduction_type' => $deduction['deduction_type'],
                 'deduction_label' => $deduction['deduction_label'],
-                'amount' => null,
                 'amount_enc' => CryptoService::encryptAESGCM((string) round($deduction['amount'])),
                 'calculation_detail' => $deduction['calculation_detail'],
                 'salary_alg' => 'AES',

@@ -90,21 +90,7 @@ class EmployeeController extends Controller
 
         $amount = $profile->base_salary_amount_enc
             ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $alg)
-            : null;
-
-        if ($amount === null || $amount === '') {
-            if ($profile->base_salary_amount !== null) {
-                $amount = (string) $profile->base_salary_amount;
-            } elseif ($profile->mandays_rate_enc) {
-                $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $alg);
-            } elseif ($profile->mandays_rate !== null) {
-                $amount = (string) $profile->mandays_rate;
-            } elseif ($Position?->default_base_salary_amount !== null) {
-                $amount = (string) $Position->default_base_salary_amount;
-            } elseif ($Position?->default_mandays_rate !== null) {
-                $amount = (string) $Position->default_mandays_rate;
-            }
-        }
+            : (string) ($Position?->default_base_salary_amount ?? $Position?->default_mandays_rate ?? 0);
 
         $basis = $profile->base_salary_basis
             ?? $Position?->base_salary_basis
@@ -265,10 +251,10 @@ class EmployeeController extends Controller
 
         if ($canSeePII) {
             $base += [
-                'nik' => CryptoService::readEncryptedOrPlain($employee->nik_enc, $employee->nik, $alg),
-                'npwp' => CryptoService::readEncryptedOrPlain($employee->npwp_enc, $employee->npwp, $alg),
-                'phone' => CryptoService::readEncryptedOrPlain($employee->phone_enc, $employee->phone, $alg),
-                'address' => CryptoService::readEncryptedOrPlain($employee->address_enc, $employee->address, $alg),
+                'nik' => CryptoService::readEncryptedOrPlain($employee->nik_enc, null, $alg),
+                'npwp' => CryptoService::readEncryptedOrPlain($employee->npwp_enc, null, $alg),
+                'phone' => CryptoService::readEncryptedOrPlain($employee->phone_enc, null, $alg),
+                'address' => CryptoService::readEncryptedOrPlain($employee->address_enc, null, $alg),
             ];
         }
 
@@ -278,7 +264,7 @@ class EmployeeController extends Controller
                 'bank_account_name' => $employee->bank_account_name,
                 'bank_account_number' => CryptoService::readEncryptedOrPlain(
                     $employee->bank_account_number_enc,
-                    $employee->bank_account_number,
+                    null,
                     $alg
                 ),
             ];
@@ -471,11 +457,6 @@ class EmployeeController extends Controller
             'is_trainer' => ['nullable', 'boolean'],
             'is_on_probation' => ['nullable', 'boolean'],
 
-            'position_allowance' => ['nullable', 'numeric', 'min:0'],
-            'base_salary_basis' => ['nullable', Rule::in(['daily', 'monthly'])],
-            'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
-            'mandays_rate' => ['nullable', 'numeric', 'min:0'],
-
             // Create account fields
             'create_account' => ['nullable', 'boolean'],
             'email' => ['nullable', 'required_if:create_account,true', 'email', 'max:255', 'unique:users,email'],
@@ -488,9 +469,7 @@ class EmployeeController extends Controller
             $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
             $effectiveFrom = $data['join_date'] ?? now()->startOfMonth()->toDateString();
             $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
-            $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
-                ? (float) $data['position_allowance']
-                : (float) ($positionRate?->rate_amount ?? 0);
+            $base = (float) ($positionRate?->rate_amount ?? 0);
             $baseSalaryAmount = $salaryConfig['amount'];
 
             $userId = null;
@@ -527,9 +506,7 @@ class EmployeeController extends Controller
             $employeeData['pii_alg'] = $piiAlg;
             $employeeData['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
 
-            foreach (['nik', 'npwp', 'phone', 'address', 'bank_account_number'] as $plainField) {
-                $employeeData[$plainField] = null;
-            }
+            unset($employeeData['nik'], $employeeData['npwp'], $employeeData['phone'], $employeeData['address'], $employeeData['bank_account_number']);
 
             $employee = Employee::create($employeeData);
             $salaryAlg = 'AES';
@@ -538,15 +515,9 @@ class EmployeeController extends Controller
                 'position_id' => $Position->id,
                 'position' => $Position->name,
                 'base_salary_basis' => $salaryConfig['basis'],
-                'base_salary_amount' => 0,
-                'position_allowance' => 0,
                 'base_salary_amount_enc' => CryptoService::encryptAESGCM((string) $baseSalaryAmount),
-                'mandays_rate' => null,
-                'allowance_fixed' => 0,
-                'deduction_fixed' => 0,
                 'effective_from' => $effectiveFrom,
                 'position_allowance_enc' => CryptoService::encryptAESGCM((string) $base),
-                'mandays_rate_enc' => CryptoService::encryptAESGCM((string) $baseSalaryAmount),
                 'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
                 'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
                 'salary_alg' => $salaryAlg,
@@ -689,14 +660,6 @@ class EmployeeController extends Controller
                     'position_id' => $Position->id,
                     'position' => $Position->name,
                     'base_salary_basis' => $salaryConfig['basis'],
-                    'base_salary_amount' => 0,
-                    'position_allowance' => 0,
-                    'allowance_fixed' => 0,
-                    'deduction_fixed' => 0,
-                    'daily_rate' => null,
-                    'overtime_rate_per_hour' => null,
-                    'late_penalty_per_minute' => null,
-                    'mandays_rate' => null,
                     'base_salary_amount_enc' => $encrypt((string) $baseSalaryAmount),
                     'position_allowance_enc' => $encrypt((string) $base),
                     'allowance_fixed_enc' => $encrypt((string) $allow),
@@ -704,7 +667,6 @@ class EmployeeController extends Controller
                     'daily_rate_enc' => $daily !== null ? $encrypt((string) $daily) : null,
                     'overtime_rate_per_hour_enc' => $overtime !== null ? $encrypt((string) $overtime) : null,
                     'late_penalty_per_minute_enc' => $latePenalty !== null ? $encrypt((string) $latePenalty) : null,
-                    'mandays_rate_enc' => $encrypt((string) $baseSalaryAmount),
                     'salary_alg' => $alg,
                     'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
                 ]
@@ -802,25 +764,25 @@ class EmployeeController extends Controller
 
         if (array_key_exists('nik', $data)) {
             $data['nik_enc'] = ! empty($data['nik']) ? $encPII((string) $data['nik']) : null;
-            $data['nik'] = null;
+            unset($data['nik']);
         }
         if (array_key_exists('npwp', $data)) {
             $data['npwp_enc'] = ! empty($data['npwp']) ? $encPII((string) $data['npwp']) : null;
-            $data['npwp'] = null;
+            unset($data['npwp']);
         }
         if (array_key_exists('phone', $data)) {
             $data['phone_enc'] = ! empty($data['phone']) ? $encPII((string) $data['phone']) : null;
-            $data['phone'] = null;
+            unset($data['phone']);
         }
         if (array_key_exists('address', $data)) {
             $data['address_enc'] = ! empty($data['address']) ? $encPII((string) $data['address']) : null;
-            $data['address'] = null;
+            unset($data['address']);
         }
         if (array_key_exists('bank_account_number', $data)) {
             $data['bank_account_number_enc'] = ! empty($data['bank_account_number'])
                 ? $encPII((string) $data['bank_account_number'])
                 : null;
-            $data['bank_account_number'] = null;
+            unset($data['bank_account_number']);
         }
 
         if (collect(['nik_enc', 'npwp_enc', 'phone_enc', 'address_enc', 'bank_account_number_enc'])->contains(fn ($field) => array_key_exists($field, $data))) {
@@ -847,10 +809,6 @@ class EmployeeController extends Controller
                     'position_id' => $Position->id,
                     'position' => $Position->name,
                     'base_salary_basis' => $salaryConfig['basis'],
-                    'base_salary_amount' => 0,
-                    'position_allowance' => 0,
-                    'allowance_fixed' => 0,
-                    'deduction_fixed' => 0,
                     'base_salary_amount_enc' => $encryptPii((string) $baseSalaryAmount),
                     'position_allowance_enc' => $encryptPii((string) $base),
                     'salary_alg' => $piiAlg,

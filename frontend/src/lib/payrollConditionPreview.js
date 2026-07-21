@@ -62,7 +62,7 @@ export function getAllowanceConditionStatus(allowanceType, form) {
   if (field === "is_on_probation") {
     return {
       eligible: false,
-      helperText: "Diatur lewat flow promosi atau mutasi.",
+      helperText: "Diatur lewat flow promosi atau demosi.",
     };
   }
 

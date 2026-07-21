@@ -386,7 +386,7 @@ class MutationRequestController extends Controller
     private function activeMutationMessage(MutationRequest $mutation): string
     {
         if ($mutation->status === 'pending') {
-            return 'Karyawan masih memiliki pengajuan mutasi aktif.';
+            return 'Karyawan masih memiliki pengajuan promosi/demosi aktif.';
         }
 
         return 'Pengajuan baru dapat dibuat setelah tanggal efektif '

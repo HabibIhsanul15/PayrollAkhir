@@ -12,16 +12,6 @@ class SalaryProfile extends Model
         'position',
         'base_salary_basis',
 
-        // plaintext (transisi)
-        'base_salary_amount',
-        'position_allowance',
-        'allowance_fixed',
-        'deduction_fixed',
-        'daily_rate',
-        'overtime_rate_per_hour',
-        'late_penalty_per_minute',
-        'mandays_rate',
-
         // ciphertext
         'base_salary_amount_enc',
         'position_allowance_enc',
@@ -42,7 +32,6 @@ class SalaryProfile extends Model
     protected $casts = [
         'effective_from' => 'date',
         'position_id' => 'integer',
-        'base_salary_amount' => 'float',
     ];
 
     public function employee()

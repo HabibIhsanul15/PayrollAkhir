@@ -76,15 +76,15 @@ class MeController extends Controller
 
         $alg = strtoupper((string) ($emp->pii_alg ?? 'AES'));
 
-        $emp->nik = CryptoService::readEncryptedOrPlain($emp->nik_enc, $emp->nik, $alg);
-        $emp->npwp = CryptoService::readEncryptedOrPlain($emp->npwp_enc, $emp->npwp, $alg);
+        $emp->nik = CryptoService::readEncryptedOrPlain($emp->nik_enc, null, $alg);
+        $emp->npwp = CryptoService::readEncryptedOrPlain($emp->npwp_enc, null, $alg);
         $emp->bank_account_number = CryptoService::readEncryptedOrPlain(
             $emp->bank_account_number_enc,
-            $emp->bank_account_number,
+            null,
             $alg
         );
-        $emp->phone = CryptoService::readEncryptedOrPlain($emp->phone_enc, $emp->phone, $alg);
-        $emp->address = CryptoService::readEncryptedOrPlain($emp->address_enc, $emp->address, $alg);
+        $emp->phone = CryptoService::readEncryptedOrPlain($emp->phone_enc, null, $alg);
+        $emp->address = CryptoService::readEncryptedOrPlain($emp->address_enc, null, $alg);
 
         unset(
             $emp->nik_enc,
@@ -139,20 +139,25 @@ class MeController extends Controller
 
         if (array_key_exists('nik', $data)) {
             $data['nik_enc'] = !empty($data['nik']) ? $encPII((string)$data['nik']) : null;
+            unset($data['nik']);
         }
         if (array_key_exists('npwp', $data)) {
             $data['npwp_enc'] = !empty($data['npwp']) ? $encPII((string)$data['npwp']) : null;
+            unset($data['npwp']);
         }
         if (array_key_exists('bank_account_number', $data)) {
             $data['bank_account_number_enc'] = !empty($data['bank_account_number'])
                 ? $encPII((string)$data['bank_account_number'])
                 : null;
+            unset($data['bank_account_number']);
         }
         if (array_key_exists('phone', $data)) {
             $data['phone_enc'] = !empty($data['phone']) ? $encPII((string)$data['phone']) : null;
+            unset($data['phone']);
         }
         if (array_key_exists('address', $data)) {
             $data['address_enc'] = !empty($data['address']) ? $encPII((string)$data['address']) : null;
+            unset($data['address']);
         }
 
         // metadata
@@ -167,15 +172,15 @@ class MeController extends Controller
 
         $fresh = $emp->fresh();
 
-        $fresh->nik = CryptoService::readEncryptedOrPlain($fresh->nik_enc, $fresh->nik, $piiAlg);
-        $fresh->npwp = CryptoService::readEncryptedOrPlain($fresh->npwp_enc, $fresh->npwp, $piiAlg);
+        $fresh->nik = CryptoService::readEncryptedOrPlain($fresh->nik_enc, null, $piiAlg);
+        $fresh->npwp = CryptoService::readEncryptedOrPlain($fresh->npwp_enc, null, $piiAlg);
         $fresh->bank_account_number = CryptoService::readEncryptedOrPlain(
             $fresh->bank_account_number_enc,
-            $fresh->bank_account_number,
+            null,
             $piiAlg
         );
-        $fresh->phone = CryptoService::readEncryptedOrPlain($fresh->phone_enc, $fresh->phone, $piiAlg);
-        $fresh->address = CryptoService::readEncryptedOrPlain($fresh->address_enc, $fresh->address, $piiAlg);
+        $fresh->phone = CryptoService::readEncryptedOrPlain($fresh->phone_enc, null, $piiAlg);
+        $fresh->address = CryptoService::readEncryptedOrPlain($fresh->address_enc, null, $piiAlg);
 
         unset(
             $fresh->nik_enc,

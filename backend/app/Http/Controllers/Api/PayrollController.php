@@ -1202,11 +1202,11 @@ class PayrollController extends Controller
             return false;
         }
 
-        if (($user->role ?? '') === 'fat') {
+        if (in_array(strtolower($user->role ?? ''), ['fat', 'director'])) {
             return true;
         }
 
-        if (($user->role ?? '') !== 'staff') {
+        if (strtolower($user->role ?? '') !== 'staff') {
             return false;
         }
 

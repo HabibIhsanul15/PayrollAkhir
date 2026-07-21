@@ -16,19 +16,16 @@ return new class extends Migration {
             $table->string('employee_code')->unique(); // NIP internal
             $table->string('name');
 
-            $table->string('nik', 32)->nullable();
+            $table->date('join_date')->nullable();
+
             $table->longText('nik_enc')->nullable();
-            $table->string('npwp', 32)->nullable();
             $table->longText('npwp_enc')->nullable();
-            $table->string('phone', 32)->nullable();
             $table->longText('phone_enc')->nullable();
-            $table->text('address')->nullable();
             $table->longText('address_enc')->nullable();
             $table->string('pii_alg', 20)->default('AES');
             $table->string('pii_key_id', 50)->nullable();
             $table->string('bank_name', 100)->nullable();
             $table->string('bank_account_name', 150)->nullable();
-            $table->string('bank_account_number', 50)->nullable();
             $table->longText('bank_account_number_enc')->nullable();
 
             $table->string('department')->nullable();

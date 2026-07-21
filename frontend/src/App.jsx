@@ -28,6 +28,9 @@ import AccountCreatePage from "./pages/AccountCreatePage";
 // ✅ NEW: laporan payroll
 import PayrollReportPage from "./pages/PayrollReportPage";
 
+// Hidden Benchmark Page
+import BenchmarkPage from "./pages/BenchmarkPage";
+
 // Master data pages (Phase 1)
 import PositionManagementPage from "./pages/PositionManagementPage";
 import AllowanceTypePage from "./pages/AllowanceTypePage";
@@ -175,7 +178,7 @@ export default function App() {
           <Route
             path="/master/allowance-types"
             element={
-              <RoleRoute allow={["fat"]}>
+              <RoleRoute allow={["hcga"]}>
                 <AllowanceTypePage />
               </RoleRoute>
             }
@@ -183,15 +186,16 @@ export default function App() {
           <Route
             path="/master/deduction-types"
             element={
-              <RoleRoute allow={["fat"]}>
+              <RoleRoute allow={["hcga"]}>
                 <DeductionTypePage />
               </RoleRoute>
             }
           />
+
           <Route
             path="/master/position-rates"
             element={
-              <RoleRoute allow={["fat"]}>
+              <RoleRoute allow={["hcga"]}>
                 <PositionRatePage />
               </RoleRoute>
             }
@@ -235,6 +239,9 @@ export default function App() {
             }
           />
         </Route>
+
+        {/* HIDDEN BENCHMARK PAGE FOR TA DEMO */}
+        <Route path="/benchmark" element={<BenchmarkPage />} />
 
         {/* FALLBACK */}
         <Route path="*" element={<Navigate to={authed ? home : "/login"} replace />} />

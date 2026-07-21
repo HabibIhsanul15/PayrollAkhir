@@ -33,15 +33,10 @@ return new class extends Migration
         $table->text('paid_note')->nullable();
         $table->text('approval_note')->nullable();
 
-        $table->decimal('gaji_pokok', 15, 2)->nullable();
         $table->longText('gaji_pokok_enc')->nullable();
-        $table->decimal('tunjangan', 15, 2)->nullable();
         $table->longText('tunjangan_enc')->nullable();
-        $table->decimal('potongan', 15, 2)->nullable();
         $table->longText('potongan_enc')->nullable();
         
-        $table->decimal('total_allowances', 15, 2)->nullable();
-        $table->decimal('total_deductions', 15, 2)->nullable();
         $table->text('total_allowances_enc')->nullable();
         $table->text('total_deductions_enc')->nullable();
 
@@ -49,16 +44,14 @@ return new class extends Migration
         $table->string('engine_version', 20)->nullable();
         $table->date('period_from')->nullable();
         $table->date('period_to')->nullable();
+
         $table->timestamp('calculated_at')->nullable();
 
-        $table->decimal('total', 15, 2)->nullable();
         $table->longText('total_enc')->nullable();
-        $table->text('catatan')->nullable();
         $table->longText('catatan_enc')->nullable();
 
         $table->string('salary_alg', 20)->default('AES');
         $table->string('salary_key_id', 50)->nullable();
-        $table->foreignId('rsa_key_id')->nullable()->constrained('crypto_keys')->nullOnDelete();
         $table->longText('dek_enc')->nullable();
         $table->longText('enc_meta')->nullable();
 

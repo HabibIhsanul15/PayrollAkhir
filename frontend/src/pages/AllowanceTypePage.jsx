@@ -87,12 +87,12 @@ function normalizeFormByCalculation(form, calculationType) {
 export default function AllowanceTypePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
-  const isFinance = role === "fat";
+  const isHcga = role === "hcga";
 
   const [success, setSuccess] = useState("");
   const [localErr, setErr] = useState("");
 
-  const { data, error, isLoading, mutate } = useSWR(isFinance ? "/master/allowance-types" : null);
+  const { data, error, isLoading, mutate } = useSWR(isHcga ? "/master/allowance-types" : null);
 
   const loading = isLoading;
   const err = localErr || error?.message;
@@ -212,9 +212,9 @@ export default function AllowanceTypePage() {
     }
   };
 
-  if (!isFinance) {
+  if (!isHcga) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk Finance." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
     );
   }
 

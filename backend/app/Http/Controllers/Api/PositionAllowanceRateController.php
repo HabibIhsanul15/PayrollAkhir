@@ -24,7 +24,7 @@ class PositionAllowanceRateController extends Controller
 
     public function index(Request $request)
     {
-        if (! $this->inRoles($request->user(), ['fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -43,7 +43,7 @@ class PositionAllowanceRateController extends Controller
 
     public function show(Request $request, PositionAllowanceRate $PositionAllowanceRate)
     {
-        if (! $this->inRoles($request->user(), ['fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -52,7 +52,7 @@ class PositionAllowanceRateController extends Controller
 
     public function store(Request $request)
     {
-        if (! $this->inRoles($request->user(), ['fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -79,7 +79,7 @@ class PositionAllowanceRateController extends Controller
 
     public function update(Request $request, PositionAllowanceRate $PositionAllowanceRate)
     {
-        if (! $this->inRoles($request->user(), ['fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -98,7 +98,7 @@ class PositionAllowanceRateController extends Controller
 
     public function destroy(Request $request, PositionAllowanceRate $PositionAllowanceRate)
     {
-        if (! $this->inRoles($request->user(), ['fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 

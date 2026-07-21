@@ -14,14 +14,17 @@ class DeductionTypeController extends Controller
         return response()->json(['message' => $message], 403);
     }
 
-    private function isFinance($user): bool
+    private function inRoles($user, array $roles): bool
     {
-        return strtolower((string) ($user->role ?? '')) === 'fat';
+        $role = strtolower((string) ($user->role ?? ''));
+        $roles = array_map(fn ($item) => strtolower((string) $item), $roles);
+
+        return in_array($role, $roles, true);
     }
 
     public function index(Request $request)
     {
-        if (! $this->isFinance($request->user())) {
+        if (! $this->inRoles($request->user(), ['hcga', 'fat'])) {
             return $this->forbid();
         }
 
@@ -35,7 +38,7 @@ class DeductionTypeController extends Controller
 
     public function store(Request $request)
     {
-        if (! $this->isFinance($request->user())) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -55,7 +58,7 @@ class DeductionTypeController extends Controller
 
     public function update(Request $request, DeductionType $deductionType)
     {
-        if (! $this->isFinance($request->user())) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
@@ -87,7 +90,7 @@ class DeductionTypeController extends Controller
 
     public function destroy(Request $request, DeductionType $deductionType)
     {
-        if (! $this->isFinance($request->user())) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 

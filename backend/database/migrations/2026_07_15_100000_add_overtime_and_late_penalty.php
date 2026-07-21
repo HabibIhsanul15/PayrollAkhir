@@ -9,17 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Add late penalty column to positions (if not exists)
-        if (!Schema::hasColumn('positions', 'default_late_penalty_amount')) {
-            Schema::table('positions', function (Blueprint $table) {
-                $table->decimal('default_late_penalty_amount', 14, 2)->nullable()->after('default_mandays_rate');
-            });
-        }
-
-        // 2. Expand calculation_type enum to include 'per_hour'
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE allowance_types MODIFY COLUMN calculation_type ENUM('per_mandays','per_trip','flat','formula','per_hour') NOT NULL");
-        }
+        // No schema alterations needed as they are merged into base migrations.
 
         // 3. Add AllowanceType for overtime
         if (DB::getDriverName() !== 'sqlite') {
@@ -41,12 +31,6 @@ return new class extends Migration
     {
         \App\Models\AllowanceType::where('code', 'overtime')->delete();
 
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE allowance_types MODIFY COLUMN calculation_type ENUM('per_mandays','per_trip','flat','formula') NOT NULL");
-        }
-
-        Schema::table('positions', function (Blueprint $table) {
-            $table->dropColumn('default_late_penalty_amount');
-        });
+        // Schema reversions handled by base migrations
     }
 };

@@ -239,7 +239,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">{editData ? "Edit Pengajuan Mutasi" : "Buat Pengajuan Mutasi"}</h3>
+            <h3 className="text-lg font-semibold text-slate-900">{editData ? "Edit Pengajuan Promosi/Demosi" : "Buat Pengajuan Promosi/Demosi"}</h3>
             <p className="text-sm text-slate-500 mt-1">Pilih karyawan yang ingin diajukan perubahan jabatannya.</p>
           </div>
           <button 
@@ -297,8 +297,8 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                 {activeMutation && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
                     {activeMutation.status === "pending"
-                      ? "Pengajuan mutasi masih aktif."
-                      : `Mutasi aktif sampai ${formatDate(activeMutation.effective_date)}.`}
+                      ? "Pengajuan promosi/demosi masih aktif."
+                      : `Promosi/demosi aktif sampai ${formatDate(activeMutation.effective_date)}.`}
                   </div>
                 )}
 
@@ -397,7 +397,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                     onChange={(e) => setForm(p => ({ ...p, document: e.target.files[0] }))}
                     className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                   />
-                  <p className="text-[10px] text-slate-500">Maks. 2MB (PDF, JPG, PNG). Surat/Memo Persetujuan Mutasi.</p>
+                  <p className="text-[10px] text-slate-500">Maks. 2MB (PDF, JPG, PNG). Surat/Memo Persetujuan Promosi/Demosi.</p>
                 </div>
               </>
             )}

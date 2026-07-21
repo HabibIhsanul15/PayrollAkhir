@@ -105,7 +105,6 @@ class SpecialDeductionController extends Controller
             'deduction_type_id' => $deductionType?->id,
             'type' => $deductionType?->code ?? $data['type'],
             'period_month' => $data['period_month'],
-            'amount' => null,
             'amount_enc' => CryptoService::encryptAESGCM((string) round($data['amount'])),
             'salary_alg' => 'AES',
             'salary_key_id' => CryptoService::keyId(),

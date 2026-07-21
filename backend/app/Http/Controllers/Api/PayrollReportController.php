@@ -105,8 +105,6 @@ class PayrollReportController extends Controller
                 'dek_enc','enc_meta',
 
                 // plain optional
-                'gaji_pokok','tunjangan','potongan','total',
-                'total_allowances','total_deductions',
                 'period_from','period_to',
 
                 // meta
@@ -179,6 +177,7 @@ class PayrollReportController extends Controller
                     $tot_ded = CryptoService::readEncryptedOrPlainSafe($p->total_deductions_enc, $p->total_deductions, $alg);
                 }
             } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Report Decrypt Error pada row ' . $p->id . ': ' . $e->getMessage());
                 // biarkan null -> jadi 0
             }
 

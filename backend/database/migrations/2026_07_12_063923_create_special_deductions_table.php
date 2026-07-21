@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->string('type', 50)->default('kasbon');
             $table->string('period_month', 7); // format: YYYY-MM
-            $table->decimal('amount', 15, 2)->nullable();
             $table->text('amount_enc')->nullable();
             $table->string('description')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
