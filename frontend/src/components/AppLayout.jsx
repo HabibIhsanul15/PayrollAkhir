@@ -21,7 +21,7 @@ function menuByRole(role) {
   const base = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/payrolls", label: "Payroll", icon: DollarSign },
-    { to: "/my-profile", label: "Profil Saya", icon: User },
+    { to: "/my-profile", label: "Profil & Riwayat", icon: User },
   ];
 
   // FAT
@@ -30,7 +30,7 @@ function menuByRole(role) {
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
-      { to: "/my-profile", label: "Profil Saya", icon: User },
+      { to: "/my-profile", label: "Ubah Password", icon: User },
     ];
   }
 
@@ -43,7 +43,7 @@ function menuByRole(role) {
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
       { to: "/mutation-approvals", label: "Persetujuan Promosi", icon: Briefcase },
-      { to: "/my-profile", label: "Profil Saya", icon: User },
+      { to: "/my-profile", label: "Ubah Password", icon: User },
     ];
   }
 
@@ -58,7 +58,7 @@ function menuByRole(role) {
       { to: "/master/position-rates", label: "Tarif Tunjangan Jabatan", icon: BarChart3 },
       { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
       { to: "/mutation-approvals", label: "Pengajuan Promosi", icon: Briefcase },
-      { to: "/my-profile", label: "Profil Saya", icon: User },
+      { to: "/my-profile", label: "Ubah Password", icon: User },
     ];
   }
 

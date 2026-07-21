@@ -194,10 +194,11 @@ export default function MyProfilePage() {
     <div className="space-y-4">
       {/* HEADER */}
       <div className="bg-white border border-border rounded shadow-sm p-4">
-        <h1 className="text-lg font-semibold text-foreground">My Profile</h1>
+        <h1 className="text-lg font-semibold text-foreground">
+          {isStaff ? "Profil & Riwayat" : "Keamanan Akun"}
+        </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Kelola informasi akun dan keamanan.{" "}
-          {isStaff ? "Data karyawan bisa diubah lewat Edit." : "Untuk admin, fokus di akun & password."}
+          {isStaff ? "Kelola informasi pribadi, riwayat karir, dan keamanan akun Anda." : "Kelola keamanan dan ubah password akun Anda."}
         </p>
       </div>
 
