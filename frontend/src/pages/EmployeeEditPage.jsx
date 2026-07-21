@@ -266,7 +266,7 @@ export default function EmployeeEditPage() {
 
               {selectedPosition ? (
                 <EmployeeNotice tone="info">
-                  Jabatan aktif: <b>{selectedPosition.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
+                  Jabatan aktif: <b>{selectedPosition.name}</b>.
                 </EmployeeNotice>
               ) : (
                 <EmployeeNotice>Data jabatan aktif belum terbaca.</EmployeeNotice>

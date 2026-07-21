@@ -337,7 +337,7 @@ export default function EmployeeCreatePage() {
 
             {selectedPosition ? (
               <EmployeeNotice tone="info">
-                Jabatan terpilih: <b>{selectedPosition.name}</b>. Nominal gaji pokok dan tunjangan jabatan dikelola oleh Finance pada master payroll.
+                Jabatan terpilih: <b>{selectedPosition.name}</b>.
               </EmployeeNotice>
             ) : (
               <EmployeeNotice>Pilih jabatan aktif yang akan menjadi acuan payroll pegawai.</EmployeeNotice>
