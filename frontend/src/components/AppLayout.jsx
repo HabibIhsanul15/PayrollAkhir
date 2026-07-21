@@ -30,7 +30,6 @@ function menuByRole(role) {
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/payrolls", label: "Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
-      { to: "/master/positions", label: "Gaji Jabatan", icon: FolderOpen },
       { to: "/my-profile", label: "Profil Saya", icon: User },
     ];
   }

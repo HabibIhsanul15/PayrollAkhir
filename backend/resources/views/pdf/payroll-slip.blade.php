@@ -109,11 +109,16 @@
         }
 
         $typeName = strtoupper($type ? $type->name : $al->allowance_type);
+        
+        $calculatedRate = 0;
+        if (!$hasSegments && $al->mandays > 0) {
+            $calculatedRate = $al->amount / $al->mandays;
+        }
 
         $incomes[] = [
             'name' => $typeName . $typeLabel,
             'mandays' => (!$hasSegments && $al->mandays > 0) ? $unit($al->mandays) : '-',
-            'rate' => (!$hasSegments && $al->rate_amount > 0) ? $rupiah($al->rate_amount) : '-',
+            'rate' => (!$hasSegments && $calculatedRate > 0) ? $rupiah($calculatedRate) : '-',
             'amount' => $al->amount,
             'is_subrow' => false
         ];
@@ -188,25 +193,25 @@
       <td style="width: 10%;">NIK</td>
       <td style="width: 2%;">:</td>
       <td style="width: 38%;" class="bold">{{ $emp?->employee_code ?? '-' }}</td>
-      <td style="width: 15%;">Grade</td>
+      <td style="width: 15%;">Level Jabatan</td>
       <td style="width: 2%;">:</td>
-      <td style="width: 33%;">{{ $emp?->grade?->name ?? '-' }}</td>
+      <td style="width: 33%;">{{ $emp?->position()->first()?->level ?? '-' }}</td>
     </tr>
     <tr>
       <td>Nama</td>
       <td>:</td>
       <td class="bold">{{ strtoupper($emp?->name ?? '-') }}</td>
-      <td>Golongan</td>
+      <td>Kode Sistem</td>
       <td>:</td>
-      <td>{{ $emp?->grade?->code ?? '0' }}</td>
+      <td>{{ strtoupper($emp?->position()->first()?->code ?? '-') }}</td>
     </tr>
     <tr>
       <td>Jabatan</td>
       <td>:</td>
       <td>{{ $emp?->position ?? '-' }}</td>
-      <td>Kategori</td>
+      <td>Keterangan</td>
       <td>:</td>
-      <td>{{ strtoupper($emp?->workBasis?->name ?? '-') }}</td>
+      <td>{{ $emp?->position()->first()?->description ?? '-' }}</td>
     </tr>
   </table>
 

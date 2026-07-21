@@ -15,17 +15,22 @@ class CryptoGenerateRsaKey extends Command
     {
         $name = $this->argument('name');
 
+        $config = ['config' => 'C:\xampp\php\extras\ssl\openssl.cnf'];
+        if (!file_exists('C:\xampp\php\extras\ssl\openssl.cnf')) {
+            $config['config'] = 'C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\extras\ssl\openssl.cnf';
+        }
+
         $res = openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
             'private_key_bits' => 2048,
-        ]);
+        ] + $config);
 
         if (!$res) {
             $this->error('openssl_pkey_new failed: ' . openssl_error_string());
             return self::FAILURE;
         }
 
-        openssl_pkey_export($res, $privatePem);
+        openssl_pkey_export($res, $privatePem, null, $config);
         $details = openssl_pkey_get_details($res);
         $publicPem = $details['key'] ?? null;
 

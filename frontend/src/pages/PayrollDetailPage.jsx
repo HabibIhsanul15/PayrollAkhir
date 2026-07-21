@@ -591,7 +591,7 @@ export default function PayrollDetailPage() {
                                     {al.is_manual_override && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">OVERRIDE</Badge>}
                                   </div>
                                   <span className="text-xs text-slate-500 mt-1">
-                                    {al.is_manual_override ? `Alasan: ${al.condition_notes || al.override_reason || '-'}` : formatDetail(al.calculation_detail, al.mandays, al.rate_amount, al.allowance_type?.name || al.allowance_type)}
+                                    {al.is_manual_override ? `Alasan: ${al.condition_notes || al.override_reason || '-'}` : formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">

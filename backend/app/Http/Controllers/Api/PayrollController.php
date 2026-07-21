@@ -28,7 +28,7 @@ class PayrollController extends Controller
         $query = Payroll::query()
             ->with([
                 'user:id,name',
-                'employee:id,user_id,employee_code,name,status,bank_name,bank_account_number,bank_account_number_enc,pii_alg',
+                'employee:id,user_id,employee_code,name,status,bank_name,bank_account_number_enc,pii_alg',
             ])
             ->orderByDesc('id');
 

@@ -13,10 +13,6 @@ class PositionController extends Controller
     {
         $data['base_salary_basis'] = 'daily';
 
-        if (array_key_exists('default_base_salary_amount', $data)) {
-            $data['default_mandays_rate'] = $data['default_base_salary_amount'];
-        }
-
         return $data;
     }
 
@@ -82,11 +78,9 @@ class PositionController extends Controller
     {
         $data = $Position->toArray();
 
-        if ($this->inRoles($user, ['hcga'])) {
+        if ($this->inRoles($user, ['fat'])) {
             unset(
-                $data['allowance_rates'],
                 $data['default_base_salary_amount'],
-                $data['default_mandays_rate'],
                 $data['default_late_penalty_amount']
             );
         }
@@ -144,13 +138,13 @@ class PositionController extends Controller
             'level' => ['required', 'integer', 'min:1'],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
+            'default_base_salary_amount' => ['sometimes', 'required', 'integer', 'min:0'],
+            'default_late_penalty_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
         $data['code'] = $this->uniqueCode($data['code'] ?? $this->makeCodeFromName($data['name']));
-        $data['base_salary_basis'] = 'daily';
-        $data['default_base_salary_amount'] = 0;
-        $data['default_mandays_rate'] = 0;
-        $data['default_late_penalty_amount'] = 0;
+        
+        $data = $this->normalizeBaseSalaryPayload($data);
         $Position = Position::create($data);
 
         return response()->json($this->positionPayloadFor($request->user(), $Position), 201);
@@ -158,48 +152,31 @@ class PositionController extends Controller
 
     public function update(Request $request, Position $Position)
     {
-        if (! $this->inRoles($request->user(), ['hcga', 'fat'])) {
+        if (! $this->inRoles($request->user(), ['hcga'])) {
             return $this->forbid();
         }
 
-        if ($this->inRoles($request->user(), ['hcga'])) {
-            $data = $request->validate([
-                'name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('positions', 'name')->ignore($Position->id)],
-                'code' => ['nullable', 'string', 'max:50'],
-                'level' => ['sometimes', 'required', 'integer', 'min:1'],
-                'description' => ['nullable', 'string'],
-                'is_active' => ['sometimes', 'required', 'boolean'],
-            ]);
-
-            if (array_key_exists('name', $data) || array_key_exists('code', $data)) {
-                $data['code'] = $this->uniqueCode(
-                    $data['code'] ?? $this->makeCodeFromName($data['name'] ?? $Position->name),
-                    $Position->id
-                );
-            }
-
-            $data['base_salary_basis'] = 'daily';
-            $Position->update($data);
-
-            return response()->json($this->positionPayloadFor($request->user(), $Position->fresh()));
-        }
-
-        $structureFields = ['name', 'code', 'level', 'description', 'is_active', 'base_salary_basis'];
-        foreach ($structureFields as $field) {
-            if ($request->exists($field)) {
-                return $this->forbid('Finance hanya boleh mengubah nominal gaji dan denda keterlambatan.');
-            }
-        }
-
         $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('positions', 'name')->ignore($Position->id)],
+            'code' => ['nullable', 'string', 'max:50'],
+            'level' => ['sometimes', 'required', 'integer', 'min:1'],
+            'description' => ['nullable', 'string'],
+            'is_active' => ['sometimes', 'required', 'boolean'],
             'default_base_salary_amount' => ['sometimes', 'required', 'integer', 'min:0'],
             'default_late_penalty_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
+        if (array_key_exists('name', $data) || array_key_exists('code', $data)) {
+            $data['code'] = $this->uniqueCode(
+                $data['code'] ?? $this->makeCodeFromName($data['name'] ?? $Position->name),
+                $Position->id
+            );
+        }
+
         $data = $this->normalizeBaseSalaryPayload($data);
         $Position->update($data);
 
-        return response()->json($Position->fresh());
+        return response()->json($this->positionPayloadFor($request->user(), $Position->fresh()));
     }
 
     public function destroy(Request $request, Position $Position)

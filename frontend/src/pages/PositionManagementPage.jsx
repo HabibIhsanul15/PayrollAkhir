@@ -170,39 +170,36 @@ export default function PositionManagementPage() {
     const salary = Number(form.default_base_salary_amount || 0);
     const penalty = Number(form.default_late_penalty_amount || 0);
 
-    if (isHCGA && !form.name.trim()) {
+    if (!form.name.trim()) {
       setErr("Nama jabatan wajib diisi.");
       return;
     }
-    if (isHCGA && duplicateName) {
+    if (duplicateName) {
       setErr("Nama jabatan sudah ada. Gunakan nama jabatan lain agar data payroll tidak ambigu.");
       return;
     }
-    if (isHCGA && (!Number.isInteger(level) || level < 1)) {
+    if (!Number.isInteger(level) || level < 1) {
       setErr("Level harus angka bulat minimal 1.");
       return;
     }
-    if (isFinance && (!Number.isInteger(salary) || salary < 0)) {
+    if (!Number.isInteger(salary) || salary < 0) {
       setErr("Nominal gaji pokok harian harus angka dan tidak boleh minus.");
       return;
     }
-    if (isFinance && (!Number.isFinite(penalty) || penalty < 0)) {
+    if (!Number.isFinite(penalty) || penalty < 0) {
       setErr("Nominal denda keterlambatan harus angka dan tidak boleh minus.");
       return;
     }
 
-    const payload = isFinance
-      ? {
-          default_base_salary_amount: salary,
-          default_late_penalty_amount: penalty,
-        }
-      : {
-          code: form.code || makeUniqueJobCode(form.name, rows, isEdit ? editId : null),
-          name: form.name.trim().replace(/\s+/g, " "),
-          level,
-          description: form.description || null,
-          is_active: form.is_active,
-        };
+    const payload = {
+      code: form.code || makeUniqueJobCode(form.name, rows, isEdit ? editId : null),
+      name: form.name.trim().replace(/\s+/g, " "),
+      level,
+      description: form.description || null,
+      is_active: form.is_active,
+      default_base_salary_amount: salary,
+      default_late_penalty_amount: penalty,
+    };
 
     try {
       if (isEdit) {
@@ -242,7 +239,7 @@ export default function PositionManagementPage() {
 
   if (!canAccessPage) {
     return (
-      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA dan Finance." />
+      <AlertMessage type="error" message="Forbidden: Anda tidak memiliki akses ke halaman ini. Halaman ini hanya untuk HCGA." />
     );
   }
 
@@ -268,7 +265,6 @@ export default function PositionManagementPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isFinance ? (
             <Button
               variant="outline"
               onClick={() => navigate("/master/position-rates")}
@@ -277,7 +273,6 @@ export default function PositionManagementPage() {
               <SlidersHorizontal size={13} />
               Tarif Tunjangan
             </Button>
-          ) : null}
           {isHCGA ? (
             <Button
               onClick={openAddModal}
@@ -305,12 +300,8 @@ export default function PositionManagementPage() {
               <TableRow className="bg-slate-50">
                 <TableHead className="pl-5 text-slate-700">Jabatan</TableHead>
                 <TableHead className="w-[120px] text-slate-700">Level</TableHead>
-                {isFinance ? (
-                  <>
-                    <TableHead className="w-[190px] text-slate-700">Gaji Pokok Harian</TableHead>
-                    <TableHead className="w-[170px] text-slate-700">Denda Terlambat</TableHead>
-                  </>
-                ) : null}
+                <TableHead className="w-[190px] text-slate-700">Gaji Pokok Harian</TableHead>
+                <TableHead className="w-[170px] text-slate-700">Denda Terlambat</TableHead>
                 <TableHead className="w-[110px] text-slate-700">Status</TableHead>
                 <TableHead className="w-[180px] pr-5 text-right text-slate-700">Aksi</TableHead>
               </TableRow>
@@ -319,7 +310,7 @@ export default function PositionManagementPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={isFinance ? 6 : 4} className="py-10 text-center text-slate-500">
+                  <TableCell colSpan={6} className="py-10 text-center text-slate-500">
                     Memuat data jabatan...
                   </TableCell>
                 </TableRow>
@@ -327,7 +318,7 @@ export default function PositionManagementPage() {
 
               {!isLoading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isFinance ? 6 : 4} className="py-10 text-center text-slate-500">
+                  <TableCell colSpan={6} className="py-10 text-center text-slate-500">
                     Belum ada jabatan yang terdaftar.
                   </TableCell>
                 </TableRow>
@@ -354,16 +345,12 @@ export default function PositionManagementPage() {
                         </Badge>
                       </TableCell>
 
-                      {isFinance ? (
-                        <>
-                          <TableCell className="py-4 font-semibold text-slate-900">
-                            {formatRupiah(row.default_base_salary_amount)}
-                          </TableCell>
-                          <TableCell className="py-4 font-semibold text-rose-600">
-                            {formatRupiah(row.default_late_penalty_amount)}
-                          </TableCell>
-                        </>
-                      ) : null}
+                      <TableCell className="py-4 font-semibold text-slate-900">
+                        {formatRupiah(row.default_base_salary_amount)}
+                      </TableCell>
+                      <TableCell className="py-4 font-semibold text-rose-600">
+                        {formatRupiah(row.default_late_penalty_amount)}
+                      </TableCell>
 
                       <TableCell className="py-4">
                         {row.is_active ? (
@@ -378,16 +365,16 @@ export default function PositionManagementPage() {
                       </TableCell>
 
                       <TableCell className="py-4 pr-5">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center gap-1 justify-end">
                           <Button
                             size="sm"
                             variant="outline"
                             className="rounded border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                             onClick={() => openEditModal(row)}
-                            title={isFinance ? "Atur gaji harian" : "Edit jabatan"}
+                            title="Edit jabatan"
                           >
                             <Edit3 size={13} />
-                            {isFinance ? "Atur Gaji" : "Edit"}
+                            Edit
                           </Button>
                           {isHCGA ? (
                             <Button
@@ -416,17 +403,14 @@ export default function PositionManagementPage() {
           <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded bg-white shadow-xl">
             <div className="border-b border-slate-200 px-5 py-4">
               <h2 className="text-base font-semibold text-slate-900">
-                {isFinance ? "Atur Gaji Harian" : isEdit ? "Edit Jabatan" : "Tambah Jabatan"}
+                {isEdit ? "Edit Jabatan" : "Tambah Jabatan"}
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                {isFinance
-                  ? "Finance hanya mengisi nominal gaji pokok harian. Struktur jabatan dikelola oleh HCGA."
-                  : "Kode sistem dibuat otomatis dari nama jabatan dan harus unik."}
+                Kode sistem dibuat otomatis dari nama jabatan dan harus unik.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto p-5">
-              {isHCGA ? (
                 <section className="space-y-4">
                   <SectionTitle title="Informasi Jabatan" description="Dipakai untuk struktur jabatan dan alur promosi/demosi." />
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -484,8 +468,8 @@ export default function PositionManagementPage() {
                     </Field>
                   </div>
                 </section>
-              ) : (
-                <section className="space-y-4">
+                
+                <section className="space-y-4 mt-6 pt-6 border-t border-slate-100">
                   <SectionTitle
                     title="Nominal Gaji Jabatan"
                     description="Nominal ini dipakai sebagai gaji pokok harian saat payroll dihitung."
@@ -518,7 +502,6 @@ export default function PositionManagementPage() {
                     />
                   </Field>
                 </section>
-              )}
 
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
                 <Button
@@ -531,10 +514,10 @@ export default function PositionManagementPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isHCGA && duplicateName}
+                  disabled={duplicateName}
                   className="rounded bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                 >
-                  {isFinance ? "Simpan Gaji" : "Simpan Jabatan"}
+                  Simpan Jabatan
                 </Button>
               </div>
             </form>

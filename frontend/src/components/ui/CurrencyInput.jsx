@@ -7,7 +7,10 @@ export function CurrencyInput({ value, onChange, placeholder, className, require
     if (value === null || value === undefined || value === "") {
       setDisplayValue("");
     } else {
-      const numStr = value.toString().replace(/[^0-9]/g, "");
+      // Split by dot to handle decimal values returned from database
+      const parts = value.toString().split(".");
+      const integerPart = parts[0];
+      const numStr = integerPart.replace(/[^0-9]/g, "");
       if (numStr) {
         setDisplayValue("Rp " + Number(numStr).toLocaleString("id-ID"));
       } else {

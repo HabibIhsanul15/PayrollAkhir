@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\MonthlyRecap;
 use App\Models\Payroll;
 use App\Models\PayrollAllowance;
+use App\Models\PayrollDeduction;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -841,7 +842,6 @@ class PayrollCalculationService
             PayrollAllowance::create([
                 'payroll_id' => $payroll->id,
                 'allowance_type_id' => $allowance['allowance_type_id'],
-                'rate_amount' => $allowance['rate_amount'],
                 'mandays' => $allowance['mandays'],
                 'amount_enc' => CryptoService::encryptAESGCM((string) round($allowance['amount'])),
                 'calculation_detail' => $allowance['calculation_detail'],
