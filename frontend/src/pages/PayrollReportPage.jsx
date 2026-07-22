@@ -95,17 +95,13 @@ export default function PayrollReportPage() {
   qs.set("month", month);
   qs.set("status", status || "all");
 
-  const { data, error, isLoading, mutate } = useSWR(`/reports/payroll?${qs.toString()}`);
+  const { data, error, isLoading } = useSWR(`/reports/payroll?${qs.toString()}`);
 
   const loading = isLoading;
   const err = error?.message;
 
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   const summary = data?.summary || {};
-
-  function load() {
-    mutate();
-  }
 
   const title = useMemo(() => {
     const roleLabel = role === "fat" ? "Finance Admin" : "Director";

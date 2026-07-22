@@ -51,49 +51,24 @@ function compareCondition(actual, expected, operator) {
 
 export function getAllowanceConditionStatus(allowanceType, form) {
   const field = allowanceType?.condition_field;
+  const operator = allowanceType?.condition_operator;
+  const expectedValue = allowanceType?.condition_value;
 
-  if (!field) {
+  if (!field || !operator || expectedValue === null || expectedValue === undefined || expectedValue === "") {
     return {
       eligible: true,
       helperText: "Tanpa syarat khusus.",
     };
   }
 
-  if (field === "is_on_probation") {
-    return {
-      eligible: false,
-      helperText: "Diatur lewat flow promosi atau demosi.",
-    };
-  }
-
-  const operator = allowanceType?.condition_operator || "=";
-  const expected = normalizeExpectedValue(field, allowanceType?.condition_value);
-  const actual = getActualValue(field, form);
-  const eligible = compareCondition(actual, expected, operator);
-
-  if (eligible) {
-    return {
-      eligible: true,
-      helperText: "Syarat terpenuhi.",
-    };
-  }
-
-  if (field === "num_toddlers") {
-    return {
-      eligible: false,
-      helperText: `Butuh jumlah balita ${operator} ${expected}.`,
-    };
-  }
-
-  if (field === "is_trainer") {
-    return {
-      eligible: false,
-      helperText: "Butuh flag trainer aktif.",
-    };
-  }
+  const actualValue = normalizeExpectedValue(field, getActualValue(field, form));
+  const normalizedExpectedValue = normalizeExpectedValue(field, expectedValue);
+  const eligible = compareCondition(actualValue, normalizedExpectedValue, operator);
 
   return {
-    eligible: false,
-    helperText: "Syarat belum terpenuhi.",
+    eligible,
+    helperText: eligible
+      ? "Syarat tunjangan terpenuhi."
+      : `Syarat ${field} ${operator} ${expectedValue} belum terpenuhi.`,
   };
 }

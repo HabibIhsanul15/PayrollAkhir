@@ -21,8 +21,6 @@ export default function PositionRatePage() {
   const user = getUser();
   const role = String(user?.role || "").toLowerCase();
   const isHcga = role === "hcga";
-  const today = new Date().toISOString().slice(0, 10);
-
   const { data: rawPositions, error: errPositions, isLoading: loadPositions } = useSWR(isHcga ? "/master/positions" : null);
   const { data: rawAllowances, error: errAllowances, isLoading: loadAllowances } = useSWR(isHcga ? "/master/allowance-types" : null);
   const { data: rawRates, error: errRates, isLoading: loadRates, mutate } = useSWR(isHcga ? "/master/position-allowance-rates" : null);

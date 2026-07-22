@@ -10,17 +10,12 @@ class SalaryProfile extends Model
         'employee_id',
         'position_id',
         'position',
-        'base_salary_basis',
 
         // ciphertext
         'base_salary_amount_enc',
         'position_allowance_enc',
         'allowance_fixed_enc',
         'deduction_fixed_enc',
-        'daily_rate_enc',
-        'overtime_rate_per_hour_enc',
-        'late_penalty_per_minute_enc',
-        'mandays_rate_enc',
 
         'effective_from',
 

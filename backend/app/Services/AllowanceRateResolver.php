@@ -10,15 +10,14 @@ class AllowanceRateResolver
 {
     public function resolveByCode(
         int $positionId,
-        string $allowanceCode,
-        ?string $employmentTypeCode = null
+        string $allowanceCode
     ): ?PositionAllowanceRate {
         $type = AllowanceType::query()
             ->where('code', $allowanceCode)
             ->where('is_active', true)
             ->first();
 
-        if (! $type || ! $this->appliesToEmploymentType($type, $employmentTypeCode)) {
+        if (! $type) {
             return null;
         }
 
@@ -35,10 +34,5 @@ class AllowanceRateResolver
             ->where('allowance_type_id', $allowanceTypeId)
             ->where('is_active', true)
             ->first();
-    }
-
-    public function appliesToEmploymentType(AllowanceType $type, ?string $employmentTypeCode): bool
-    {
-        return true;
     }
 }

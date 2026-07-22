@@ -154,25 +154,19 @@ export default function DeductionTypePage() {
             <TableHeader>
               <TableRow className="bg-slate-50/80">
                 <TableHead className="text-slate-700 pl-6 w-[300px]">Jenis Potongan</TableHead>
-                <TableHead className="text-slate-700 w-[220px]">Cara Input</TableHead>
                 <TableHead className="text-slate-700 w-[100px]">Status</TableHead>
                 <TableHead className="text-center text-slate-700 w-[160px] pr-6">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!isLoading && rows.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="py-10 text-center text-slate-500">Belum ada data.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={3} className="py-10 text-center text-slate-500">Belum ada data.</TableCell></TableRow>
               )}
               {rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="font-medium text-foreground py-4 pl-6">
                     <div className="font-semibold">{row.name}</div>
                     <div className="text-[11px] text-slate-500 font-normal">{row.description || "-"}</div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">
-                      Input manual
-                    </Badge>
                   </TableCell>
                   <TableCell className="py-4">
                     <Badge className={row.is_active

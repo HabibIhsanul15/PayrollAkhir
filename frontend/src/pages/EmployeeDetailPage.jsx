@@ -46,19 +46,6 @@ function roleLabel(role) {
   );
 }
 
-function formatCurrencyValue(num) {
-  if (!Number.isFinite(num) || num <= 0) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(num);
-}
-
 function formatBaseSalaryBasisValue(basis) {
   if (!basis) return "-";
   return basis === "monthly" ? "Bulanan" : "Harian";
@@ -73,7 +60,7 @@ export default function EmployeeDetailPage() {
   const isHCGA = role === "hcga";
   const isFAT = role === "fat";
 
-  const { data: rawEmp, error: errEmp, isLoading, mutate } = useSWR(`/employees/${id}`);
+  const { data: rawEmp, error: errEmp, isLoading } = useSWR(`/employees/${id}`);
 
   const emp = rawEmp;
   const err = errEmp?.message || "";
@@ -84,7 +71,6 @@ export default function EmployeeDetailPage() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [newPassword, setNewPassword] = useState("");
-  const [resetError, setResetError] = useState("");
 
   const isOwner =
     !!emp?.user_id &&
@@ -148,7 +134,6 @@ export default function EmployeeDetailPage() {
 
   const performResetPassword = async () => {
     setConfirmResetModalOpen(false);
-    setResetError("");
     setResetting(true);
     try {
       const res = await api(`/employees/${id}/reset-password`, { method: "POST" });
@@ -308,10 +293,18 @@ export default function EmployeeDetailPage() {
                 ) : null}
 
                 {!hasAccount && isHCGA ? (
-                  <div className="mt-4">
+                  <div className="mt-4 flex flex-col gap-3">
                     <EmployeeNotice>
                       Akun login bisa dibuat saat input pegawai baru atau melalui alur administrasi akun terpisah.
                     </EmployeeNotice>
+                    <div>
+                      <Button
+                        onClick={() => nav("/accounts/create")}
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Buat Akun Login Karyawan
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
               </EmployeeSectionCard>

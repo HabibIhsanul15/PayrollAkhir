@@ -12,20 +12,12 @@ return new class extends Migration {
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
             $table->string('position', 255)->nullable();
-            $table->string('base_salary_basis', 20)->nullable();
 
             // aturan dasar (nanti presensi tinggal tambah)
             $table->longText('base_salary_amount_enc')->nullable();
             $table->longText('position_allowance_enc')->nullable();
             $table->longText('allowance_fixed_enc')->nullable();
             $table->longText('deduction_fixed_enc')->nullable();
-
-            // buat pengembangan presensi
-            $table->longText('daily_rate_enc')->nullable();
-            $table->longText('overtime_rate_per_hour_enc')->nullable();
-            $table->longText('late_penalty_per_minute_enc')->nullable();
-            
-            $table->text('mandays_rate_enc')->nullable();
 
             $table->string('salary_alg', 20)->default('AES');
             $table->string('salary_key_id', 50)->nullable();

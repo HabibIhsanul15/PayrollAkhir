@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('code', 50)->unique();
             $table->string('name', 150);
-            $table->enum('calculation_type', ['per_mandays', 'per_trip', 'flat', 'formula', 'per_hour']);
+            $table->enum('calculation_type', ['per_mandays', 'per_trip', 'flat', 'formula', 'per_hour', 'per_toddler']);
             $table->string('input_source', 50)->nullable();
             $table->string('condition_field', 50)->nullable();
             $table->string('condition_operator', 10)->nullable();

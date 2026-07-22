@@ -35,7 +35,7 @@ class AllowanceCalculationService
             }
 
             $units = $this->units($employee, $recap, $type);
-            $amount = $this->amount($type, $rate, $units, $baseSalaryAmount, $segmentRatio);
+            $amount = $this->amount($employee, $type, $rate, $units, $baseSalaryAmount, $segmentRatio);
 
             if ($amount <= 0) {
                 continue;
@@ -57,6 +57,7 @@ class AllowanceCalculationService
     }
 
     private function amount(
+        Employee $employee,
         AllowanceType $type,
         PositionAllowanceRate $rate,
         float $units,
@@ -65,11 +66,14 @@ class AllowanceCalculationService
     ): float {
         $rateAmount = (float) ($rate->rate_amount ?? 0);
 
-        return match ($type->calculation_type) {
+        $baseAmount = match ($type->calculation_type) {
             'flat' => $rateAmount * $segmentRatio,
             'per_mandays', 'per_trip' => $rateAmount * $units,
+            'per_toddler' => $rateAmount * (float) ($employee->num_toddlers ?? 0) * $segmentRatio,
             default => 0.0,
         };
+
+        return $baseAmount;
     }
 
     private function units(Employee $employee, MonthlyRecap $recap, AllowanceType $type): float

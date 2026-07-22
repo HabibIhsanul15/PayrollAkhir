@@ -94,10 +94,7 @@ class EmployeeController extends Controller
 
         $basis = $profile->base_salary_basis
             ?? $Position?->base_salary_basis
-            ?? match ($employee->workBasis?->code) {
-                'monthly' => 'monthly',
-                default => 'daily',
-            };
+            ?? 'daily';
 
         return [
             'basis' => $basis ?: 'daily',
@@ -123,7 +120,6 @@ class EmployeeController extends Controller
 
         return $query->with([
             'position:id,code,name,is_active,level',
-            'employmentType:id,code,name',
             'salaryProfiles' => function ($profileQuery) {
                 $profileQuery
                     ->whereDate('effective_from', '<=', now()->toDateString())
@@ -139,8 +135,6 @@ class EmployeeController extends Controller
             'user_id',
             'position_id',
             'join_date',
-            'employment_type_id',
-            'work_basis_id',
         ])->map(function (Employee $employee) {
             $currentProfile = $employee->salaryProfiles->first();
             $currentPosition = $currentProfile?->getRelation('position') ?? $employee->position;
@@ -156,6 +150,8 @@ class EmployeeController extends Controller
                 'payroll_readiness' => $employee->payrollReadiness(),
             ];
         });
+
+        return response()->json($employees);
     }
 
     public function nextCode(Request $request)
@@ -224,14 +220,10 @@ class EmployeeController extends Controller
 
             // Phase 1 fields:
             'position_id' => $currentProfile?->position_id ?? $employee->position_id,
-            'employment_type_id' => $employee->employment_type_id,
-            'work_basis_id' => $employee->work_basis_id,
             'num_toddlers' => (int) $employee->num_toddlers,
             'is_trainer' => (bool) $employee->is_trainer,
             'is_on_probation' => (bool) $employee->is_on_probation,
             'Position' => $positionPayload,
-            'employment_type' => $employee->employmentType,
-            'work_basis' => $employee->workBasis,
             'salary_profile_summary' => $baseSalary ? [
                 'base_salary_basis' => $baseSalary['basis'],
                 'base_salary_amount' => $canSeePayrollNominal && $baseSalary['amount'] !== null
@@ -452,7 +444,6 @@ class EmployeeController extends Controller
 
             // Phase 1 fields:
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
-            'employment_type_id' => ['nullable', Rule::exists('employment_types', 'id')->where('is_active', true)],
             'num_toddlers' => ['nullable', 'integer', 'min:0'],
             'is_trainer' => ['nullable', 'boolean'],
             'is_on_probation' => ['nullable', 'boolean'],
@@ -514,7 +505,6 @@ class EmployeeController extends Controller
             $employee->salaryProfiles()->create([
                 'position_id' => $Position->id,
                 'position' => $Position->name,
-                'base_salary_basis' => $salaryConfig['basis'],
                 'base_salary_amount_enc' => CryptoService::encryptAESGCM((string) $baseSalaryAmount),
                 'effective_from' => $effectiveFrom,
                 'position_allowance_enc' => CryptoService::encryptAESGCM((string) $base),
@@ -536,7 +526,7 @@ class EmployeeController extends Controller
         });
 
         return response()->json([
-            'employee' => $employee->fresh(['Position', 'employmentType', 'workBasis', 'salaryProfiles']),
+            'employee' => $employee->fresh(['Position', 'salaryProfiles']),
         ], 201);
     }
 
@@ -659,14 +649,10 @@ class EmployeeController extends Controller
                 [
                     'position_id' => $Position->id,
                     'position' => $Position->name,
-                    'base_salary_basis' => $salaryConfig['basis'],
                     'base_salary_amount_enc' => $encrypt((string) $baseSalaryAmount),
                     'position_allowance_enc' => $encrypt((string) $base),
                     'allowance_fixed_enc' => $encrypt((string) $allow),
                     'deduction_fixed_enc' => $encrypt((string) $deduction),
-                    'daily_rate_enc' => $daily !== null ? $encrypt((string) $daily) : null,
-                    'overtime_rate_per_hour_enc' => $overtime !== null ? $encrypt((string) $overtime) : null,
-                    'late_penalty_per_minute_enc' => $latePenalty !== null ? $encrypt((string) $latePenalty) : null,
                     'salary_alg' => $alg,
                     'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
                 ]
@@ -733,7 +719,6 @@ class EmployeeController extends Controller
             'bank_account_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'bank_account_number' => $this->digitStringRules(50, true),
 
-            'employment_type_id' => ['sometimes', 'nullable', Rule::exists('employment_types', 'id')->where('is_active', true)],
             'num_toddlers' => ['sometimes', 'integer', 'min:0'],
             'is_trainer' => ['sometimes', 'boolean'],
             'is_on_probation' => ['sometimes', 'boolean'],
@@ -808,7 +793,6 @@ class EmployeeController extends Controller
                 $employee->salaryProfiles()->create([
                     'position_id' => $Position->id,
                     'position' => $Position->name,
-                    'base_salary_basis' => $salaryConfig['basis'],
                     'base_salary_amount_enc' => $encryptPii((string) $baseSalaryAmount),
                     'position_allowance_enc' => $encryptPii((string) $base),
                     'salary_alg' => $piiAlg,
@@ -857,7 +841,7 @@ class EmployeeController extends Controller
 
         return response()->json([
             'message' => 'Employee updated',
-            'employee' => $employee->fresh(['Position', 'employmentType', 'workBasis']),
+            'employee' => $employee->fresh(['Position']),
         ]);
     }
 

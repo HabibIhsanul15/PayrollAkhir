@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { formatRupiah } from "@/lib/utils";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 export default function OverrideAllowanceModal({ isOpen, onClose, data, onSave, isSaving }) {
   const [amount, setAmount] = useState("");

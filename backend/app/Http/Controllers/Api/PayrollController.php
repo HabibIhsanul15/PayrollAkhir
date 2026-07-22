@@ -169,8 +169,6 @@ class PayrollController extends Controller
             'user:id,name',
             'employee',
             'employee.Position',
-            'employee.employmentType',
-            'employee.workBasis',
             'allowances.allowanceType',
             'deductions',
         ]);
@@ -610,8 +608,6 @@ class PayrollController extends Controller
             'user:id,name',
             'employee',
             'employee.Position',
-            'employee.employmentType',
-            'employee.workBasis',
             'allowances.allowanceType',
             'deductions',
         ]);
@@ -1137,12 +1133,7 @@ class PayrollController extends Controller
         }
 
         $Position = $profile->Position ?? $employee?->Position;
-        $basis = $profile->base_salary_basis
-            ?? $Position?->base_salary_basis
-            ?? match ($employee?->workBasis?->code) {
-                'monthly' => 'monthly',
-                default => 'daily',
-            };
+        $basis = $Position?->base_salary_basis ?? 'daily';
 
         return [
             'basis' => $basis ?: 'daily',

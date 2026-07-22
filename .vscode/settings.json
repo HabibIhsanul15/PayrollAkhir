@@ -1,0 +1,18 @@
+{
+  "files.associations": {
+    "*.blade.php": "blade"
+  },
+  "[blade]": {
+    "css.validate": false
+  },
+  "intelephense.environment.includePaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/app",
+    "${workspaceFolder}/backend/app/Services"
+  ],
+  "intelephense.environment.documentRoot": "${workspaceFolder}/backend/public",
+  "intelephense.environment.phpVersion": "8.2.0",
+  "intelephense.diagnostics.exclude": {
+    "**/vendor/**": []
+  }
+}

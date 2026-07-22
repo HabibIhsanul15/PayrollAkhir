@@ -237,9 +237,6 @@ export default function EmployeeCreatePage() {
   const selectedPosition = positions.find((position) => String(position.id) === String(form.position_id));
   const hasChildcare =
     selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
-  const hasTraining =
-    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
-
   return (
     <div className="space-y-6">
       <EmployeePageHeader

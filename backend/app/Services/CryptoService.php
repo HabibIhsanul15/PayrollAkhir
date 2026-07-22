@@ -65,7 +65,7 @@ class CryptoService
     // =====================================================
     // READ helper (AES/RSA only)
     // =====================================================
-    public static function readEncryptedOrPlain($enc, $plain, string $alg = 'AES')
+    public static function readEncryptedOrPlain(?string $enc, mixed $plain, string $alg = 'AES'): mixed
     {
         $mode = self::readMode();
         $alg  = strtoupper((string) $alg);
@@ -92,7 +92,7 @@ class CryptoService
         return null;
     }
 
-    public static function readEncryptedOrPlainSafe(?string $enc, $plain, string $alg = 'AES'): ?string
+    public static function readEncryptedOrPlainSafe(?string $enc, mixed $plain, string $alg = 'AES'): ?string
     {
         try {
             return self::readEncryptedOrPlain($enc, $plain, $alg);

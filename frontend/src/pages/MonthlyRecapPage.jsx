@@ -36,14 +36,6 @@ function wholeInputValue(value) {
   return String(Math.max(number, 0));
 }
 
-function decimalInputValue(value) {
-  if (value === null || value === undefined || value === "") return "0";
-  const number = Number(value) || 0;
-  return String(Math.max(number, 0));
-}
-
-
-
 function recapPaidDays(recap) {
   return (
     Number(recap.wfo_days || 0) +
@@ -163,7 +155,6 @@ export default function MonthlyRecapPage() {
   const segmentWarnings = useMemo(() => {
     return formRecaps.map((recap) => {
       const warnings = [];
-      const paidDays = recapPaidDays(recap);
       const wfo = Number(recap.wfo_days || 0);
       const wfh = Number(recap.wfh_days || 0);
       const lk = Number(recap.out_of_town_days || 0);
@@ -171,7 +162,6 @@ export default function MonthlyRecapPage() {
       const attendanceDays = wfo + wfh + lk; // hari yang "hadir" fisik/remote
       const lateCount = Number(recap.late_count || 0);
       const businessTrips = Number(recap.business_trips || 0);
-      const overtimeHours = Number(recap.overtime_hours || 0);
 
       // 1. Terlambat tidak boleh melebihi hari hadir (WFO + WFH + Luar Kota)
       if (lateCount > attendanceDays) {
@@ -385,6 +375,11 @@ export default function MonthlyRecapPage() {
   const handleRecapChange = (index, field, value) => {
     const newRecaps = [...formRecaps];
     newRecaps[index][field] = value.replace(/\D/g, "");
+
+    if (field === "out_of_town_days") {
+      newRecaps[index]["business_trips"] = value.replace(/\D/g, "");
+    }
+
     setFormRecaps(newRecaps);
   };
   
@@ -604,16 +599,7 @@ export default function MonthlyRecapPage() {
                         onChange={(e) => handleRecapChange(index, "training_days", e.target.value)}
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Jumlah Perjalanan Dinas</label>
-                      <input
-                        type="text" inputMode="numeric" required
-                        className={`w-full border p-2 rounded text-sm ${Number(recap.business_trips || 0) > Number(recap.out_of_town_days || 0) ? 'border-rose-400 bg-rose-50' : ''}`}
-                        value={recap.business_trips}
-                        onChange={(e) => handleRecapChange(index, "business_trips", e.target.value)}
-                      />
-                      <p className="mt-1 text-[11px] text-slate-500">Maks: {recap.out_of_town_days || 0} (= hari luar kota)</p>
-                    </div>
+
 
                     <div>
                       <label className="block text-xs font-medium mb-1">Jumlah Terlambat</label>

@@ -40,7 +40,7 @@ class AllowanceTypeSeeder extends Seeder
             [
                 'code' => 'childcare',
                 'name' => 'Tunjangan Pengasuh (Childcare)',
-                'calculation_type' => 'flat',
+                'calculation_type' => 'per_toddler',
                 'applies_to' => 'all',
                 'display_order' => 4,
                 'description' => 'Tunjangan Pengasuh (Childcare) untuk Project Partner',

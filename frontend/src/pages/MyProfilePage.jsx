@@ -6,7 +6,6 @@ import { getUser, updateAuthUser } from "@/lib/auth";
 import { digitsOnly } from "@/lib/employeeFormHelpers";
 import {
   updateMeEmployee,
-  updateMe,
   updatePassword,
 } from "@/lib/meApi";
 import EmployeeHistoryHub from "@/components/EmployeeHistoryHub";

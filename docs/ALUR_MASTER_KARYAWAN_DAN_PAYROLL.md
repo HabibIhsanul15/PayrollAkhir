@@ -35,22 +35,22 @@ Prinsip utamanya:
 
 | Tabel | Isi | Kunci hubungan |
 |---|---|---|
-| `employees` | Identitas dan referensi jabatan aktif | `grade_id` |
-| `grades` | Master Jabatan dan level hierarki | `id` |
+| `employees` | Identitas dan referensi jabatan aktif | `position_id` |
+| `positions` | Master jabatan dan level hierarki | `id` |
 | `allowance_types` | Cara menghitung suatu tunjangan | `id` |
-| `grade_allowance_rates` | Tarif tunjangan per jabatan dan periode | `grade_id`, `allowance_type_id` |
+| `position_allowance_rates` | Tarif tunjangan per jabatan dan periode | `position_id`, `allowance_type_id` |
 | `salary_profiles` | Snapshot jabatan dan nominal individual | `employee_id`, `effective_from` |
 | `job_histories` | Riwayat perubahan jabatan | `employee_id`, `start_date` |
 | `monthly_recaps` | Aktivitas bulanan untuk dasar hitung | `employee_id`, `salary_profile_id` |
 | `payrolls` | Total hasil payroll terenkripsi | `employee_id`, `periode` |
 | `payroll_allowances` | Rincian tunjangan hasil perhitungan | `payroll_id`, `allowance_type_id` |
 
-`employees.position` masih dipertahankan sebagai snapshot nama jabatan untuk tampilan cepat. Sumber keputusan tetap `grade_id` dan `salary_profiles.grade_id`.
+`employees.position` masih dipertahankan sebagai snapshot nama jabatan untuk tampilan cepat. Sumber keputusan tetap `position_id` dan `salary_profiles.position_id`.
 
 Untuk TA ini, penentuan gaji pokok dipusatkan ke data Jabatan dan dibuat sederhana:
 
 ```text
-Grade / Jabatan
+Position / Jabatan
    |
    +---- base_salary_basis = daily
    |
@@ -221,7 +221,7 @@ Catatan desain form:
 4. Basis gaji pokok tidak diedit dari form karyawan. Untuk batasan TA, gaji pokok jabatan dibuat harian dan nominalnya dikelola Finance di menu Master Jabatan.
 5. Kondisi khusus payroll seperti `is_trainer` dan `num_toddlers` tetap bisa diisi di form karyawan, meskipun suatu jabatan belum memakai aturan tersebut saat ini.
 6. Jabatan tidak diedit bebas dari form edit, tetapi mengikuti flow promosi atau demosi agar histori tetap konsisten.
-7. `employment_type` dan `work_basis` tidak lagi menjadi penentu utama payroll. Keduanya hanya tersisa sebagai data legacy.
+7. Penentu payroll yang digunakan pada aplikasi ini adalah jabatan aktif, profil gaji efektif, rekap bulanan, dan tarif tunjangan jabatan.
 8. Flag probation promosi tidak dimasukkan ke form awal karyawan agar scope master data tetap sederhana. Jika nanti dipakai, lebih tepat masuk ke flow promosi atau demosi.
 9. `NIK`, `NPWP`, nomor telepon, dan nomor rekening dibatasi angka saja agar validasi form dan data terenkripsi tetap konsisten.
 10. Saat membuat akun login dari form karyawan, email dan password dimulai kosong. Operator bisa isi manual, melihat password, atau menggunakan generator password.
@@ -262,7 +262,7 @@ Aturan level:
 Pada 12 Juli 2026:
 
 ```text
-employees.grade_id             = Staff
+employees.position_id          = Staff
 salary_profiles 01-01-2026     = Staff
 salary_profiles 01-08-2026     = Manager
 ```
@@ -344,30 +344,23 @@ File utama:
 
 Backend tetap menjadi pengaman utama. Pembatasan menu frontend hanya membantu tampilan dan tidak boleh dianggap sebagai mekanisme keamanan.
 
-## 10. Bukti Pengujian
+## 10. Validasi Aplikasi
 
-Tes utama berada di:
-
-```text
-backend/tests/Feature/MasterPayrollFlowTest.php
-```
-
-Skenario yang diuji:
-
-1. Tarif dipilih sesuai tanggal.
-2. Versi tarif baru menutup periode tarif lama.
-3. Tunjangan membaca jumlah aktivitas dari rekap bulanan.
-4. Karyawan baru otomatis aktif dan memakai basis gaji dari master jabatan.
-5. Gaji pokok bulanan dibayar sebagai nominal tetap per periode.
-6. Promosi masa depan tidak langsung mengubah jabatan hari ini.
-7. Auto payroll memakai master dan menyimpan nominal sebagai cipher-only.
-
-Jalankan:
+Validasi teknis yang digunakan sebelum aplikasi dijalankan:
 
 ```bash
 cd backend
-php artisan test --filter=MasterPayrollFlowTest
+php -l app/Services/PayrollCalculationService.php
+php artisan route:list
 ```
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+Skenario fungsional utama yang perlu diuji melalui antarmuka adalah pembuatan karyawan, pengaturan jabatan dan tarif, input rekap bulanan, preview payroll, alur persetujuan, pembayaran, laporan, dan pembuatan PDF slip gaji.
 
 ## 11. Urutan Belajar untuk Sidang
 

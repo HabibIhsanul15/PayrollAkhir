@@ -427,7 +427,7 @@ export default function PayrollDetailPage() {
       )}
 
       {!loading && !err && row && (
-        <div className="space-y-6">
+        <div className="space-y-4">
 
           {/* Header Card (Hero Section) */}
           <div className="bg-gradient-to-br from-indigo-900 via-blue-900 to-sky-800 rounded-2xl p-8 shadow-xl text-white relative">
@@ -469,15 +469,15 @@ export default function PayrollDetailPage() {
           </div>
 
           {/* Cards Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* Employee Information Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                <UserCircle className="text-slate-500" size={18} />
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <UserCircle className="text-slate-500" size={16} />
                 <h3 className="font-semibold text-slate-800 text-sm">Profil Pegawai</h3>
               </div>
-              <div className="p-6 space-y-5 flex-1">
+              <div className="p-4 space-y-3 flex-1">
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Lengkap</p>
                   <p className="font-bold text-slate-800 text-lg">{row.employee_name || "-"}</p>
@@ -495,11 +495,11 @@ export default function PayrollDetailPage() {
 
             {/* Info Pembayaran & Kehadiran Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                <CreditCard className="text-slate-500" size={18} />
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <CreditCard className="text-slate-500" size={16} />
                 <h3 className="font-semibold text-slate-800 text-sm">Informasi Kehadiran & Pembayaran</h3>
               </div>
-              <div className="p-6 space-y-5 flex-1">
+              <div className="p-4 space-y-3 flex-1">
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Hari Kerja</p>
                   <p className="font-bold text-slate-800 text-lg">
@@ -526,20 +526,20 @@ export default function PayrollDetailPage() {
           </div>
 
               {/* Salary Breakdown (Split Layout) */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                
                 {/* Kolom Pendapatan */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b border-emerald-100 bg-emerald-50/30 flex items-center justify-between">
+                  <div className="px-4 py-3 border-b border-emerald-100 bg-emerald-50/30 flex items-center justify-between">
                     <h3 className="font-bold text-emerald-800 text-sm">Pendapatan (Earnings)</h3>
                   </div>
-                  <div className="p-6 flex-1 space-y-4">
+                  <div className="p-4 flex-1 space-y-3">
                     {row.masked ? (
                       <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-sm border border-dashed border-slate-200">Nominal Disembunyikan</div>
                     ) : (
                       <>
                         {/* Gaji Pokok Blok */}
-                        <div className="group flex flex-col p-4 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-emerald-200 transition-colors">
+                        <div className="group flex flex-col p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:border-emerald-200 transition-colors">
                           <div className="flex justify-between items-start mb-2">
                             <span className="font-semibold text-slate-800">Gaji Pokok</span>
                             <span className="font-bold text-emerald-700">{formatIDR(row.gaji_pokok)}</span>
@@ -583,7 +583,7 @@ export default function PayrollDetailPage() {
                         {/* Tunjangan Blok */}
                         {row.allowances?.length > 0 ? (
                           row.allowances.map((al, idx) => (
-                            <div key={`al-${idx}`} className="group flex flex-col p-4 bg-white rounded-xl border border-slate-100 hover:border-emerald-200 transition-colors">
+                            <div key={`al-${idx}`} className="group flex flex-col p-3 bg-white rounded-xl border border-slate-100 hover:border-emerald-200 transition-colors">
                               <div className="flex justify-between items-start">
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
@@ -591,7 +591,7 @@ export default function PayrollDetailPage() {
                                     {al.is_manual_override && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">OVERRIDE</Badge>}
                                   </div>
                                   <span className="text-xs text-slate-500 mt-1">
-                                    {al.is_manual_override ? `Alasan: ${al.condition_notes || al.override_reason || '-'}` : formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
+                                    {al.is_manual_override ? 'Penyesuaian manual oleh Finance' : formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
@@ -624,7 +624,7 @@ export default function PayrollDetailPage() {
                       </>
                     )}
                   </div>
-                  <div className="bg-emerald-50/50 border-t border-emerald-100 p-6 flex justify-between items-center">
+                  <div className="bg-emerald-50/50 border-t border-emerald-100 p-4 flex justify-between items-center">
                     <span className="font-bold text-emerald-900">Total Pendapatan</span>
                     <span className="text-lg font-extrabold text-emerald-700">
                       {row.masked ? "Rp •••••" : formatIDR(Number(row.gaji_pokok || 0) + Number(row.tunjangan || 0))}
@@ -634,10 +634,10 @@ export default function PayrollDetailPage() {
 
                 {/* Kolom Potongan */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/30 flex items-center justify-between">
+                  <div className="px-4 py-3 border-b border-rose-100 bg-rose-50/30 flex items-center justify-between">
                     <h3 className="font-bold text-rose-800 text-sm">Potongan (Deductions)</h3>
                   </div>
-                  <div className="p-6 flex-1 space-y-3">
+                  <div className="p-4 flex-1 space-y-2">
                     {row.masked ? (
                       <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-sm border border-dashed border-slate-200">Nominal Disembunyikan</div>
                     ) : (
@@ -665,7 +665,7 @@ export default function PayrollDetailPage() {
                       </>
                     )}
                   </div>
-                  <div className="bg-rose-50/50 border-t border-rose-100 p-6 flex justify-between items-center">
+                  <div className="bg-rose-50/50 border-t border-rose-100 p-4 flex justify-between items-center">
                     <span className="font-bold text-rose-900">Total Potongan</span>
                     <span className="text-lg font-extrabold text-rose-700">
                       {row.masked ? "Rp •••••" : `- ${formatIDR(row.potongan)}`}

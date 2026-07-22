@@ -123,7 +123,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       fetchData();
     }
     return () => { active = false; };
-  }, [isOpen]);
+  }, [isOpen, editData]);
 
   useEffect(() => {
     if (!editData) {

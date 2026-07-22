@@ -9,6 +9,9 @@ use App\Models\MonthlyRecap;
 use App\Models\Payroll;
 use App\Models\PayrollAllowance;
 use App\Models\PayrollDeduction;
+use App\Models\Position;
+use App\Models\SalaryProfile;
+use App\Services\AllowanceCalculationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +25,7 @@ class PayrollCalculationService
         private PayrollCipherService $cipherService
     ) {}
 
-    public function validatePrerequisites($employee, $periodMonth, $ignorePayrollId = null)
+    public function validatePrerequisites(Employee $employee, string $periodMonth, ?int $ignorePayrollId = null): array
     {
         if ($employee->status !== 'active') {
             return ['status' => false, 'error' => 'Employee tidak aktif.'];
@@ -109,7 +112,7 @@ class PayrollCalculationService
         ];
     }
 
-    public function runEngine($employee, $periodMonth, $ignorePayrollId = null)
+    public function runEngine(Employee $employee, string $periodMonth, ?int $ignorePayrollId = null): array
     {
         $prereq = $this->validatePrerequisites($employee, $periodMonth, $ignorePayrollId);
         if (! $prereq['status']) {
@@ -357,9 +360,9 @@ class PayrollCalculationService
         ];
     }
 
-    public function calculatePreview($employeeId, $periodMonth, $ignorePayrollId = null)
+    public function calculatePreview(int $employeeId, string $periodMonth, ?int $ignorePayrollId = null): array
     {
-        $employee = Employee::with(['employmentType', 'workBasis'])->find($employeeId);
+        $employee = Employee::find($employeeId);
         if (! $employee) {
             return ['is_calculable' => false, 'prerequisite_status' => false, 'blocking_warnings' => ['Employee not found']];
         }
@@ -367,9 +370,9 @@ class PayrollCalculationService
         return $this->runEngine($employee, $periodMonth, $ignorePayrollId);
     }
 
-    public function calculateAndSave($employeeId, $periodMonth, $recordedBy)
+    public function calculateAndSave(int $employeeId, string $periodMonth, int $recordedBy): Payroll
     {
-        $employee = Employee::with(['employmentType', 'workBasis'])->find($employeeId);
+        $employee = Employee::find($employeeId);
         if (! $employee) {
             throw new \Exception('Employee not found');
         }
@@ -414,7 +417,7 @@ class PayrollCalculationService
         }
     }
 
-    public function batchGenerate($periodMonth, $recordedBy)
+    public function batchGenerate(string $periodMonth, int $recordedBy): array
     {
         $employees = Employee::where('status', 'active')
             ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
@@ -492,7 +495,7 @@ class PayrollCalculationService
         ];
     }
 
-    public function batchPreview($periodMonth)
+    public function batchPreview(string $periodMonth): array
     {
         $employees = Employee::where('status', 'active')
             ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
@@ -641,7 +644,7 @@ class PayrollCalculationService
         ];
     }
 
-    public function recalculate(Payroll $payroll, $force, $recordedBy)
+    public function recalculate(Payroll $payroll, bool $force, int $recordedBy): Payroll
     {
         if ($payroll->status !== 'draft') {
             throw new \Exception('Hanya payroll draft yang bisa direcalculate.');
@@ -691,7 +694,13 @@ class PayrollCalculationService
         }
     }
 
-    public function overrideAllowance(Payroll $payroll, PayrollAllowance $allowance, $amount, $reason, $recordedBy)
+    public function overrideAllowance(
+        Payroll $payroll,
+        PayrollAllowance $allowance,
+        float $amount,
+        string $reason,
+        int $recordedBy
+    ): Payroll
     {
         if ($payroll->status !== 'draft') {
             throw new \Exception('Hanya draft payroll yang dapat di override.');
@@ -710,7 +719,6 @@ class PayrollCalculationService
                 'salary_alg' => 'AES',
                 'salary_key_id' => CryptoService::keyId(),
                 'is_manual_override' => true,
-                'condition_notes' => $reason,
             ]);
 
             $totalAllowances = $payroll->allowances()->get()->sum(function (PayrollAllowance $row) {
@@ -753,7 +761,7 @@ class PayrollCalculationService
         }
     }
 
-    private function resolvePositionAllowance($profile, $Position, string $periodStart): string
+    private function resolvePositionAllowance(SalaryProfile $profile, ?Position $Position, string $periodStart): string
     {
         $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $positionAllowanceDecrypted = $profile->position_allowance_enc
@@ -776,7 +784,7 @@ class PayrollCalculationService
         return (string) $positionAllowanceDecrypted;
     }
 
-    private function resolveBaseSalary($profile, $Position, Employee $employee): array
+    private function resolveBaseSalary(SalaryProfile $profile, ?Position $Position, Employee $employee): array
     {
         $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $amount = $profile->base_salary_amount_enc
@@ -797,12 +805,7 @@ class PayrollCalculationService
             }
         }
 
-        $basis = $profile->base_salary_basis
-            ?: $Position?->base_salary_basis
-            ?: match ($employee->workBasis?->code) {
-                'monthly' => 'monthly',
-                default => 'daily',
-            };
+        $basis = $Position?->base_salary_basis ?? 'daily';
 
         return [
             'basis' => $basis ?: 'daily',

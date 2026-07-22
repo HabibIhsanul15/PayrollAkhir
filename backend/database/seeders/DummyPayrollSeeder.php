@@ -7,7 +7,7 @@ use App\Models\EmploymentType;
 use App\Models\Position;
 use App\Models\SalaryProfile;
 use App\Models\User;
-use App\Models\WorkBasis;
+
 use App\Services\CryptoService;
 use App\Services\PayrollCalculationService;
 use App\Services\PayrollCipherService;
@@ -23,11 +23,9 @@ class DummyPayrollSeeder extends Seeder
         $this->command->info('Menyiapkan data payroll demo (3 user)...');
 
         $Position = Position::where('code', 'staff')->first() ?? Position::first();
-        $employmentType = EmploymentType::where('code', 'project')->first() ?? EmploymentType::first();
-        $workBasis = WorkBasis::where('code', 'mandays')->first() ?? WorkBasis::first();
 
-        if (! $Position || ! $employmentType || ! $workBasis) {
-            $this->command->error('Pastikan master data Position, employment type, dan work basis sudah tersedia.');
+        if (! $Position) {
+            $this->command->error('Pastikan master data Position sudah tersedia.');
             return;
         }
 
@@ -76,8 +74,14 @@ class DummyPayrollSeeder extends Seeder
                 'position' => $Position->name,
                 'status' => 'active',
                 'position_id' => $Position->id,
-                'employment_type_id' => $employmentType->id,
-                'work_basis_id' => $workBasis->id,
+                'join_date' => now()->subMonths(12)->toDateString(),
+                'nik_enc' => CryptoService::encryptAESGCM(str_pad(rand(10000000, 99999999), 16, '0', STR_PAD_RIGHT)),
+                'npwp_enc' => CryptoService::encryptAESGCM(str_pad(rand(10000000, 99999999), 15, '0', STR_PAD_RIGHT)),
+                'phone_enc' => CryptoService::encryptAESGCM('0812' . rand(10000000, 99999999)),
+                'address_enc' => CryptoService::encryptAESGCM('Jl. Pegawai No. ' . rand(1, 100) . ', Jakarta'),
+                'num_toddlers' => rand(0, 2),
+                'is_trainer' => false,
+                'is_on_probation' => false,
                 'bank_name' => 'Bank BCA',
                 'bank_account_name' => $d['name'],
                 'bank_account_number_enc' => CryptoService::encryptAESGCM('1234567890'),

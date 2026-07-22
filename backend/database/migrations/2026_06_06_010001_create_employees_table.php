@@ -32,8 +32,6 @@ return new class extends Migration {
             $table->string('position')->nullable();
 
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
-            $table->foreignId('employment_type_id')->nullable()->constrained('employment_types')->nullOnDelete();
-            $table->foreignId('work_basis_id')->nullable()->constrained('work_bases')->nullOnDelete();
 
             $table->unsignedTinyInteger('num_toddlers')->default(0)->comment('Jumlah balita, digunakan untuk syarat Tunjangan Pengasuh');
             $table->boolean('is_trainer')->default(false)->comment('Kategori trainer, digunakan untuk Tunjangan Training (1.5x rate)');

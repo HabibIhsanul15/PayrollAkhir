@@ -164,9 +164,6 @@ export default function EmployeeEditPage() {
   const selectedPosition = positions.find((position) => String(position.id) === String(form.position_id));
   const hasChildcare =
     selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "childcare") || false;
-  const hasTraining =
-    selectedPosition?.allowance_rates?.some((rate) => rate.allowance_type?.code === "training") || false;
-
   return (
     <div className="space-y-6">
       <EmployeePageHeader
@@ -225,10 +222,10 @@ export default function EmployeeEditPage() {
                   <label className="text-xs font-medium text-slate-600">Jabatan Aktif</label>
                   <select
                     value={form.position_id}
-                    disabled={!!swrData?.data?.position_id}
+                     disabled={Boolean(swrData?.data?.position_id)}
                     onChange={(e) => setForm({ ...form, position_id: e.target.value })}
                     className={`w-full rounded-xl border px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40 ${
-                      !!swrData?.data?.position_id ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-300'
+                       swrData?.data?.position_id ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-300'
                     }`}
                   >
                     <option value="">-- Pilih Jabatan --</option>
@@ -259,7 +256,7 @@ export default function EmployeeEditPage() {
               </div>
 
               <EmployeeNotice>
-                {!!swrData?.data?.position_id 
+                {swrData?.data?.position_id 
                   ? "Jabatan aktif diubah melalui proses promosi atau demosi supaya histori jabatan dan perubahan payroll tetap konsisten."
                   : "Pilih jabatan awal untuk karyawan ini. Setelah disimpan, perubahan selanjutnya harus melalui proses promosi atau demosi."}
               </EmployeeNotice>

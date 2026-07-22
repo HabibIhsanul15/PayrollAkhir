@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X, AlertCircle, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatRupiah, monthLabel } from "@/lib/utils";
+import { formatRupiah } from "@/lib/utils";
 import { specialDeductionsApi } from "@/lib/specialDeductionsApi";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import PeriodDisplay from "@/components/PeriodDisplay";

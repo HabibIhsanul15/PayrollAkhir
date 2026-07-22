@@ -31,8 +31,6 @@ class Employee extends Model
 
         // Phase 1 fields
         'position_id',
-        'employment_type_id',
-        'work_basis_id',
         'num_toddlers',
         'is_trainer',
         'is_on_probation',
@@ -50,15 +48,6 @@ class Employee extends Model
         return $this->belongsTo(Position::class, 'position_id');
     }
 
-    public function employmentType()
-    {
-        return $this->belongsTo(EmploymentType::class, 'employment_type_id');
-    }
-
-    public function workBasis()
-    {
-        return $this->belongsTo(WorkBasis::class, 'work_basis_id');
-    }
 
     public function payrolls()
     {

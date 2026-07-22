@@ -45,7 +45,7 @@ export default function DashboardPage() {
     apiUrl = `/dashboard/summary?month=${encodeURIComponent(month)}`;
   }
 
-  const { data, error, isLoading, mutate } = useSWR(apiUrl);
+  const { data, error, isLoading } = useSWR(apiUrl);
 
   const loading = isLoading;
   const err = error?.message;
@@ -97,7 +97,7 @@ export default function DashboardPage() {
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
                     onClick={(e) => {
-                      try { e.target.showPicker(); } catch(err) {}
+                      try { e.target.showPicker(); } catch { /* Browser does not support showPicker. */ }
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20"
                   />
@@ -374,7 +374,7 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <div className="space-y-5">
-                      {trend.map((t, idx) => {
+                       {trend.map((t) => {
                         const val = Number(t?.total || 0);
                         const w = Math.round((val / maxTrend) * 100);
                         return (

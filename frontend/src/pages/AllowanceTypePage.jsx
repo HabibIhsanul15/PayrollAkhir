@@ -14,10 +14,11 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-const calculationLabels = {
-  per_mandays: "Berdasarkan Rekap",
-  per_trip: "Per Perjalanan",
+const CALC_OPTIONS = {
+  per_mandays: "Per Kehadiran (Mandays)",
+  per_trip: "Per Perjalanan (Trip)",
   flat: "Tetap Bulanan",
+  per_toddler: "Per Balita (Toddler)",
 };
 
 const inputSourceLabels = {
@@ -67,7 +68,7 @@ function calculationText(row) {
     return "Tetap bulanan";
   }
 
-  return calculationLabels[row.calculation_type] || row.calculation_type;
+  return CALC_OPTIONS[row.calculation_type] || row.calculation_type;
 }
 
 function defaultInputSource(calculationType) {
@@ -396,13 +397,13 @@ export default function AllowanceTypePage() {
                     onChange={(e) => setForm((prev) => normalizeFormByCalculation(prev, e.target.value))}
                     className="w-full border border-border rounded bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
                   >
-                    <option value="per_mandays">Berdasarkan Rekap</option>
-                    <option value="per_trip">Per Perjalanan Dinas</option>
-                    <option value="flat">Tetap Bulanan</option>
+                    {Object.entries(CALC_OPTIONS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
                   </select>
                 </div>
 
-                {form.calculation_type !== "flat" && (
+                {!["flat", "per_toddler"].includes(form.calculation_type) && (
                   <div>
                     <label className="block text-xs font-semibold text-slate-800 mb-1">
                       Sumber Pemicu
@@ -427,6 +428,8 @@ export default function AllowanceTypePage() {
                   Dasar perhitungan: <strong>
                     {form.calculation_type === "flat"
                       ? "Nominal tetap per bulan"
+                      : form.calculation_type === "per_toddler"
+                      ? "Jumlah anak/balita dari profil pegawai"
                       : inputSourceLabels[form.input_source] || "Sumber kehadiran"}
                   </strong>
                 </div>
