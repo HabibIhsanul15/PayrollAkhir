@@ -7,6 +7,7 @@ use App\Models\Payroll;
 use App\Models\SalaryProfile;
 use App\Services\CryptoService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 class EncryptLegacyData extends Command
 {
@@ -48,7 +49,7 @@ class EncryptLegacyData extends Command
         $this->info('[1/3] payrolls');
 
         $rows = Payroll::query()
-            ->where(function ($q) {
+            ->where(function (Builder $q) {
                 $q->whereNull('gaji_pokok_enc')
                     ->orWhereNull('total_enc');
             })
@@ -94,7 +95,7 @@ class EncryptLegacyData extends Command
         $this->info('[2/3] salary_profiles');
 
         $rows = SalaryProfile::query()
-            ->where(function ($q) {
+            ->where(function (Builder $q) {
                 $q->whereNull('position_allowance_enc')
                     ->orWhereNull('allowance_fixed_enc')
                     ->orWhereNull('deduction_fixed_enc');
@@ -146,7 +147,7 @@ class EncryptLegacyData extends Command
         $this->info('[3/3] employees');
 
         $rows = Employee::query()
-            ->where(function ($q) {
+            ->where(function (Builder $q) {
                 $q->whereNull('nik_enc')
                     ->orWhereNull('npwp_enc')
                     ->orWhereNull('bank_account_number_enc');

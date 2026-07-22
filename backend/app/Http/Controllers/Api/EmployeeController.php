@@ -17,7 +17,7 @@ class EmployeeController extends Controller
 {
     public function __construct(private AllowanceRateResolver $rateResolver) {}
 
-    private function roleOf($user): string
+    private function roleOf(mixed $user): string
     {
         return strtolower((string) ($user->role ?? ''));
     }
@@ -27,10 +27,10 @@ class EmployeeController extends Controller
         return response()->json(['message' => $msg], 403);
     }
 
-    private function inRoles($user, array $roles): bool
+    private function inRoles(mixed $user, array $roles): bool
     {
         $r = $this->roleOf($user);
-        $roles = array_map(fn ($x) => strtolower((string) $x), $roles);
+        $roles = array_map(fn (mixed $x) => strtolower((string) $x), $roles);
 
         return in_array($r, $roles, true);
     }
@@ -83,7 +83,7 @@ class EmployeeController extends Controller
         ];
     }
 
-    private function resolveBaseSalaryFromProfile(Employee $employee, $profile, ?Position $Position = null): array
+    private function resolveBaseSalaryFromProfile(Employee $employee, mixed $profile, ?Position $Position = null): array
     {
         $Position ??= $profile->Position ?? $employee->Position;
         $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
@@ -120,7 +120,7 @@ class EmployeeController extends Controller
 
         return $query->with([
             'position:id,code,name,is_active,level',
-            'salaryProfiles' => function ($profileQuery) {
+            'salaryProfiles' => function (mixed $profileQuery) {
                 $profileQuery
                     ->whereDate('effective_from', '<=', now()->toDateString())
                     ->orderByDesc('effective_from')
@@ -383,7 +383,7 @@ class EmployeeController extends Controller
                 $base = (float) $profile->position_allowance;
                 $is_using_default_base = false;
             } else {
-                $posRate = $Position ? $this->rateResolver->resolveByCode($Position->id, 'position', $date) : null;
+                $posRate = $Position ? $this->rateResolver->resolveByCode($Position->id, 'position') : null;
                 $base = $posRate ? (float) $posRate->rate_amount : 0.0;
                 $is_using_default_base = true;
             }
@@ -459,7 +459,7 @@ class EmployeeController extends Controller
             $Position = Position::findOrFail($data['position_id']);
             $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
             $effectiveFrom = $data['join_date'] ?? now()->startOfMonth()->toDateString();
-            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
+            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position');
             $base = (float) ($positionRate?->rate_amount ?? 0);
             $baseSalaryAmount = $salaryConfig['amount'];
 
@@ -548,7 +548,7 @@ class EmployeeController extends Controller
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
         $employeePosition = $employee->Position;
 
-        $results = $profiles->map(function ($p) use ($employeePosition, $canSeeNominal, $employee) {
+        $results = $profiles->map(function (mixed $p) use ($employeePosition, $canSeeNominal, $employee) {
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
 
             $positionVal = $p->position_allowance_enc ? CryptoService::decryptByAlg($p->position_allowance_enc, $alg) : null;
@@ -566,7 +566,7 @@ class EmployeeController extends Controller
                     $is_using_default_base = false;
                 } else {
                     $posRate = $Position
-                        ? $this->rateResolver->resolveByCode($Position->id, 'position', $p->effective_from)
+                        ? $this->rateResolver->resolveByCode($Position->id, 'position')
                         : null;
                     $base = $posRate ? (float) $posRate->rate_amount : 0.0;
                     $is_using_default_base = true;
@@ -633,7 +633,7 @@ class EmployeeController extends Controller
                 : CryptoService::encryptAESGCM($value);
             $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
 
-            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
+            $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position');
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']
                 : (float) ($positionRate?->rate_amount ?? 0);
@@ -770,7 +770,7 @@ class EmployeeController extends Controller
             unset($data['bank_account_number']);
         }
 
-        if (collect(['nik_enc', 'npwp_enc', 'phone_enc', 'address_enc', 'bank_account_number_enc'])->contains(fn ($field) => array_key_exists($field, $data))) {
+        if (collect(['nik_enc', 'npwp_enc', 'phone_enc', 'address_enc', 'bank_account_number_enc'])->contains(fn (mixed $field) => array_key_exists($field, $data))) {
             $data['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
         }
 
@@ -782,7 +782,7 @@ class EmployeeController extends Controller
                 
                 // Gunakan default configurasi
                 $salaryConfig = $this->resolveBaseSalaryPayload($Position, []);
-                $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position', $effectiveFrom);
+                $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position');
                 $base = (float) ($positionRate?->rate_amount ?? 0);
                 $baseSalaryAmount = $salaryConfig['amount'];
                 

@@ -155,8 +155,8 @@ class PayrollBenchmark extends Command
 
                 $total_ms = $enc_ms + $db_ms; // khusus benchmark create: fokus encrypt+db
                 $cipherBytes = collect([$gaji_enc, $tunj_enc, $pot_enc, $total_enc, $cat_enc, $dekEnc])
-                    ->filter(fn ($value) => $value !== null)
-                    ->sum(fn ($value) => strlen((string) $value));
+                    ->filter(fn (mixed $value) => $value !== null)
+                    ->sum(fn (mixed $value) => strlen((string) $value));
                 if ($encMeta) {
                     $cipherBytes += strlen(json_encode($encMeta));
                 }

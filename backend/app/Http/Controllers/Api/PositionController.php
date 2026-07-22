@@ -26,7 +26,7 @@ class PositionController extends Controller
         }
 
         if (count($words) > 1) {
-            return substr(implode('', array_map(fn ($word) => $word[0], $words)), 0, 20);
+            return substr(implode('', array_map(fn (mixed $word) => $word[0], $words)), 0, 20);
         }
 
         return substr($words[0], 0, 30);
@@ -44,7 +44,7 @@ class PositionController extends Controller
     {
         $base = $this->sanitizeCode($base);
         $exists = fn (string $code) => Position::where('code', $code)
-            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->when($ignoreId, fn (mixed $query) => $query->whereKeyNot($ignoreId))
             ->exists();
 
         if (! $exists($base)) {
@@ -66,15 +66,15 @@ class PositionController extends Controller
         return response()->json(['message' => $msg], 403);
     }
 
-    private function inRoles($user, array $roles): bool
+    private function inRoles(mixed $user, array $roles): bool
     {
         $r = strtolower((string) ($user->role ?? ''));
-        $roles = array_map(fn ($x) => strtolower((string) $x), $roles);
+        $roles = array_map(fn (mixed $x) => strtolower((string) $x), $roles);
 
         return in_array($r, $roles, true);
     }
 
-    private function positionPayloadFor($user, Position $Position): array
+    private function positionPayloadFor(mixed $user, Position $Position): array
     {
         $data = $Position->toArray();
 
@@ -102,8 +102,8 @@ class PositionController extends Controller
         }
 
         if ($this->inRoles($request->user(), ['fat'])) {
-            $query->with(['allowanceRates' => function ($rates) {
-                $rates->whereHas('allowanceType', fn ($type) => $type->where('is_active', true))
+            $query->with(['allowanceRates' => function (mixed $rates) {
+                $rates->whereHas('allowanceType', fn (mixed $type) => $type->where('is_active', true))
                     ->with('allowanceType');
             }]);
         }

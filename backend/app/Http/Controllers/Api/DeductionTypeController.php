@@ -14,10 +14,10 @@ class DeductionTypeController extends Controller
         return response()->json(['message' => $message], 403);
     }
 
-    private function inRoles($user, array $roles): bool
+    private function inRoles(mixed $user, array $roles): bool
     {
         $role = strtolower((string) ($user->role ?? ''));
-        $roles = array_map(fn ($item) => strtolower((string) $item), $roles);
+        $roles = array_map(fn (mixed $item) => strtolower((string) $item), $roles);
 
         return in_array($role, $roles, true);
     }

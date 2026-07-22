@@ -42,7 +42,7 @@ class PayrollController extends Controller
             if (! empty($user->employee_id)) {
                 $query->where('employee_id', $user->employee_id);
             } else {
-                $query->whereHas('employee', fn ($q) => $q->where('user_id', $user->id));
+                $query->whereHas('employee', fn (mixed $q) => $q->where('user_id', $user->id));
             }
         } else {
             // selain staff, baru boleh filter employee_id
@@ -381,11 +381,11 @@ class PayrollController extends Controller
             'calculation_mode' => $payroll->calculation_mode,
             'calculated_at' => $payroll->calculated_at,
 
-            'allowances' => $canSeeNominal ? collect($payroll->allowances)->map(function ($al) {
+            'allowances' => $canSeeNominal ? collect($payroll->allowances)->map(function (mixed $al) {
                 // Ensure relation is loaded if possible, though React uses al.allowance_type as fallback
                 return $al;
             })->values()->all() : [],
-            'deductions' => $canSeeNominal ? collect($payroll->deductions)->filter(function($dd) {
+            'deductions' => $canSeeNominal ? collect($payroll->deductions)->filter(function (mixed $dd) {
                 return $dd->amount > 0;
             })->values()->all() : [],
 
@@ -407,7 +407,7 @@ class PayrollController extends Controller
                 ->where('period_month', $periodMonth)
                 ->orderBy('id', 'asc')
                 ->get()
-                ->map(function ($r) use ($payroll) {
+                ->map(function (mixed $r) use ($payroll) {
                     $prof = \App\Models\SalaryProfile::find($r->salary_profile_id);
                     $decBase = $prof ? $this->resolvePositionAllowanceFromProfile($prof, $payroll->employee) : 0;
                     $baseSalary = $prof ? $this->resolveBaseSalaryFromProfile($prof, $payroll->employee) : ['basis' => 'daily', 'amount' => 0];
@@ -1087,7 +1087,7 @@ class PayrollController extends Controller
         ]);
     }
 
-    private function resolvePositionAllowanceFromProfile($profile, ?Employee $employee): float
+    private function resolvePositionAllowanceFromProfile(mixed $profile, ?Employee $employee): float
     {
         $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $decrypted = $profile->position_allowance_enc
@@ -1102,7 +1102,7 @@ class PayrollController extends Controller
             $Position = $profile->Position ?? $employee?->Position;
             $posRate = $Position
                 ? \App\Models\PositionAllowanceRate::where('position_id', $Position->id)
-                    ->whereHas('allowanceType', fn ($q) => $q->where('code', 'position'))
+                    ->whereHas('allowanceType', fn (mixed $q) => $q->where('code', 'position'))
                     ->first()
                 : null;
 
@@ -1112,7 +1112,7 @@ class PayrollController extends Controller
         return (float) $decrypted;
     }
 
-    private function resolveBaseSalaryFromProfile($profile, ?Employee $employee): array
+    private function resolveBaseSalaryFromProfile(mixed $profile, ?Employee $employee): array
     {
         $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
         $amount = $profile->base_salary_amount_enc
@@ -1156,7 +1156,7 @@ class PayrollController extends Controller
      *
      * NOTE: jangan pakai "creator payroll" sebagai owner slip, itu beda konsep.
      */
-    private function canSeeNominal($user, Payroll $payroll): bool
+    private function canSeeNominal(mixed $user, Payroll $payroll): bool
     {
         if (! $user) {
             return false;
@@ -1187,7 +1187,7 @@ class PayrollController extends Controller
         return $payroll->status === 'paid';
     }
 
-    private function canSeeBank($user, Payroll $payroll): bool
+    private function canSeeBank(mixed $user, Payroll $payroll): bool
     {
         if (! $user) {
             return false;
@@ -1227,7 +1227,7 @@ class PayrollController extends Controller
         }
     }
 
-    private function ensureRole($user, array $roles)
+    private function ensureRole(mixed $user, array $roles)
     {
         $r = $user->role ?? '';
         if (! in_array($r, $roles, true)) {

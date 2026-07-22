@@ -245,7 +245,7 @@ class PayrollBenchmarkCsvCommand extends Command
         $rows = [];
 
         while (($csvRow = fgetcsv($handle)) !== false) {
-            if ($csvRow === [null] || count(array_filter($csvRow, fn ($value) => $value !== null && $value !== '')) === 0) {
+            if ($csvRow === [null] || count(array_filter($csvRow, fn (mixed $value) => $value !== null && $value !== '')) === 0) {
                 continue;
             }
 

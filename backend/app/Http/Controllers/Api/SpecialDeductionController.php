@@ -16,10 +16,10 @@ class SpecialDeductionController extends Controller
         return response()->json(['message' => $msg], 403);
     }
 
-    private function inRoles($user, array $roles): bool
+    private function inRoles(mixed $user, array $roles): bool
     {
         $role = strtolower((string) ($user->role ?? ''));
-        $roles = array_map(fn ($item) => strtolower((string) $item), $roles);
+        $roles = array_map(fn (mixed $item) => strtolower((string) $item), $roles);
 
         return in_array($role, $roles, true);
     }
@@ -37,7 +37,7 @@ class SpecialDeductionController extends Controller
         if ($request->employee_id) {
             $query->where('employee_id', $request->employee_id);
         }
-        $deductions = $query->latest()->get()->map(function ($item) {
+        $deductions = $query->latest()->get()->map(function (mixed $item) {
             $item->amount = (float) (CryptoService::readEncryptedOrPlainSafe($item->amount_enc, $item->amount, $item->salary_alg ?? 'AES') ?? 0);
 
             return $item;
@@ -83,9 +83,9 @@ class SpecialDeductionController extends Controller
             ->where('period_month', $data['period_month']);
 
         if ($deductionType) {
-            $duplicateQuery->where(function ($query) use ($deductionType) {
+            $duplicateQuery->where(function (mixed $query) use ($deductionType) {
                 $query->where('deduction_type_id', $deductionType->id)
-                    ->orWhere(function ($legacyQuery) use ($deductionType) {
+                    ->orWhere(function (mixed $legacyQuery) use ($deductionType) {
                         $legacyQuery->whereNull('deduction_type_id')
                             ->where('type', $deductionType->code);
                     });

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
-    private function roleOf($user): string
+    private function roleOf(mixed $user): string
     {
         return strtolower((string) ($user->role ?? ''));
     }
@@ -65,7 +65,7 @@ class DashboardController extends Controller
 
         $currentMonth = date('Y-m');
         $pendingRecapsCount = Employee::where('status', 'active')
-            ->whereDoesntHave('monthlyRecaps', function ($q) use ($currentMonth) {
+            ->whereDoesntHave('monthlyRecaps', function (mixed $q) use ($currentMonth) {
                 $q->where('period_month', $currentMonth)->where('is_finalized', true);
             })->count();
 
@@ -140,7 +140,7 @@ class DashboardController extends Controller
                 ->groupBy('status')
                 ->orderByRaw("FIELD(status,'draft','requested','approved','paid','rejected')")
                 ->get()
-                ->map(fn ($r) => [
+                ->map(fn (mixed $r) => [
                     'status' => $r->status,
                     'total' => (int) $r->total,
                 ])
@@ -156,7 +156,7 @@ class DashboardController extends Controller
                 ->groupBy('salary_alg')
                 ->orderByDesc('total')
                 ->get()
-                ->map(fn ($r) => [
+                ->map(fn (mixed $r) => [
                     'salary_alg' => $r->salary_alg,
                     'total' => (int) $r->total,
                 ])
@@ -212,7 +212,7 @@ class DashboardController extends Controller
             ->limit(8)
             ->get($select);
 
-        $recent = $recentRows->map(function ($p) {
+        $recent = $recentRows->map(function (mixed $p) {
             $periodMonth = optional($p->period_to)->format('Y-m') ?? optional($p->periode)->format('Y-m');
             $recap = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
                 ->where('period_month', $periodMonth)
@@ -258,7 +258,7 @@ class DashboardController extends Controller
         return [$start, $end];
     }
 
-    private function applyPeriodFilter($query, string $month, Carbon $start, Carbon $end): void
+    private function applyPeriodFilter(mixed $query, string $month, Carbon $start, Carbon $end): void
     {
         if (Schema::hasColumn('payrolls', 'periode')) {
             $query->whereBetween('periode', [$start->toDateString(), $end->toDateString()]);

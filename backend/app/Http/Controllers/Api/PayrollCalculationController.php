@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 
 class PayrollCalculationController extends Controller
 {
-    protected $service;
+    protected PayrollCalculationService $service;
 
     public function __construct(PayrollCalculationService $service)
     {

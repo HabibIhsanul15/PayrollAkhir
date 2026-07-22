@@ -13,6 +13,7 @@ use App\Models\Position;
 use App\Models\SalaryProfile;
 use App\Services\AllowanceCalculationService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class PayrollCalculationService
@@ -53,7 +54,7 @@ class PayrollCalculationService
         $profilesData = [];
         $fallbackProfile = $employee->currentSalaryProfile($start->toDateString());
 
-        if (! $fallbackProfile && $recaps->contains(fn ($r) => ! $r->salary_profile_id)) {
+        if (! $fallbackProfile && $recaps->contains(fn (mixed $r) => ! $r->salary_profile_id)) {
             return ['status' => false, 'error' => 'Salary profile aktif tidak ditemukan untuk sebagian rekap.'];
         }
 
@@ -147,7 +148,16 @@ class PayrollCalculationService
         $base_salary_segments = [];
         $accumulatedAllowances = [];
 
-        $addAllowance = function ($typeCode, $typeId, $typeName, $amount, $mandays, $rate, $detail, $positionName = null) use (&$accumulatedAllowances, $profilesData) {
+        $addAllowance = function (
+            string $typeCode,
+            int $typeId,
+            string $typeName,
+            float $amount,
+            ?float $mandays,
+            ?float $rate,
+            array $detail,
+            ?string $positionName = null
+        ) use (&$accumulatedAllowances, $profilesData) {
             if (! isset($accumulatedAllowances[$typeCode])) {
                 $accumulatedAllowances[$typeCode] = [
                     'allowance_type_id' => $typeId,
@@ -420,7 +430,7 @@ class PayrollCalculationService
     public function batchGenerate(string $periodMonth, int $recordedBy): array
     {
         $employees = Employee::where('status', 'active')
-            ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
+            ->whereHas('monthlyRecaps', function (Builder $q) use ($periodMonth) {
                 $q->where('period_month', $periodMonth)
                   ->where('is_finalized', true);
             })
@@ -498,7 +508,7 @@ class PayrollCalculationService
     public function batchPreview(string $periodMonth): array
     {
         $employees = Employee::where('status', 'active')
-            ->whereHas('monthlyRecaps', function($q) use ($periodMonth) {
+            ->whereHas('monthlyRecaps', function (Builder $q) use ($periodMonth) {
                 $q->where('period_month', $periodMonth)
                   ->where('is_finalized', true);
             })

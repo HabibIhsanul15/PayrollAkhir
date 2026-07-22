@@ -120,7 +120,7 @@ class MutationRequestController extends Controller
         ]);
     }
 
-    public function approve(Request $request, $id)
+    public function approve(Request $request, int|string $id)
     {
         $user = $request->user();
         if ($user->role !== 'director') {
@@ -156,7 +156,7 @@ class MutationRequestController extends Controller
                 abort(422, 'Gaji pokok jabatan tujuan belum diatur. Lengkapi master gaji jabatan sebelum menyetujui pengajuan.');
             }
             
-            $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position', $effectiveDate);
+            $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position');
             $baseAllowance = (float) ($positionRate?->rate_amount ?? 0);
 
             $currentAlg = strtoupper((string) ($currentProfile?->salary_alg ?? 'AES'));
@@ -164,7 +164,7 @@ class MutationRequestController extends Controller
             $encrypt = fn (string $value) => $alg === 'RSA'
                 ? CryptoService::encryptRSA($value)
                 : CryptoService::encryptAESGCM($value);
-            $readCurrent = function (?string $cipher, $plain = 0) use ($alg): float {
+            $readCurrent = function (?string $cipher, mixed $plain = 0) use ($alg): float {
                 return (float) (CryptoService::readEncryptedOrPlainSafe($cipher, $plain, $alg) ?? 0);
             };
             
@@ -228,7 +228,7 @@ class MutationRequestController extends Controller
         return response()->json(['message' => 'Perubahan jabatan berhasil disetujui dan diterapkan.']);
     }
 
-    public function show(Request $request, $id)
+    public function show(Request $request, int|string $id)
     {
         $user = $request->user();
         if (!in_array($user->role, ['hcga', 'director'], true)) {
@@ -243,7 +243,7 @@ class MutationRequestController extends Controller
         ]));
     }
 
-    public function reject(Request $request, $id)
+    public function reject(Request $request, int|string $id)
     {
         $user = $request->user();
         if ($user->role !== 'director') {
@@ -268,7 +268,7 @@ class MutationRequestController extends Controller
         return response()->json(['message' => 'Pengajuan berhasil ditolak.']);
     }
 
-    public function cancel(Request $request, $id)
+    public function cancel(Request $request, int|string $id)
     {
         $user = $request->user();
         if ($user->role !== 'hcga') {
@@ -287,7 +287,7 @@ class MutationRequestController extends Controller
         return response()->json(['message' => 'Pengajuan berhasil dibatalkan.']);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, int|string $id)
     {
         $user = $request->user();
         if ($user->role !== 'hcga') {
@@ -372,10 +372,10 @@ class MutationRequestController extends Controller
     {
         return MutationRequest::query()
             ->where('employee_id', $employeeId)
-            ->when($excludeId, fn ($query) => $query->where('id', '<>', $excludeId))
-            ->where(function ($query) {
+            ->when($excludeId, fn (mixed $query) => $query->where('id', '<>', $excludeId))
+            ->where(function (mixed $query) {
                 $query->where('status', 'pending')
-                    ->orWhere(function ($approved) {
+                    ->orWhere(function (mixed $approved) {
                         $approved->where('status', 'approved')
                             ->whereDate('effective_date', '>', Carbon::today()->toDateString());
                     });
@@ -412,8 +412,8 @@ class MutationRequestController extends Controller
 
         $payroll = Payroll::query()
             ->where('employee_id', $employee->id)
-            ->when($period, fn ($query) => $query->whereDate('periode', $period->start_date))
-            ->when(! $period, fn ($query) => $query
+            ->when($period, fn (mixed $query) => $query->whereDate('periode', $period->start_date))
+            ->when(! $period, fn (mixed $query) => $query
                 ->whereYear('periode', $effectiveDate->year)
                 ->whereMonth('periode', $effectiveDate->month))
             ->whereIn('status', ['requested', 'submitted', 'approved', 'paid'])

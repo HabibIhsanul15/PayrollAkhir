@@ -44,7 +44,7 @@ class MeController extends Controller
         ]);
     }
 
-    private function resolveEmployee($u): ?Employee
+    private function resolveEmployee(mixed $u): ?Employee
     {
         return Employee::where('user_id', $u->id)->first();
     }

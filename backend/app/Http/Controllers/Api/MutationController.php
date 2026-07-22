@@ -39,7 +39,7 @@ class MutationController extends Controller
     /**
      * POST /api/employees/{id}/mutate
      */
-    public function store(Request $request, $id)
+    public function store(Request $request, int|string $id)
     {
         $user = $request->user();
 
@@ -100,7 +100,7 @@ class MutationController extends Controller
                     'position_id' => 'Gaji pokok jabatan tujuan belum diatur pada master jabatan.',
                 ]);
             }
-            $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position', $effectiveDate);
+            $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position');
             $base = array_key_exists('position_allowance', $data) && $data['position_allowance'] !== null
                 ? (float) $data['position_allowance']
                 : (float) ($positionRate?->rate_amount ?? 0);
@@ -111,7 +111,7 @@ class MutationController extends Controller
             $encrypt = fn (string $value) => $alg === 'RSA'
                 ? CryptoService::encryptRSA($value)
                 : CryptoService::encryptAESGCM($value);
-            $readCurrent = function (?string $cipher, $plain = 0) use ($alg): float {
+            $readCurrent = function (?string $cipher, mixed $plain = 0) use ($alg): float {
                 return (float) (CryptoService::readEncryptedOrPlainSafe($cipher, $plain, $alg) ?? 0);
             };
             $allowanceFixed = $currentProfile

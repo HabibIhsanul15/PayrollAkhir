@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Employee;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class SyncEffectiveEmployeeJobs extends Command
@@ -17,7 +18,7 @@ class SyncEffectiveEmployeeJobs extends Command
         $date = $this->option('date') ?: now()->toDateString();
         $updated = 0;
 
-        Employee::query()->chunkById(100, function ($employees) use ($date, &$updated) {
+        Employee::query()->chunkById(100, function (mixed $employees) use ($date, &$updated) {
             foreach ($employees as $employee) {
                 $profile = $employee->currentSalaryProfile($date);
                 if (! $profile?->position_id) {
@@ -34,7 +35,7 @@ class SyncEffectiveEmployeeJobs extends Command
                     $employee->jobHistories()->update(['status' => 'inactive']);
                     $employee->jobHistories()
                         ->whereDate('start_date', '<=', $date)
-                        ->where(function ($query) use ($date) {
+                        ->where(function (Builder $query) use ($date) {
                             $query->whereNull('end_date')->orWhereDate('end_date', '>=', $date);
                         })
                         ->orderByDesc('start_date')

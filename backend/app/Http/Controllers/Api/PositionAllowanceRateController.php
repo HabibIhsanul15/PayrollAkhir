@@ -14,10 +14,10 @@ class PositionAllowanceRateController extends Controller
         return response()->json(['message' => $msg], 403);
     }
 
-    private function inRoles($user, array $roles): bool
+    private function inRoles(mixed $user, array $roles): bool
     {
         $r = strtolower((string) ($user->role ?? ''));
-        $roles = array_map(fn ($x) => strtolower((string) $x), $roles);
+        $roles = array_map(fn (mixed $x) => strtolower((string) $x), $roles);
 
         return in_array($r, $roles, true);
     }

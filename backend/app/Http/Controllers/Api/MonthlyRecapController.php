@@ -227,7 +227,7 @@ class MonthlyRecapController extends Controller
         $totalDays = $startDate->diffInDays($endDate) + 1;
 
         $profiles = \App\Models\SalaryProfile::where('employee_id', $employeeId)
-            ->where(function ($q) use ($startDate, $endDate) {
+            ->where(function (mixed $q) use ($startDate, $endDate) {
                 $q->whereBetween('effective_from', [$startDate, $endDate])
                   ->orWhere('effective_from', '<=', $startDate);
             })

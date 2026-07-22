@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\CryptoService;
+use Closure;
 use Illuminate\Http\Request;
 
 class BenchmarkController extends Controller
@@ -26,14 +27,14 @@ class BenchmarkController extends Controller
         // 1. AES-128
         $results[] = $this->runTest('AES-128', $count, function() use ($dummyPlainStr) {
             return CryptoService::encryptAESGCM($dummyPlainStr);
-        }, function($ct) {
+        }, function(string $ct) {
             return CryptoService::decryptAESGCM($ct);
         });
 
         // 2. RSA-2048
         $results[] = $this->runTest('RSA-2048', $count, function() use ($dummyPlainStr) {
             return CryptoService::encryptRSA($dummyPlainStr);
-        }, function($ct) {
+        }, function(string $ct) {
             return CryptoService::decryptRSA($ct);
         });
 
@@ -46,7 +47,7 @@ class BenchmarkController extends Controller
         ]);
     }
 
-    private function runTest($alg, $count, $encryptFn, $decryptFn)
+    private function runTest(string $alg, int $count, Closure $encryptFn, Closure $decryptFn): array
     {
         $ciphertexts = [];
         
@@ -74,7 +75,7 @@ class BenchmarkController extends Controller
         ];
     }
 
-    private function runHybridTest($alg, $count, $dummyFields)
+    private function runHybridTest(string $alg, int $count, array $dummyFields): array
     {
         $rows = [];
         

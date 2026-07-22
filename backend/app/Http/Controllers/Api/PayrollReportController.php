@@ -13,7 +13,7 @@ use App\Services\CryptoService;
 
 class PayrollReportController extends Controller
 {
-    private function roleOf($user): string
+    private function roleOf(mixed $user): string
     {
         return strtolower((string) ($user->role ?? ''));
     }
@@ -124,7 +124,7 @@ class PayrollReportController extends Controller
 
             $periodEnd = $p->period_to ?: $p->periode;
             $profile = $p->employee?->salaryProfiles
-                ?->filter(fn ($profile) => $profile->effective_from && $profile->effective_from->lte($periodEnd))
+                ?->filter(fn (mixed $profile) => $profile->effective_from && $profile->effective_from->lte($periodEnd))
                 ->sortByDesc('effective_from')
                 ->first();
 
@@ -250,7 +250,7 @@ class PayrollReportController extends Controller
 
         // ========== TENTUKAN ALG UNTUK REPORT ==========
         // kalau isinya campur (AES/RSA/HYBRID), tandai MIXED
-        $algList = $payrollRows->pluck('salary_alg')->filter()->map(fn($a) => strtoupper((string)$a))->unique()->values();
+        $algList = $payrollRows->pluck('salary_alg')->filter()->map(fn (mixed $a) => strtoupper((string) $a))->unique()->values();
         $reportAlg = $algList->count() === 1 ? ($algList->first() ?? 'AES') : 'MIXED';
 
         // ========== INSERT PERF LOG ==========
