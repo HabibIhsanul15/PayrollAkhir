@@ -28,7 +28,6 @@ export default function EmployeeEditPage() {
     join_date: "",
     position_id: "",
     position_allowance: "",
-    base_salary_basis: "daily",
     base_salary_amount: "",
     num_toddlers: "",
     nik: "",
@@ -81,7 +80,6 @@ export default function EmployeeEditPage() {
       join_date: data.join_date ?? "",
       position_id: data.position_id ?? "",
       position_allowance: positionRate?.rate_amount ?? "",
-      base_salary_basis: data.salary_profile_summary?.base_salary_basis ?? activePosition?.base_salary_basis ?? "daily",
       base_salary_amount:
         data.salary_profile_summary?.base_salary_amount ?? activePosition?.default_base_salary_amount ?? "",
       num_toddlers: data.num_toddlers ? String(data.num_toddlers) : "",

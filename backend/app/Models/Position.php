@@ -11,7 +11,6 @@ class Position extends Model
         'name',
         'level',
         'description',
-        'base_salary_basis',
         'default_base_salary_amount',
         'is_active',
         'default_mandays_rate',

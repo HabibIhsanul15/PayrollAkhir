@@ -191,7 +191,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                                   {formatProfileAmount(sp.base_salary_amount, "Belum diatur")}
                                 </div>
                                 <div className="mt-1 text-[10px] text-slate-400">
-                                  {sp.base_salary_basis === "monthly" ? "Bulanan" : "Harian"}
+                                  Per hari
                                 </div>
                               </div>
                               <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">

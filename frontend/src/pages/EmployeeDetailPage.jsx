@@ -46,11 +46,6 @@ function roleLabel(role) {
   );
 }
 
-function formatBaseSalaryBasisValue(basis) {
-  if (!basis) return "-";
-  return basis === "monthly" ? "Bulanan" : "Harian";
-}
-
 export default function EmployeeDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -117,10 +112,6 @@ export default function EmployeeDetailPage() {
       label: "Jabatan Aktif",
       value: emp?.Position ? `${emp.Position.name} (${String(emp.Position.code || "").toUpperCase()})` : (emp?.position || "-"),
       helper: emp?.Position?.level ? `Level ${emp.Position.level}` : undefined,
-    },
-    {
-      label: "Basis Gaji Pokok",
-      value: formatBaseSalaryBasisValue(emp?.salary_profile_summary?.base_salary_basis),
     },
     {
       label: "Jumlah Balita",

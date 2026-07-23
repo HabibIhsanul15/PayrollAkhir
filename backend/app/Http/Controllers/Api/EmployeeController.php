@@ -67,10 +67,6 @@ class EmployeeController extends Controller
 
     private function resolveBaseSalaryPayload(Position $Position, array $data): array
     {
-        $basis = $data['base_salary_basis']
-            ?? $Position->base_salary_basis
-            ?? 'daily';
-
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null && $data['base_salary_amount'] !== ''
             ? (float) $data['base_salary_amount']
             : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null && $data['mandays_rate'] !== ''
@@ -78,7 +74,6 @@ class EmployeeController extends Controller
                 : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
 
         return [
-            'basis' => $basis,
             'amount' => $amount,
         ];
     }
@@ -92,12 +87,7 @@ class EmployeeController extends Controller
             ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $alg)
             : (string) ($Position?->default_base_salary_amount ?? $Position?->default_mandays_rate ?? 0);
 
-        $basis = $profile->base_salary_basis
-            ?? $Position?->base_salary_basis
-            ?? 'daily';
-
         return [
-            'basis' => $basis ?: 'daily',
             'amount' => $amount,
         ];
     }
@@ -223,7 +213,6 @@ class EmployeeController extends Controller
             'num_toddlers' => (int) $employee->num_toddlers,
             'Position' => $positionPayload,
             'salary_profile_summary' => $baseSalary ? [
-                'base_salary_basis' => $baseSalary['basis'],
                 'base_salary_amount' => $canSeePayrollNominal && $baseSalary['amount'] !== null
                     ? (string) $baseSalary['amount']
                     : null,
@@ -400,14 +389,11 @@ class EmployeeController extends Controller
             'effective_from' => $profile->effective_from->toDateString(),
             'position_id' => $effectivepositionId,
             'position' => $effectivePosition,
-            'base_salary_basis' => $baseSalary['basis'],
             'base_salary_amount' => $baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null,
             'position_allowance' => (string) $base,
             'allowance_fixed' => (string) $allow,
             'deduction_fixed' => (string) $ded,
-            'mandays_rate' => $baseSalary['basis'] === 'daily'
-                ? ($baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null)
-                : null,
+            'mandays_rate' => $baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null,
             'is_using_default_base' => $is_using_default_base,
             'is_using_default_salary' => $is_using_default_salary,
             'suggested_total' => (string) ($base + $allow - $ded),
@@ -576,7 +562,6 @@ class EmployeeController extends Controller
                 'position_id' => $effectivepositionId,
                 'position_name' => $Position ? $Position->name : '-',
                 'position' => $p->position,
-                'base_salary_basis' => $baseSalary['basis'],
                 'base_salary_amount' => $canSeeNominal ? ($baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null) : null,
                 'position_allowance' => $canSeeNominal ? (string) $base : null,
                 'allowance_fixed' => $canSeeNominal ? (string) $allow : null,
@@ -605,7 +590,6 @@ class EmployeeController extends Controller
             'allowance_fixed' => ['nullable', 'numeric', 'min:0'],
             'deduction_fixed' => ['nullable', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
-            'base_salary_basis' => ['nullable', Rule::in(['daily', 'monthly'])],
             'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
 
             'daily_rate' => ['nullable', 'numeric', 'min:0'],

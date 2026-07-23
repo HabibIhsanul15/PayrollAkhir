@@ -24,7 +24,6 @@ export default function EmployeeCreatePage() {
     join_date: "",
     position_id: "",
     position_allowance: "",
-    base_salary_basis: "daily",
     base_salary_amount: "",
     num_toddlers: "",
     nik: "",
@@ -111,7 +110,6 @@ export default function EmployeeCreatePage() {
         ...prev,
         position_id: positionId,
         position_allowance: positionRate ? positionRate.rate_amount : 0,
-        base_salary_basis: position.base_salary_basis || "daily",
         base_salary_amount: position.default_base_salary_amount || 0,
       }));
       setErrors((prev) => ({ ...prev, position_id: undefined }));
@@ -123,7 +121,6 @@ export default function EmployeeCreatePage() {
       ...prev,
       position_id: positionId,
       position_allowance: "",
-      base_salary_basis: "daily",
       base_salary_amount: "",
     }));
     setErrors((prev) => ({ ...prev, position_id: undefined }));

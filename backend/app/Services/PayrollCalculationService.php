@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Models\AllowanceType;
-use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\MonthlyRecap;
 use App\Models\Payroll;
 use App\Models\PayrollAllowance;
 use App\Models\PayrollDeduction;
+use App\Models\PerfLog;
 use App\Models\Position;
 use App\Models\SalaryProfile;
 use App\Services\AllowanceCalculationService;
@@ -83,7 +83,6 @@ class PayrollCalculationService
                 'profile' => [
                     'position_allowance' => $positionAllowanceDecrypted,
                     'base_salary_amount' => $baseSalary['amount'],
-                    'base_salary_basis' => $baseSalary['basis'],
                     'position_id' => $activePositionId,
                     'position_name' => $Position?->name,
                     'effective_from' => $profile->effective_from->toDateString(),
@@ -211,9 +210,7 @@ class PayrollCalculationService
 
             // 1. Basic Salary
             $ratio = $prereq['total_mandays'] > 0 ? ((float) $r->total_mandays / (float) $prereq['total_mandays']) : 0;
-            $segBaseSalary = $p['base_salary_basis'] === 'monthly'
-                ? (float) $p['base_salary_amount'] * $ratio
-                : (float) $p['base_salary_amount'] * (float) $r->total_mandays;
+            $segBaseSalary = (float) $p['base_salary_amount'] * (float) $r->total_mandays;
             $gaji_pokok += $segBaseSalary;
 
             if (count($profilesData) > 1 && $segBaseSalary > 0) {
@@ -376,6 +373,7 @@ class PayrollCalculationService
 
     public function calculateAndSave(int $employeeId, string $periodMonth, int $recordedBy): Payroll
     {
+        $t0Total = hrtime(true);
         $employee = Employee::find($employeeId);
         if (! $employee) {
             throw new \Exception('Employee not found');
@@ -385,6 +383,11 @@ class PayrollCalculationService
         if (! $res['is_calculable']) {
             throw new \Exception('Cannot calculate: '.implode(', ', $res['blocking_warnings']));
         }
+
+        $t0Encrypt = hrtime(true);
+        $encryptedPayroll = $this->encryptedPayrollAttributes($res);
+        $encryptMs = (hrtime(true) - $t0Encrypt) / 1e6;
+        $t0Db = hrtime(true);
 
         DB::beginTransaction();
         try {
@@ -397,21 +400,21 @@ class PayrollCalculationService
                 'status' => 'draft',
                 'calculation_mode' => 'auto',
                 'calculated_at' => now(),
-                ...$this->encryptedPayrollAttributes($res),
+                ...$encryptedPayroll,
             ]);
 
             $this->createAllowanceRows($payroll, $res['allowances']);
             $this->createDeductionRows($payroll, $res['deductions'] ?? []);
 
-            AuditLog::create([
-                'user_id' => $recordedBy,
-                'action' => 'PAYROLL_AUTO_CALCULATE',
-                'payroll_id' => $payroll->id,
-                'meta' => ['employee_id' => $employee->id, 'period_month' => $periodMonth, 'warnings' => $res['non_blocking_warnings']],
-                'ip_address' => request()->ip(),
-            ]);
-
             DB::commit();
+
+            $this->logCreatePerformance(
+                $payroll,
+                $encryptMs,
+                (hrtime(true) - $t0Db) / 1e6,
+                (hrtime(true) - $t0Total) / 1e6,
+                'auto_single'
+            );
 
             return $payroll;
         } catch (\Exception $e) {
@@ -433,6 +436,7 @@ class PayrollCalculationService
         $failed = 0;
 
         foreach ($employees as $employee) {
+            $t0Total = hrtime(true);
             DB::beginTransaction();
             try {
                 $prereq = $this->validatePrerequisites($employee, $periodMonth);
@@ -445,6 +449,11 @@ class PayrollCalculationService
                     throw new \Exception(implode(', ', $res['blocking_warnings']));
                 }
 
+                $t0Encrypt = hrtime(true);
+                $encryptedPayroll = $this->encryptedPayrollAttributes($res);
+                $encryptMs = (hrtime(true) - $t0Encrypt) / 1e6;
+                $t0Db = hrtime(true);
+
                 $payroll = Payroll::create([
                     'user_id' => $recordedBy,
                     'employee_id' => $employee->id,
@@ -454,13 +463,20 @@ class PayrollCalculationService
                     'status' => 'draft',
                     'calculation_mode' => 'auto',
                     'calculated_at' => now(),
-                    ...$this->encryptedPayrollAttributes($res),
+                    ...$encryptedPayroll,
                 ]);
 
                 $this->createAllowanceRows($payroll, $res['allowances']);
                 $this->createDeductionRows($payroll, $res['deductions'] ?? []);
 
                 DB::commit();
+                $this->logCreatePerformance(
+                    $payroll,
+                    $encryptMs,
+                    (hrtime(true) - $t0Db) / 1e6,
+                    (hrtime(true) - $t0Total) / 1e6,
+                    'auto_batch'
+                );
                 $success++;
                 $results[] = [
                     'employee_id' => $employee->id,
@@ -479,14 +495,6 @@ class PayrollCalculationService
                 $results[] = ['employee_id' => $employee->id, 'employee_name' => $employee->name, 'status' => 'failed', 'errors' => [$e->getMessage()]];
             }
         }
-
-        AuditLog::create([
-            'user_id' => $recordedBy,
-            'action' => 'PAYROLL_BATCH_GENERATE',
-            'payroll_id' => null,
-            'meta' => ['period_month' => $periodMonth, 'total_employees' => count($employees), 'success' => $success, 'failed' => $failed],
-            'ip_address' => request()->ip(),
-        ]);
 
         return [
             'period_month' => $periodMonth,
@@ -678,14 +686,6 @@ class PayrollCalculationService
 
             $this->createAllowanceRows($payroll, $res['allowances']);
 
-            AuditLog::create([
-                'user_id' => $recordedBy,
-                'action' => 'PAYROLL_RECALCULATE',
-                'payroll_id' => $payroll->id,
-                'meta' => ['force' => $force, 'has_override_overwritten' => $hasOverride],
-                'ip_address' => request()->ip(),
-            ]);
-
             DB::commit();
 
             return $payroll;
@@ -742,14 +742,6 @@ class PayrollCalculationService
 
             $payroll->update($this->cipherAttributes($cipher));
 
-            AuditLog::create([
-                'user_id' => $recordedBy,
-                'action' => 'PAYROLL_ALLOWANCE_OVERRIDE',
-                'payroll_id' => $payroll->id,
-                'meta' => ['allowance_id' => $allowance->id, 'new_amount' => $amount, 'reason' => $reason],
-                'ip_address' => request()->ip(),
-            ]);
-
             DB::commit();
 
             return $payroll;
@@ -803,10 +795,7 @@ class PayrollCalculationService
             }
         }
 
-        $basis = $Position?->base_salary_basis ?? 'daily';
-
         return [
-            'basis' => $basis ?: 'daily',
             'amount' => $amount,
         ];
     }
@@ -832,6 +821,47 @@ class PayrollCalculationService
             'salary_alg' => $cipher['alg'],
             'salary_key_id' => $cipher['key_id'],
         ];
+    }
+
+    private function logCreatePerformance(
+        Payroll $payroll,
+        float $encryptMs,
+        float $dbMs,
+        float $totalMs,
+        string $source
+    ): void {
+        try {
+            $ciphertexts = [
+                $payroll->gaji_pokok_enc,
+                $payroll->tunjangan_enc,
+                $payroll->potongan_enc,
+                $payroll->total_enc,
+                $payroll->dek_enc,
+                ...$payroll->allowances()->pluck('amount_enc')->all(),
+                ...$payroll->deductions()->pluck('amount_enc')->all(),
+            ];
+
+            $cipherBytes = array_sum(array_map(
+                static fn (?string $value): int => strlen((string) $value),
+                $ciphertexts
+            ));
+
+            PerfLog::create([
+                'scenario' => 'CREATE',
+                'alg' => $payroll->salary_alg ?? 'AES',
+                'payroll_id' => $payroll->id,
+                'encrypt_ms' => round($encryptMs, 3),
+                'db_ms' => round($dbMs, 3),
+                'total_ms' => round($totalMs, 3),
+                'cipher_bytes' => $cipherBytes,
+                'meta' => [
+                    'source' => $source,
+                    'cipher_bytes_scope' => 'payroll,allowance,deduction ciphertexts and dek_enc',
+                ],
+            ]);
+        } catch (\Throwable) {
+            // Kegagalan pencatatan metrik tidak boleh menggagalkan payroll.
+        }
     }
 
     private function createAllowanceRows(Payroll $payroll, array $allowances): void

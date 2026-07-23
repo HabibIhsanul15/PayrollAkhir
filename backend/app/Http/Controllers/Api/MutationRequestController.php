@@ -149,7 +149,6 @@ class MutationRequestController extends Controller
 
             $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
 
-            $basis = $targetPosition->base_salary_basis ?? 'daily';
             $amount = (float) ($targetPosition->default_base_salary_amount ?? $targetPosition->default_mandays_rate ?? 0);
 
             if ($amount <= 0) {
@@ -176,7 +175,6 @@ class MutationRequestController extends Controller
                 [
                     'position_id' => $targetPosition->id,
                     'position' => $targetPosition->name,
-                    'base_salary_basis' => $basis,
                     'base_salary_amount' => 0,
                     'position_allowance' => 0,
                     'mandays_rate' => null,

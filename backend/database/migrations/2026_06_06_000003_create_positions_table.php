@@ -14,7 +14,6 @@ return new class extends Migration
             $table->string('name', 100);
             $table->unsignedTinyInteger('level')->comment('Hierarki jabatan: 1 = tertinggi');
             $table->text('description')->nullable();
-            $table->string('base_salary_basis', 20)->default('daily');
             $table->decimal('default_base_salary_amount', 14, 2)->nullable();
             $table->decimal('default_late_penalty_amount', 14, 2)->nullable();
             $table->boolean('is_active')->default(true);

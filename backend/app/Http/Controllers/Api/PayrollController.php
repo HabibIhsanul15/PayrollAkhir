@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\PerfLog;
@@ -275,9 +274,6 @@ class PayrollController extends Controller
             }
         }
 
-        // audit view detail
-        $this->audit($request, 'PAYROLL_VIEW_DETAIL', $payroll);
-
         $total_ms = (hrtime(true) - $t0_total) / 1e6;
 
         $activeProfile = null;
@@ -289,7 +285,6 @@ class PayrollController extends Controller
 
                 $activeProfile = [
                     'position_allowance' => $decBase,
-                    'base_salary_basis' => $baseSalary['basis'],
                     'base_salary_amount' => $baseSalary['amount'],
                 ];
             }
@@ -319,10 +314,6 @@ class PayrollController extends Controller
             'department' => $payroll->employee->department,
             'position' => $payroll->employee->position,
             'position_name' => $payroll->employee->Position?->name,
-            'base_salary_basis' => $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily'),
-            'base_salary_basis_label' => $this->baseSalaryBasisLabel(
-                $activeProfile['base_salary_basis'] ?? ($payroll->employee->Position?->base_salary_basis ?? 'daily')
-            ),
         ] : null;
 
         if ($employeePayload && $this->canSeeBank($user, $payroll)) {
@@ -392,15 +383,13 @@ class PayrollController extends Controller
                 ->map(function (mixed $r) use ($payroll) {
                     $prof = \App\Models\SalaryProfile::find($r->salary_profile_id);
                     $decBase = $prof ? $this->resolvePositionAllowanceFromProfile($prof, $payroll->employee) : 0;
-                    $baseSalary = $prof ? $this->resolveBaseSalaryFromProfile($prof, $payroll->employee) : ['basis' => 'daily', 'amount' => 0];
+                    $baseSalary = $prof ? $this->resolveBaseSalaryFromProfile($prof, $payroll->employee) : ['amount' => 0];
 
                     return [
                         'id' => $r->id,
                         'wfo_days' => (float) $r->wfo_days,
                         'wfh_days' => (float) $r->wfh_days,
                         'total_mandays' => (float) $r->total_mandays,
-                        'base_salary_basis' => $baseSalary['basis'],
-                        'base_salary_basis_label' => $this->baseSalaryBasisLabel($baseSalary['basis']),
                         'base_salary_amount' => (float) $baseSalary['amount'],
                         'position_allowance' => (float) $decBase,
                         'position_name' => $prof && $prof->Position ? $prof->Position->name : '-',
@@ -421,8 +410,6 @@ class PayrollController extends Controller
     {
         $user = $request->user();
         $this->ensureRole($user, ['director', 'fat']);
-
-        $this->audit($request, 'SECURITY_INSPECTION', $payroll);
 
         $alg = strtoupper((string) ($payroll->salary_alg ?: 'AES'));
 
@@ -539,8 +526,6 @@ class PayrollController extends Controller
     {
         $user = $request->user();
         $this->ensureRole($user, ['director', 'fat']);
-
-        $this->audit($request, 'SECURITY_INSPECTION_EXPORT', $payroll);
 
         $alg = strtoupper((string) ($payroll->salary_alg ?: 'AES'));
 
@@ -678,8 +663,6 @@ class PayrollController extends Controller
         $filename = 'slip-gaji-'.
             ($payroll->employee?->employee_code ?? $payroll->employee_id).
             '-'.$payrollPeriod->period_month.'.pdf';
-
-        $this->audit($request, 'PAYROLL_VIEW_PDF', $payroll);
 
         return response($pdf->output(), 200)
             ->header('Content-Type', 'application/pdf')
@@ -820,13 +803,6 @@ class PayrollController extends Controller
         ]);
 
         $db_ms = (hrtime(true) - $t0_db) / 1e6;
-
-        $this->audit($request, 'PAYROLL_CREATE', $payroll, [
-            'employee_id' => $payroll->employee_id,
-            'periode' => $payroll->periode,
-            'alg' => $payroll->salary_alg,
-            'key_id' => $payroll->salary_key_id,
-        ]);
 
         $total_ms = (hrtime(true) - $t0_total) / 1e6;
 
@@ -1009,14 +985,6 @@ class PayrollController extends Controller
 
         $payroll->update($data);
 
-        $this->audit($request, 'PAYROLL_UPDATE', $payroll, [
-            'fields_updated' => array_keys($data),
-            'employee_id' => $payroll->employee_id,
-            'periode' => optional($payroll->periode)->toDateString(),
-            'alg' => $alg,
-            'key_id' => $keyId,
-        ]);
-
         return response()->json([
             'message' => 'Payroll updated',
             'data' => $payroll->fresh()->loadMissing([
@@ -1034,11 +1002,6 @@ class PayrollController extends Controller
         $this->authorize('delete', $payroll);
 
         $payroll->delete();
-
-        $this->audit(
-            request(),
-            'PAYROLL_DELETE',
-            $payroll);
 
         return response()->json([
             'message' => 'Payroll deleted',
@@ -1090,21 +1053,9 @@ class PayrollController extends Controller
             }
         }
 
-        $Position = $profile->Position ?? $employee?->Position;
-        $basis = $Position?->base_salary_basis ?? 'daily';
-
         return [
-            'basis' => $basis ?: 'daily',
             'amount' => (float) $amount,
         ];
-    }
-
-    private function baseSalaryBasisLabel(?string $basis): string
-    {
-        return match ($basis) {
-            'monthly' => 'Bulanan',
-            default => 'Harian',
-        };
     }
 
     /**
@@ -1166,25 +1117,6 @@ class PayrollController extends Controller
         ) || ((int) ($payroll->employee?->user_id) === (int) $user->id);
     }
 
-    private function audit(Request $request, string $action, ?Payroll $payroll = null, array $meta = []): void
-    {
-        try {
-            $u = $request->user();
-
-            AuditLog::create([
-                'user_id' => $u?->id,
-                'action' => $action,
-                'payroll_id' => $payroll?->id,
-                'ip_address' => $request->ip(),
-                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
-                'meta' => $meta,
-            ]);
-        } catch (\Throwable $e) {
-            // Jangan ganggu flow utama kalau log gagal
-            // Optional: logger()->warning('Audit log failed', ['err' => $e->getMessage()]);
-        }
-    }
-
     private function ensureRole(mixed $user, array $roles)
     {
         $r = $user->role ?? '';
@@ -1241,11 +1173,6 @@ class PayrollController extends Controller
 
         $payroll->refresh(); // ✅ ambil data terbaru dari DB
 
-        $this->audit($request, 'PAYROLL_MARK_PAID', $payroll, [
-            'paid_proof_path' => $path,
-            'paid_ref' => $payroll->paid_ref,
-        ]);
-
         return response()->json([
             'message' => 'Payroll ditandai PAID + bukti transfer tersimpan.',
             'payroll' => $payroll,
@@ -1269,11 +1196,6 @@ class PayrollController extends Controller
             // optional: kalau mau bersih, bisa juga null-kan approved_by/approved_at kalau reject dari approved
             // 'approved_by' => null,
             // 'approved_at' => null,
-        ]);
-
-        $this->audit($request, 'PAYROLL_REJECT_PAYMENT', $payroll, [
-            'from' => $from,
-            'to' => 'rejected',
         ]);
 
         return response()->json([
@@ -1311,8 +1233,6 @@ class PayrollController extends Controller
         if (! Storage::disk('public')->exists($payroll->paid_proof_path)) {
             return response()->json(['message' => 'File bukti tidak ditemukan di storage.'], 404);
         }
-
-        $this->audit($request, 'PAYROLL_VIEW_PROOF', $payroll);
 
         $fullPath = Storage::disk('public')->path($payroll->paid_proof_path);
 

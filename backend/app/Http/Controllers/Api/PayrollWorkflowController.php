@@ -3,27 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
 use App\Models\Payroll;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class PayrollWorkflowController extends Controller
 {
-    private function audit(Request $request, string $action, Payroll $payroll, array $meta = []): void
-    {
-        try {
-            AuditLog::create([
-                'user_id' => $request->user()?->id,
-                'action' => $action,
-                'payroll_id' => $payroll->id,
-                'ip_address' => $request->ip(),
-                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
-                'meta' => $meta,
-            ]);
-        } catch (\Throwable $e) {}
-    }
-
     public function submit(Request $request, Payroll $payroll)
     {
         if ($request->user()->cannot('update', $payroll) && $request->user()->role !== 'fat') {
@@ -40,8 +25,6 @@ class PayrollWorkflowController extends Controller
             'requested_at' => Carbon::now(),
             'approval_note' => null,
         ]);
-
-        $this->audit($request, 'PAYROLL_SUBMIT', $payroll);
 
         return response()->json(['message' => 'Payroll berhasil diajukan ke Direktur.', 'payroll' => $payroll]);
     }
@@ -63,8 +46,6 @@ class PayrollWorkflowController extends Controller
             'approval_note' => $request->note,
         ]);
 
-        $this->audit($request, 'PAYROLL_APPROVE', $payroll, ['note' => $request->note]);
-
         return response()->json(['message' => 'Payroll berhasil disetujui.', 'payroll' => $payroll]);
     }
 
@@ -84,8 +65,6 @@ class PayrollWorkflowController extends Controller
             'paid_at' => Carbon::now(),
             'paid_note' => $request->note,
         ]);
-
-        $this->audit($request, 'PAYROLL_MARK_PAID', $payroll, ['note' => $request->note]);
 
         return response()->json(['message' => 'Payroll berhasil ditandai sebagai dibayar.', 'payroll' => $payroll]);
     }
@@ -108,8 +87,6 @@ class PayrollWorkflowController extends Controller
             'status' => 'rejected',
             'approval_note' => $data['note'],
         ]);
-
-        $this->audit($request, 'PAYROLL_REJECT', $payroll, ['note' => $data['note']]);
 
         return response()->json(['message' => 'Payroll berhasil ditolak.', 'payroll' => $payroll]);
     }

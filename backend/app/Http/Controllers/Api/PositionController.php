@@ -9,13 +9,6 @@ use Illuminate\Validation\Rule;
 
 class PositionController extends Controller
 {
-    private function normalizeBaseSalaryPayload(array $data): array
-    {
-        $data['base_salary_basis'] = 'daily';
-
-        return $data;
-    }
-
     private function makeCodeFromName(string $name): string
     {
         $words = preg_split('/\s+/', strtolower(trim(preg_replace('/[^a-zA-Z0-9\s]/', ' ', $name)))) ?: [];
@@ -144,7 +137,6 @@ class PositionController extends Controller
 
         $data['code'] = $this->uniqueCode($data['code'] ?? $this->makeCodeFromName($data['name']));
         
-        $data = $this->normalizeBaseSalaryPayload($data);
         $Position = Position::create($data);
 
         return response()->json($this->positionPayloadFor($request->user(), $Position), 201);
@@ -173,7 +165,6 @@ class PositionController extends Controller
             );
         }
 
-        $data = $this->normalizeBaseSalaryPayload($data);
         $Position->update($data);
 
         return response()->json($this->positionPayloadFor($request->user(), $Position->fresh()));

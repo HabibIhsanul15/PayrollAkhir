@@ -594,7 +594,7 @@ export default function PayrollDetailPage() {
                                   <div className="font-medium text-slate-700 mb-1">{recap.position_name} <span className="text-slate-400 font-normal">(Mulai: {recap.effective_from})</span></div>
                                   <div className="flex justify-between text-slate-500">
                                     <span>{formatIDR(recap.base_salary_amount)} / Hari</span>
-                                    <span>{recap.base_salary_basis === "monthly" ? `${formatPlainNumber(recap.total_mandays)} hari prorata` : `${formatPlainNumber(recap.total_mandays)} hari`}</span>
+                                    <span>{formatPlainNumber(recap.total_mandays)} hari</span>
                                   </div>
                                 </div>
                               ))}

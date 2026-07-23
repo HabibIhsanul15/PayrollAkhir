@@ -20,10 +20,6 @@ class MutationController extends Controller
 
     private function resolveBaseSalaryPayload(Position $Position, array $data): array
     {
-        $basis = $data['base_salary_basis']
-            ?? $Position->base_salary_basis
-            ?? 'daily';
-
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
             ? (float) $data['base_salary_amount']
             : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
@@ -31,7 +27,6 @@ class MutationController extends Controller
                 : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
 
         return [
-            'basis' => $basis,
             'amount' => $amount,
         ];
     }
@@ -54,7 +49,6 @@ class MutationController extends Controller
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'position_allowance' => ['nullable', 'numeric', 'min:0'],
-            'base_salary_basis' => ['nullable', Rule::in(['daily', 'monthly'])],
             'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
             'mandays_rate' => ['nullable', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
