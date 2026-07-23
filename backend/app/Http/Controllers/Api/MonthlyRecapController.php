@@ -55,7 +55,7 @@ class MonthlyRecapController extends Controller
             'recaps.*.out_of_town_days' => 'integer|min:0',
             'recaps.*.business_trips' => 'integer|min:0',
             'recaps.*.training_days' => 'integer|min:0',
-            'recaps.*.overtime_hours' => 'numeric|min:0',
+            'recaps.*.overtime_hours' => 'integer|min:0',
             'recaps.*.late_count' => 'integer|min:0',
         ]);
 

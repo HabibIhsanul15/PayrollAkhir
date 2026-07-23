@@ -352,7 +352,7 @@ export default function AccountCreatePage() {
                         value={form.role}
                         onChange={(v) => setField("role", v)}
                         options={[
-                          { value: "staff", label: "Staff" },
+                          { value: "staff", label: "Pegawai" },
                           { value: "hcga", label: "HCGA" },
                           { value: "fat", label: "Finance Admin (FAT)" },
                           { value: "director", label: "Director" },

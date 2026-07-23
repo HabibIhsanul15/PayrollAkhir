@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
-import { currentPayrollMonth } from "@/lib/utils";
+import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
-import { ChevronDown, Download, FileText, X } from "lucide-react";
+import { Download, FileText, X } from "lucide-react";
 
 function todayMonth() {
   return currentPayrollMonth();
@@ -66,7 +66,7 @@ function toCsv(rows) {
         r.employee_name,
         r.bank_name || "-",
         r.bank_account_number || "-",
-        r.periode,
+        r.period_month || r.periode,
         r.status,
         r.gaji_pokok,
         r.tunjangan,
@@ -88,12 +88,12 @@ export default function PayrollReportPage() {
   const role = String(user?.role || "").toLowerCase();
 
   const [month, setMonth] = useState(() => todayMonth());
-  const [status, setStatus] = useState("");
+  const status = "paid";
   const [detailRow, setDetailRow] = useState(null);
 
   const qs = new URLSearchParams();
   qs.set("month", month);
-  qs.set("status", status || "all");
+  qs.set("status", status);
 
   const { data, error, isLoading } = useSWR(`/reports/payroll?${qs.toString()}`);
 
@@ -121,7 +121,7 @@ export default function PayrollReportPage() {
         <div>
           <h1 className="text-lg font-semibold text-foreground">{title}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Laporan payroll (nominal ditampilkan) khusus FAT & Director.
+            Laporan payroll yang sudah dibayarkan, khusus FAT & Director.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -157,20 +157,8 @@ export default function PayrollReportPage() {
           </div>
           <div className="w-full md:w-52">
             <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Status</label>
-            <div>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full appearance-none pl-3 pr-7 py-1.5 text-xs border border-border rounded bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
-              >
-                <option value="">Semua Status</option>
-                <option value="draft">DRAFT</option>
-                <option value="requested">REQUESTED</option>
-                <option value="approved">APPROVED</option>
-                <option value="paid">PAID</option>
-                <option value="rejected">REJECTED</option>
-              </select>
-              <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <div className="w-full rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+              PAID
             </div>
           </div>
         </div>
@@ -211,7 +199,7 @@ export default function PayrollReportPage() {
           <div>
             <span className="text-sm font-medium text-foreground">Detail Payroll</span>
             <span className="text-[10px] text-muted-foreground ml-2">
-              Periode <PeriodDisplay period={month} /> • {status ? `Status: ${status.toUpperCase()}` : "Semua status"}
+              Periode <PeriodDisplay period={month} /> • Status: PAID
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground">
@@ -281,7 +269,7 @@ export default function PayrollReportPage() {
                     {r.position_name || "Belum ditentukan"}
                   </td>
                   <td className="px-2 py-4 text-xs text-muted-foreground">
-                    {r.periode ? new Date(r.periode).toLocaleString("id-ID", { month: "short", year: "numeric" }) : "—"}
+                    {r.period_month ? monthLabel(r.period_month) : r.periode ? new Date(r.periode).toLocaleString("id-ID", { month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-2 py-4">
                     <StatusBadge status={r.status} variant="text" />
@@ -316,7 +304,7 @@ export default function PayrollReportPage() {
 
       <PayrollReportDetailModal
         row={detailRow}
-        periodMonth={month}
+        periodMonth={detailRow?.period_month || month}
         onClose={() => setDetailRow(null)}
       />
     </div>

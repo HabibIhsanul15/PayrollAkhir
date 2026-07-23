@@ -30,14 +30,15 @@ class PayrollWorkflowController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        if ($payroll->status !== 'draft') {
-            return response()->json(['message' => 'Hanya payroll berstatus draft yang bisa diajukan.'], 422);
+        if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
+            return response()->json(['message' => 'Hanya payroll berstatus draft atau ditolak yang bisa diajukan.'], 422);
         }
 
         $payroll->update([
             'status' => 'submitted',
             'requested_by' => $request->user()->id,
             'requested_at' => Carbon::now(),
+            'approval_note' => null,
         ]);
 
         $this->audit($request, 'PAYROLL_SUBMIT', $payroll);
@@ -99,13 +100,17 @@ class PayrollWorkflowController extends Controller
             return response()->json(['message' => 'Hanya payroll yang sedang diajukan yang dapat ditolak.'], 422);
         }
 
-        $payroll->update([
-            'status' => 'draft',
-            'approval_note' => 'Ditolak: ' . ($request->note ?? 'Tanpa alasan'),
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:1000'],
         ]);
 
-        $this->audit($request, 'PAYROLL_REJECT', $payroll, ['note' => $request->note]);
+        $payroll->update([
+            'status' => 'rejected',
+            'approval_note' => $data['note'],
+        ]);
 
-        return response()->json(['message' => 'Payroll berhasil ditolak dan dikembalikan ke Draft.', 'payroll' => $payroll]);
+        $this->audit($request, 'PAYROLL_REJECT', $payroll, ['note' => $data['note']]);
+
+        return response()->json(['message' => 'Payroll berhasil ditolak.', 'payroll' => $payroll]);
     }
 }

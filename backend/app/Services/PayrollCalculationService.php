@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollCalculationService
 {
-    const ENGINE_VERSION = 'v2.0';
 
     public function __construct(
         private AllowanceCalculationService $allowanceCalculator,
@@ -229,11 +228,7 @@ class PayrollCalculationService
             $segPosAllow = (float) $p['position_allowance'] * $ratio;
             $trPos = AllowanceType::where('code', 'position')->first();
             if ($trPos && $segPosAllow > 0) {
-                $amt = $segPosAllow;
-                if ($employee->is_on_probation) {
-                    $amt = $amt * 0.5;
-                }
-                $addAllowance($trPos->code, $trPos->id, $trPos->name, $amt, null, $p['position_allowance'], ['is_on_probation' => $employee->is_on_probation], $segPositionName);
+                $addAllowance($trPos->code, $trPos->id, $trPos->name, $segPosAllow, null, $p['position_allowance'], [], $segPositionName);
             }
 
             $rateDate = max($prereq['periodFrom'], $p['effective_from']);
@@ -365,7 +360,6 @@ class PayrollCalculationService
             'total_mandays' => $prereq['total_mandays'],
             'recaps' => $recapsSummary,
             'calculation_mode' => 'auto',
-            'engine_version' => self::ENGINE_VERSION,
             'message' => 'PPh 21 dan BPJS belum dihitung.',
         ];
     }
@@ -402,7 +396,6 @@ class PayrollCalculationService
                 'period_to' => $res['period_to'],
                 'status' => 'draft',
                 'calculation_mode' => 'auto',
-                'engine_version' => $res['engine_version'],
                 'calculated_at' => now(),
                 ...$this->encryptedPayrollAttributes($res),
             ]);
@@ -460,7 +453,6 @@ class PayrollCalculationService
                     'period_to' => $res['period_to'],
                     'status' => 'draft',
                     'calculation_mode' => 'auto',
-                    'engine_version' => $res['engine_version'],
                     'calculated_at' => now(),
                     ...$this->encryptedPayrollAttributes($res),
                 ]);
@@ -542,7 +534,6 @@ class PayrollCalculationService
                         'tunjangan_enc' => $existing->tunjangan_enc,
                         'potongan_enc' => $existing->potongan_enc,
                         'total_enc' => $existing->total_enc,
-                        'catatan_enc' => $existing->catatan_enc,
                     ]);
                     $gaji_pokok = $dec['gaji_pokok'] ?? 0;
                     $tunjangan = $dec['tunjangan'] ?? 0;
@@ -656,8 +647,8 @@ class PayrollCalculationService
 
     public function recalculate(Payroll $payroll, bool $force, int $recordedBy): Payroll
     {
-        if ($payroll->status !== 'draft') {
-            throw new \Exception('Hanya payroll draft yang bisa direcalculate.');
+        if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
+            throw new \Exception('Hanya payroll draft atau yang ditolak yang bisa direcalculate.');
         }
         if ($payroll->calculation_mode !== 'auto') {
             throw new \Exception('Hanya auto payroll yang bisa direcalculate.');
@@ -712,8 +703,8 @@ class PayrollCalculationService
         int $recordedBy
     ): Payroll
     {
-        if ($payroll->status !== 'draft') {
-            throw new \Exception('Hanya draft payroll yang dapat di override.');
+        if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
+            throw new \Exception('Hanya payroll draft atau yang ditolak yang dapat di override.');
         }
         if ($payroll->calculation_mode !== 'auto') {
             throw new \Exception('Hanya auto payroll yang dapat di override.');
@@ -740,16 +731,13 @@ class PayrollCalculationService
             });
             $plain = $this->cipherService->decrypt($payroll);
             $gaji = (float) ($plain['gaji_pokok'] ?? 0);
-            $deductions = (float) ($plain['total_deductions'] ?? $plain['potongan'] ?? 0);
+            $deductions = (float) ($plain['potongan'] ?? 0);
             $total = $gaji + $totalAllowances - $deductions;
             $cipher = $this->cipherService->encrypt([
                 'gaji_pokok' => $gaji,
                 'tunjangan' => $totalAllowances,
                 'potongan' => $deductions,
                 'total' => $total,
-                'total_allowances' => $totalAllowances,
-                'total_deductions' => $deductions,
-                'catatan' => (string) ($plain['catatan'] ?? ''),
             ]);
 
             $payroll->update($this->cipherAttributes($cipher));
@@ -830,9 +818,6 @@ class PayrollCalculationService
             'tunjangan' => $result['total_allowances'],
             'potongan' => $result['total_deductions'],
             'total' => $result['total_nett'],
-            'total_allowances' => $result['total_allowances'],
-            'total_deductions' => $result['total_deductions'],
-            'catatan' => '',
         ]);
 
         return $this->cipherAttributes($cipher);

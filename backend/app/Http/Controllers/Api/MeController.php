@@ -104,7 +104,7 @@ class MeController extends Controller
         $u = $request->user();
 
         if ($u->role !== 'staff') {
-            return response()->json(['message' => 'Endpoint ini khusus untuk staff.'], 403);
+            return response()->json(['message' => 'Endpoint ini khusus untuk pegawai.'], 403);
         }
 
         $emp = $this->resolveEmployee($u);

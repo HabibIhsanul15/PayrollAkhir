@@ -18,12 +18,11 @@ class Payroll extends Model
         'approval_note',
 
         // ciphertext
-        'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc','catatan_enc',
+        'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc',
         
-        // breakdown fields
+        // metadata perhitungan
         'calculation_mode', 'calculated_at',
-        'total_allowances_enc', 'total_deductions_enc',
-        'engine_version', 'period_from', 'period_to',
+        'period_from', 'period_to',
 
         // ✅ HYBRID fields
         'dek_enc',
@@ -46,9 +45,6 @@ class Payroll extends Model
         'tunjangan_enc',
         'potongan_enc',
         'total_enc',
-        'catatan_enc',
-        'total_allowances_enc',
-        'total_deductions_enc',
 
         // optional: kalau kamu mau sembunyikan juga
         // 'dek_enc',

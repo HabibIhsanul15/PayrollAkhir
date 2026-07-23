@@ -254,7 +254,7 @@ export default function PayrollPreviewModal({
                   <div className="flex justify-between pt-2 border-t mt-2">
                     <span className="font-semibold text-slate-800">Total Pendapatan</span>
                     <span className="font-semibold text-slate-800">
-                      {formatRupiah(data.gaji_pokok + data.total_allowances)}
+                      {formatRupiah(data.gaji_pokok + data.tunjangan)}
                     </span>
                   </div>
                 </div>
@@ -288,7 +288,7 @@ export default function PayrollPreviewModal({
                   {data.deductions?.length > 0 && (
                     <div className="flex justify-between gap-4 pt-2 border-t mt-2 text-red-700">
                       <span className="font-semibold">Total Potongan</span>
-                      <span className="font-semibold">-{formatRupiah(data.total_deductions)}</span>
+                      <span className="font-semibold">-{formatRupiah(data.potongan)}</span>
                     </div>
                   )}
                 </div>

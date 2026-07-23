@@ -398,10 +398,6 @@ class MutationRequestController extends Controller
     {
         $period = PayrollPeriod::forDate($effectiveDate);
 
-        if ($period?->status === 'closed') {
-            return "Perubahan tidak dapat dijadwalkan karena periode penggajian {$period->period_month} sudah ditutup.";
-        }
-
         if ($period && MonthlyRecap::query()
             ->where('employee_id', $employee->id)
             ->where('period_month', $period->period_month)

@@ -57,14 +57,17 @@
         return rtrim(rtrim(number_format($num, 2, ',', '.'), '0'), ',');
     };
     
-    $periodStr = optional($payroll->periode)->format('F Y');
+    $periodMonth = isset($payrollPeriod)
+        ? $payrollPeriod->period_month
+        : \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
+    $periodStr = \Carbon\Carbon::createFromFormat('Y-m', $periodMonth)->format('F Y');
     if ($payroll->period_from && $payroll->period_to) {
         $from = \Carbon\Carbon::parse($payroll->period_from);
         $to = \Carbon\Carbon::parse($payroll->period_to);
         if ($from->month == $to->month) {
-            $periodStr = $from->format('d') . ' sd ' . $to->format('d F Y');
+            $periodStr .= ' (' . $from->format('d') . ' sd ' . $to->format('d F Y') . ')';
         } else {
-            $periodStr = $from->format('d F') . ' sd ' . $to->format('d F Y');
+            $periodStr .= ' (' . $from->format('d F') . ' sd ' . $to->format('d F Y') . ')';
         }
     }
 
@@ -248,9 +251,9 @@
       <!-- Footer Totals -->
       <tr class="bg-blue-light bold" style="border-top: 1px solid #000;">
         <td colspan="3">Total Gaji Bruto</td>
-        <td class="right">{{ $rupiah($payroll->gaji_pokok + $payroll->total_allowances) }}</td>
+        <td class="right">{{ $rupiah($payroll->gaji_pokok + $payroll->tunjangan) }}</td>
         <td style="padding-left: 10px;">Total Potongan</td>
-        <td class="right">{{ $rupiah($payroll->total_deductions) }}</td>
+        <td class="right">{{ $rupiah($payroll->potongan) }}</td>
       </tr>
       <tr class="bg-blue-dark bold">
         <td colspan="3">Take Home Pay</td>

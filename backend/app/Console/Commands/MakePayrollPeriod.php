@@ -52,7 +52,6 @@ class MakePayrollPeriod extends Command
                 'name' => 'Periode Gaji ' . Carbon::createFromFormat('Y-m', $month)->translatedFormat('F Y'),
                 'start_date' => $start,
                 'end_date' => $end,
-                'status' => 'open'
             ]
         );
 

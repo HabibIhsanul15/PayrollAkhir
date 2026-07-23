@@ -418,7 +418,7 @@ export default function PositionManagementPage() {
                       <input
                         value={form.name}
                         onChange={(event) => updateName(event.target.value)}
-                        placeholder="Contoh: Staff"
+                        placeholder="Contoh: Pegawai"
                         required
                         className={`${inputClass} ${duplicateName ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
                       />

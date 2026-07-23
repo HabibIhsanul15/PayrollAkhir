@@ -64,7 +64,6 @@ class PayrollController extends Controller
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
 
             $gaji = $tunj = $pot = $total = null;
-            $cat = null;
 
             if ($canSeeNominal) {
                 try {
@@ -78,24 +77,21 @@ class PayrollController extends Controller
                             'tunjangan_enc' => $p->tunjangan_enc,
                             'potongan_enc' => $p->potongan_enc,
                             'total_enc' => $p->total_enc,
-                            'catatan_enc' => $p->catatan_enc,
                         ]);
 
                         $gaji = $dec['gaji_pokok'] ?? null;
                         $tunj = $dec['tunjangan'] ?? null;
                         $pot = $dec['potongan'] ?? null;
                         $total = $dec['total'] ?? null;
-                        $cat = $dec['catatan'] ?? null;
                     } else {
                         // ✅ AES / RSA
                         $gaji = CryptoService::readEncryptedOrPlainSafe($p->gaji_pokok_enc, $p->gaji_pokok, $alg);
                         $tunj = CryptoService::readEncryptedOrPlainSafe($p->tunjangan_enc, $p->tunjangan, $alg);
                         $pot = CryptoService::readEncryptedOrPlainSafe($p->potongan_enc, $p->potongan, $alg);
                         $total = CryptoService::readEncryptedOrPlainSafe($p->total_enc, $p->total, $alg);
-                        $cat = CryptoService::readEncryptedOrPlainSafe($p->catatan_enc, $p->catatan, $alg);
                     }
 
-                    // nominal -> float (catatan biarkan string)
+                    // nominal -> float
                     $gaji = $gaji !== null ? (float) $gaji : null;
                     $tunj = $tunj !== null ? (float) $tunj : null;
                     $pot = $pot !== null ? (float) $pot : null;
@@ -103,7 +99,6 @@ class PayrollController extends Controller
                 } catch (\Throwable $e) {
                     // kalau decrypt gagal, jangan bikin endpoint crash
                     $gaji = $tunj = $pot = $total = null;
-                    $cat = null;
                 }
             }
 
@@ -140,7 +135,6 @@ class PayrollController extends Controller
                     'tunjangan' => $tunj,
                     'potongan' => $pot,
                     'total' => $total,
-                    'catatan' => $cat,
                     'total_mandays' => (float) $total_mandays,
 
                     'masked' => ! $canSeeNominal,
@@ -200,8 +194,6 @@ class PayrollController extends Controller
         }
 
         $gaji = $tunj = $pot = $total = null;
-        $cat = null;
-        $tot_all = $tot_ded = null;
 
         $dec_ms = null;
 
@@ -219,36 +211,25 @@ class PayrollController extends Controller
                         'tunjangan_enc' => $payroll->tunjangan_enc,
                         'potongan_enc' => $payroll->potongan_enc,
                         'total_enc' => $payroll->total_enc,
-                        'catatan_enc' => $payroll->catatan_enc,
-                        'total_allowances_enc' => $payroll->total_allowances_enc,
-                        'total_deductions_enc' => $payroll->total_deductions_enc,
                     ]);
 
                     $gaji = $plain['gaji_pokok'] ?? null;
                     $tunj = $plain['tunjangan'] ?? null;
                     $pot = $plain['potongan'] ?? null;
                     $total = $plain['total'] ?? null;
-                    $cat = $plain['catatan'] ?? null;
-                    $tot_all = $plain['total_allowances'] ?? null;
-                    $tot_ded = $plain['total_deductions'] ?? null;
                 } else {
                     // ✅ AES / RSA
                     $gaji = CryptoService::readEncryptedOrPlain($payroll->gaji_pokok_enc, $payroll->gaji_pokok, $alg);
                     $tunj = CryptoService::readEncryptedOrPlain($payroll->tunjangan_enc, $payroll->tunjangan, $alg);
                     $pot = CryptoService::readEncryptedOrPlain($payroll->potongan_enc, $payroll->potongan, $alg);
                     $total = CryptoService::readEncryptedOrPlain($payroll->total_enc, $payroll->total, $alg);
-                    $cat = CryptoService::readEncryptedOrPlain($payroll->catatan_enc, $payroll->catatan, $alg);
-                    $tot_all = CryptoService::readEncryptedOrPlainSafe($payroll->total_allowances_enc, $payroll->total_allowances, $alg);
-                    $tot_ded = CryptoService::readEncryptedOrPlainSafe($payroll->total_deductions_enc, $payroll->total_deductions, $alg);
                 }
 
-                // nominal jadi float (catatan tetap string)
+                // nominal jadi float
                 $gaji = $gaji !== null ? (float) $gaji : null;
                 $tunj = $tunj !== null ? (float) $tunj : null;
                 $pot = $pot !== null ? (float) $pot : null;
                 $total = $total !== null ? (float) $total : null;
-                $tot_all = $tot_all !== null ? (float) $tot_all : null;
-                $tot_ded = $tot_ded !== null ? (float) $tot_ded : null;
 
                 foreach ($payroll->allowances as $al) {
                     if ($al->amount_enc) {
@@ -363,8 +344,12 @@ class PayrollController extends Controller
 
             'created_by' => $payroll->user?->name,
             'periode' => optional($payroll->periode)->toDateString(),
+            'period_month' => $periodMonth,
+            'period_from' => optional($payroll->period_from)->toDateString(),
+            'period_to' => optional($payroll->period_to)->toDateString(),
 
             'status' => $payroll->status ?? null,
+            'rejection_reason' => $payroll->status === 'rejected' ? $payroll->approval_note : null,
             'salary_alg' => $payroll->salary_alg ?? null,
             'paid_ref' => $payroll->paid_ref,
             'paid_at' => optional($payroll->paid_at)->toDateTimeString(),
@@ -374,10 +359,7 @@ class PayrollController extends Controller
             'tunjangan' => $tunj,
             'potongan' => $pot,
             'total' => $total,
-            'catatan' => $cat,
 
-            'total_allowances' => $tot_all,
-            'total_deductions' => $tot_ded,
             'calculation_mode' => $payroll->calculation_mode,
             'calculated_at' => $payroll->calculated_at,
 
@@ -643,26 +625,17 @@ class PayrollController extends Controller
                     'tunjangan_enc' => $payroll->tunjangan_enc,
                     'potongan_enc' => $payroll->potongan_enc,
                     'total_enc' => $payroll->total_enc,
-                    'catatan_enc' => $payroll->catatan_enc,
-                    'total_allowances_enc' => $payroll->total_allowances_enc,
-                    'total_deductions_enc' => $payroll->total_deductions_enc,
                 ]);
 
                 $payroll->gaji_pokok = $plain['gaji_pokok'] ?? null;
                 $payroll->tunjangan = $plain['tunjangan'] ?? null;
                 $payroll->potongan = $plain['potongan'] ?? null;
                 $payroll->total = $plain['total'] ?? null;
-                $payroll->catatan = $plain['catatan'] ?? null;
-                $payroll->total_allowances = $plain['total_allowances'] ?? null;
-                $payroll->total_deductions = $plain['total_deductions'] ?? null;
             } else {
                 $payroll->gaji_pokok = CryptoService::readEncryptedOrPlain($payroll->gaji_pokok_enc, $payroll->gaji_pokok, $alg);
                 $payroll->tunjangan = CryptoService::readEncryptedOrPlain($payroll->tunjangan_enc, $payroll->tunjangan, $alg);
                 $payroll->potongan = CryptoService::readEncryptedOrPlain($payroll->potongan_enc, $payroll->potongan, $alg);
                 $payroll->total = CryptoService::readEncryptedOrPlain($payroll->total_enc, $payroll->total, $alg);
-                $payroll->catatan = CryptoService::readEncryptedOrPlain($payroll->catatan_enc, $payroll->catatan, $alg);
-                $payroll->total_allowances = CryptoService::readEncryptedOrPlainSafe($payroll->total_allowances_enc, $payroll->total_allowances, $alg);
-                $payroll->total_deductions = CryptoService::readEncryptedOrPlainSafe($payroll->total_deductions_enc, $payroll->total_deductions, $alg);
             }
         } catch (\Throwable $e) {
             return response()->json([
@@ -674,9 +647,6 @@ class PayrollController extends Controller
         $payroll->gaji_pokok = $payroll->gaji_pokok !== null ? (float) $payroll->gaji_pokok : 0;
         $payroll->tunjangan = $payroll->tunjangan !== null ? (float) $payroll->tunjangan : 0;
         $payroll->potongan = $payroll->potongan !== null ? (float) $payroll->potongan : 0;
-
-        $payroll->total_allowances = $payroll->total_allowances !== null ? (float) $payroll->total_allowances : null;
-        $payroll->total_deductions = $payroll->total_deductions !== null ? (float) $payroll->total_deductions : null;
 
         foreach ($payroll->allowances as $al) {
             if ($al->amount_enc) {
@@ -697,14 +667,17 @@ class PayrollController extends Controller
             ? (float) $payroll->total
             : ($payroll->gaji_pokok + $payroll->tunjangan - $payroll->potongan);
 
+        $payrollPeriod = \App\Models\PayrollPeriod::forDate($payroll->periode);
+
         $pdf = Pdf::loadView('pdf.payroll-slip', [
             'payroll' => $payroll,
+            'payrollPeriod' => $payrollPeriod,
             'canSeeBank' => $this->canSeeBank($user, $payroll),
         ])->setPaper('A4', 'portrait');
 
         $filename = 'slip-gaji-'.
             ($payroll->employee?->employee_code ?? $payroll->employee_id).
-            '-'.optional($payroll->periode)->format('Y-m').'.pdf';
+            '-'.$payrollPeriod->period_month.'.pdf';
 
         $this->audit($request, 'PAYROLL_VIEW_PDF', $payroll);
 
@@ -729,11 +702,11 @@ class PayrollController extends Controller
             'gaji_pokok' => ['required', 'numeric', 'min:0'],
             'tunjangan' => ['nullable', 'numeric', 'min:0'],
             'potongan' => ['nullable', 'numeric', 'min:0'],
-            'catatan' => ['nullable', 'string', 'max:500'],
             'auto_request' => ['nullable', 'boolean'],
         ]);
 
-        $periode = \App\Models\PayrollPeriod::forDate($data['periode'])->start_date->startOfDay();
+        $payrollPeriod = \App\Models\PayrollPeriod::forDate($data['periode']);
+        $periode = $payrollPeriod->start_date->startOfDay();
         $data['periode'] = $periode->toDateString();
         $autoRequest = (bool) ($request->input('auto_request', false));
 
@@ -777,7 +750,6 @@ class PayrollController extends Controller
         $t0_enc = hrtime(true);
 
         $gaji_enc = $tunj_enc = $pot_enc = $total_enc = null;
-        $cat_enc = null;
 
         $payrollDekEnc = null;
         $payrollEncMeta = null;
@@ -789,14 +761,12 @@ class PayrollController extends Controller
                 'tunjangan' => (string) $tunj,
                 'potongan' => (string) $pot,
                 'total' => (string) $total,
-                'catatan' => (string) ($data['catatan'] ?? ''),
             ]);
 
             $gaji_enc = $pack['fields']['gaji_pokok_enc'];
             $tunj_enc = $pack['fields']['tunjangan_enc'];
             $pot_enc = $pack['fields']['potongan_enc'];
             $total_enc = $pack['fields']['total_enc'];
-            $cat_enc = ! empty($data['catatan']) ? $pack['fields']['catatan_enc'] : null;
 
             $payrollDekEnc = $pack['dek_enc'];
             $payrollEncMeta = $pack['enc_meta'];
@@ -812,7 +782,6 @@ class PayrollController extends Controller
             $tunj_enc = $enc((string) $tunj);
             $pot_enc = $enc((string) $pot);
             $total_enc = $enc((string) $total);
-            $cat_enc = ! empty($data['catatan']) ? $enc((string) $data['catatan']) : null;
         }
 
         $enc_ms = (hrtime(true) - $t0_enc) / 1e6;
@@ -824,6 +793,8 @@ class PayrollController extends Controller
             'user_id' => $request->user()->id,
             'employee_id' => $data['employee_id'],
             'periode' => $data['periode'],
+            'period_from' => $payrollPeriod->start_date->toDateString(),
+            'period_to' => $payrollPeriod->end_date->toDateString(),
             'status' => $autoRequest ? 'requested' : 'draft',
             'requested_by' => $autoRequest ? $request->user()->id : null,
             'requested_at' => $autoRequest ? Carbon::now() : null,
@@ -833,14 +804,12 @@ class PayrollController extends Controller
             'tunjangan' => null,
             'potongan' => null,
             'total' => null,
-            'catatan' => null,
 
             // ciphertext
             'gaji_pokok_enc' => $gaji_enc,
             'tunjangan_enc' => $tunj_enc,
             'potongan_enc' => $pot_enc,
             'total_enc' => $total_enc,
-            'catatan_enc' => $cat_enc,
 
             // ✅ HYBRID support (boleh null kalau AES/RSA)
             'dek_enc' => $payrollDekEnc,
@@ -861,6 +830,13 @@ class PayrollController extends Controller
 
         $total_ms = (hrtime(true) - $t0_total) / 1e6;
 
+        // Ukuran payload terenkripsi yang disimpan untuk satu payroll baru.
+        // Nilai ini sengaja hanya dicatat pada skenario CREATE.
+        $cipherBytes = array_sum(array_map(
+            static fn (?string $value): int => strlen((string) $value),
+            [$gaji_enc, $tunj_enc, $pot_enc, $total_enc, $payrollDekEnc]
+        ));
+
         try {
             PerfLog::create([
                 'scenario' => 'CREATE',
@@ -869,10 +845,11 @@ class PayrollController extends Controller
                 'encrypt_ms' => $enc_ms,
                 'db_ms' => $db_ms,
                 'total_ms' => $total_ms,
+                'cipher_bytes' => $cipherBytes,
                 'meta' => [
                     'read_mode' => env('PAYROLL_READ_MODE'),
                     'storage_mode' => env('SALARY_STORAGE_MODE'),
-                    'cat_len' => isset($data['catatan']) ? strlen((string) $data['catatan']) : 0,
+                    'cipher_bytes_scope' => 'gaji_pokok_enc,tunjangan_enc,potongan_enc,total_enc,dek_enc',
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -909,7 +886,6 @@ class PayrollController extends Controller
             'gaji_pokok' => ['sometimes', 'numeric', 'min:0'],
             'tunjangan' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'potongan' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'catatan' => ['sometimes', 'nullable', 'string', 'max:500'],
         ]);
 
         // 1) Algoritma target dari config/env (jangan terima dari FE)
@@ -927,18 +903,15 @@ class PayrollController extends Controller
                     'tunjangan_enc' => $payroll->tunjangan_enc,
                     'potongan_enc' => $payroll->potongan_enc,
                     'total_enc' => $payroll->total_enc,
-                    'catatan_enc' => $payroll->catatan_enc,
                 ]);
 
                 $oldGaji = (float) ($oldPlain['gaji_pokok'] ?? 0);
                 $oldTunj = (float) ($oldPlain['tunjangan'] ?? 0);
                 $oldPot = (float) ($oldPlain['potongan'] ?? 0);
-                $oldCat = (string) ($oldPlain['catatan'] ?? '');
             } else {
                 $oldGaji = (float) (CryptoService::readEncryptedOrPlainSafe($payroll->gaji_pokok_enc, null, $oldAlg) ?? 0);
                 $oldTunj = (float) (CryptoService::readEncryptedOrPlainSafe($payroll->tunjangan_enc, null, $oldAlg) ?? 0);
                 $oldPot = (float) (CryptoService::readEncryptedOrPlainSafe($payroll->potongan_enc, null, $oldAlg) ?? 0);
-                $oldCat = (string) (CryptoService::readEncryptedOrPlainSafe($payroll->catatan_enc, null, $oldAlg) ?? '');
             }
         } catch (\Throwable $e) {
             return response()->json([
@@ -951,18 +924,16 @@ class PayrollController extends Controller
         $tunj = array_key_exists('tunjangan', $data) ? (float) ($data['tunjangan'] ?? 0) : $oldTunj;
         $pot = array_key_exists('potongan', $data) ? (float) ($data['potongan'] ?? 0) : $oldPot;
 
-        $catatanInputProvided = array_key_exists('catatan', $data);
-        $catatan = $catatanInputProvided
-            ? (string) ($data['catatan'] ?? '')
-            : $oldCat;
-
         $total = $gaji + $tunj - $pot;
 
         // 4) Handle periode
         $periode = null;
         if (array_key_exists('periode', $data)) {
-            $periode = \App\Models\PayrollPeriod::forDate($data['periode'])->start_date->startOfDay();
+            $payrollPeriod = \App\Models\PayrollPeriod::forDate($data['periode']);
+            $periode = $payrollPeriod->start_date->startOfDay();
             $data['periode'] = $periode->toDateString();
+            $data['period_from'] = $payrollPeriod->start_date->toDateString();
+            $data['period_to'] = $payrollPeriod->end_date->toDateString();
 
             // Cegah duplikat periode
             $exists = Payroll::where('employee_id', $payroll->employee_id)
@@ -983,9 +954,6 @@ class PayrollController extends Controller
         $data['tunjangan'] = null;
         $data['potongan'] = null;
         $data['total'] = null;
-        if ($catatanInputProvided) {
-            $data['catatan'] = null;
-        }
 
         // 6) Encrypt ulang sesuai algoritma target
         $payrollDekEnc = null;
@@ -999,18 +967,12 @@ class PayrollController extends Controller
                 'tunjangan' => (string) $tunj,
                 'potongan' => (string) $pot,
                 'total' => (string) $total,
-                'catatan' => (string) $catatan,
             ]);
 
             $data['gaji_pokok_enc'] = $pack['fields']['gaji_pokok_enc'];
             $data['tunjangan_enc'] = $pack['fields']['tunjangan_enc'];
             $data['potongan_enc'] = $pack['fields']['potongan_enc'];
             $data['total_enc'] = $pack['fields']['total_enc'];
-
-            // catatan: kalau kosong, set null biar hemat
-            if ($catatanInputProvided) {
-                $data['catatan_enc'] = ($catatan !== '') ? $pack['fields']['catatan_enc'] : null;
-            }
 
             $payrollDekEnc = $pack['dek_enc'];
             $payrollEncMeta = $pack['enc_meta'];
@@ -1029,10 +991,6 @@ class PayrollController extends Controller
             $data['tunjangan_enc'] = $enc((string) $tunj);
             $data['potongan_enc'] = $enc((string) $pot);
             $data['total_enc'] = $enc((string) $total);
-
-            if ($catatanInputProvided) {
-                $data['catatan_enc'] = ($catatan !== '') ? $enc((string) $catatan) : null;
-            }
 
             // kalau pindah dari HYBRID -> AES/RSA, bersihin meta biar rapi
             $data['dek_enc'] = null;
@@ -1238,7 +1196,8 @@ class PayrollController extends Controller
 
     private function makePaidReference(Payroll $payroll): string
     {
-        $periodKey = optional($payroll->periode)->format('Ym') ?: Carbon::now()->format('Ym');
+        $periodKey = \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
+        $periodKey = str_replace('-', '', $periodKey);
         $payrollId = str_pad((string) $payroll->id, 5, '0', STR_PAD_LEFT);
 
         return "TRF-{$periodKey}-{$payrollId}";

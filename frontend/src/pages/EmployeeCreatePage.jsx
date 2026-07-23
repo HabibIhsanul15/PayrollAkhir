@@ -27,7 +27,6 @@ export default function EmployeeCreatePage() {
     base_salary_basis: "daily",
     base_salary_amount: "",
     num_toddlers: "",
-    is_trainer: false,
     nik: "",
     npwp: "",
     phone: "",
@@ -194,10 +193,9 @@ export default function EmployeeCreatePage() {
         position_id: form.position_id ? parseInt(form.position_id, 10) : null,
         employee_code: form.employee_code,
         name: form.name,
-        join_date: form.join_date || null,
-        num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
-        is_trainer: !!form.is_trainer,
-        nik: form.nik || null,
+          join_date: form.join_date || null,
+          num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
+          nik: form.nik || null,
         npwp: form.npwp || null,
         phone: form.phone || null,
         address: form.address || null,
@@ -462,7 +460,7 @@ export default function EmployeeCreatePage() {
                     onChange={(event) => setField("role", event.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-200/40"
                   >
-                    <option value="staff">Staff</option>
+                    <option value="staff">Pegawai</option>
                     <option value="hcga">HCGA</option>
                     <option value="fat">FAT</option>
                     <option value="director">Director</option>

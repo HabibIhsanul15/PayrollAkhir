@@ -12,9 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('payroll_id')->constrained()->cascadeOnDelete();
             $table->foreignId('allowance_type_id')->constrained()->cascadeOnDelete();
-            $table->decimal('mandays', 8, 2)->nullable();
+            $table->unsignedInteger('mandays')->nullable();
             $table->json('calculation_detail')->nullable();
-            $table->boolean('condition_met')->default(true);
             $table->boolean('is_manual_override')->default(false);
             $table->text('amount_enc')->nullable();
             $table->string('salary_alg', 20)->nullable();

@@ -37,18 +37,13 @@ return new class extends Migration
         $table->longText('tunjangan_enc')->nullable();
         $table->longText('potongan_enc')->nullable();
         
-        $table->text('total_allowances_enc')->nullable();
-        $table->text('total_deductions_enc')->nullable();
-
         $table->string('calculation_mode', 20)->default('manual');
-        $table->string('engine_version', 20)->nullable();
         $table->date('period_from')->nullable();
         $table->date('period_to')->nullable();
 
         $table->timestamp('calculated_at')->nullable();
 
         $table->longText('total_enc')->nullable();
-        $table->longText('catatan_enc')->nullable();
 
         $table->string('salary_alg', 20)->default('AES');
         $table->string('salary_key_id', 50)->nullable();

@@ -66,13 +66,11 @@ class AllowanceTypeController extends Controller
             'name' => ['required', 'string', 'max:150', 'unique:allowance_types,name'],
             'calculation_type' => ['required', 'in:per_mandays,per_trip,flat,per_toddler'],
             'input_source' => ['nullable', Rule::in(self::INPUT_SOURCES)],
-            'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['required', 'integer', 'min:0'],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $data['applies_to'] = 'all';
         $data['input_source'] = $this->normalizeInputSource($data['calculation_type'], $data['input_source'] ?? null);
         $allowanceType = AllowanceType::create($data);
 
@@ -95,13 +93,11 @@ class AllowanceTypeController extends Controller
             ],
             'calculation_type' => ['sometimes', 'required', 'in:per_mandays,per_trip,flat,per_toddler'],
             'input_source' => ['nullable', Rule::in(self::INPUT_SOURCES)],
-            'applies_to' => ['nullable', 'in:all'],
             'display_order' => ['sometimes', 'required', 'integer', 'min:0'],
             'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'required', 'boolean'],
         ]);
 
-        $data['applies_to'] = 'all';
         if (array_key_exists('calculation_type', $data) || array_key_exists('input_source', $data)) {
             $data['input_source'] = $this->normalizeInputSource(
                 $data['calculation_type'] ?? $allowanceType->calculation_type,

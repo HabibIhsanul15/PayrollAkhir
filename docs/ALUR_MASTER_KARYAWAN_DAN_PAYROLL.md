@@ -26,7 +26,7 @@ Prinsip utamanya:
 4. Untuk batasan TA, form Master Jabatan dibuat sederhana: identitas jabatan, level, status, dan nominal gaji harian default.
 5. Nominal individual disimpan dalam profil gaji berdasarkan tanggal efektif.
 6. Tarif master dipilih berdasarkan jabatan, jenis tunjangan, dan tanggal.
-7. Data karyawan hanya menampilkan kondisi personal yang memang dibutuhkan di flow awal payroll, misalnya `join_date`, `is_trainer`, dan `num_toddlers`.
+7. Data karyawan hanya menampilkan kondisi personal yang memang dibutuhkan di flow payroll, misalnya `join_date` dan `num_toddlers`.
 8. Hasil payroll disimpan sebagai ciphertext, bukan nominal plaintext.
 9. Setiap hasil payroll menyimpan breakdown agar perhitungannya dapat ditelusuri.
 10. Status karyawan otomatis `active` saat data awal dibuat, lalu baru diubah bila ada kebutuhan nonaktif.
@@ -140,27 +140,20 @@ jumlah tunjangan = tarif lembur per jam x overtime_hours
 Contoh Tunjangan Training:
 
 ```text
-calculation_type   = formula
+calculation_type   = per_mandays
 input_source       = training_days
-condition_field    = is_trainer
-condition_operator = =
-condition_value    = 1
-rate_multiplier    = 1.5
 ```
 
 Rumusnya:
 
 ```text
-jumlah tunjangan = basis gaji pokok x 1.5 x training_days
+jumlah tunjangan = tarif jabatan x training_days
 ```
-
-Nilai `requires_condition` dan `rate_formula` pada tarif hanya merupakan keterangan manusia. Keputusan program memakai field kondisi yang terstruktur pada `allowance_types`.
 
 Penting: hak menerima tunjangan sekarang ditentukan oleh kombinasi:
 
 1. Jabatan punya tarif aktif untuk tunjangan tersebut.
-2. Kondisi karyawan terpenuhi, misalnya `is_trainer = 1`.
-3. Rekap bulanan menyediakan angka aktivitas jika tunjangan itu berbasis harian/trip.
+2. Rekap bulanan menyediakan angka aktivitas jika tunjangan itu berbasis harian/trip.
 
 Field lama seperti `Berlaku Untuk: Project Partner/Fix Rate/HO` tidak dipakai sebagai penentu payroll karena master karyawan sudah disederhanakan. Secara konsep, jenis tunjangan berlaku umum, lalu yang benar-benar dihitung adalah tunjangan yang memiliki tarif aktif pada jabatan karyawan.
 
@@ -219,7 +212,7 @@ Catatan desain form:
 2. `status` tidak ditampilkan sebagai keputusan awal, karena karyawan baru logisnya langsung aktif.
 3. `join_date` ditampilkan karena penting untuk menjelaskan kapan histori jabatan dan profil gaji mulai berlaku.
 4. Basis gaji pokok tidak diedit dari form karyawan. Untuk batasan TA, gaji pokok jabatan dibuat harian dan nominalnya dikelola Finance di menu Master Jabatan.
-5. Kondisi khusus payroll seperti `is_trainer` dan `num_toddlers` tetap bisa diisi di form karyawan, meskipun suatu jabatan belum memakai aturan tersebut saat ini.
+5. Jumlah balita (`num_toddlers`) tetap bisa diisi di form karyawan karena dipakai oleh tunjangan per balita.
 6. Jabatan tidak diedit bebas dari form edit, tetapi mengikuti flow promosi atau demosi agar histori tetap konsisten.
 7. Penentu payroll yang digunakan pada aplikasi ini adalah jabatan aktif, profil gaji efektif, rekap bulanan, dan tarif tunjangan jabatan.
 8. Flag probation promosi tidak dimasukkan ke form awal karyawan agar scope master data tetap sederhana. Jika nanti dipakai, lebih tepat masuk ke flow promosi atau demosi.
@@ -326,7 +319,7 @@ HYBRID  -> field dienkripsi AES-128-GCM dengan DEK,
            kemudian DEK dibungkus RSA-2048
 ```
 
-Kolom `gaji_pokok`, `tunjangan`, `potongan`, dan `total` disimpan `NULL`. Nilainya dibaca dari `*_enc` hanya setelah pengguna lolos pemeriksaan hak akses.
+Kolom `gaji_pokok`, `tunjangan`, `potongan`, dan `total` disimpan `NULL`. Nilainya dibaca dari empat kolom terenkripsi utama (`gaji_pokok_enc`, `tunjangan_enc`, `potongan_enc`, dan `total_enc`) hanya setelah pengguna lolos pemeriksaan hak akses.
 
 File utama:
 

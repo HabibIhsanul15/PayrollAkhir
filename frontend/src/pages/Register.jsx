@@ -111,7 +111,7 @@ export default function Register() {
               <h1 className="mt-10 text-4xl font-black leading-tight">
                 Let’s setup your
                 <br />
-                <span className="text-white/90">Staff Account</span>
+                <span className="text-white/90">Akun Pegawai</span>
               </h1>
 
               <p className="mt-5 max-w-md text-white/85 leading-relaxed">
@@ -149,15 +149,15 @@ export default function Register() {
           <div className="w-full max-w-lg">
             {/* top nav */}
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-500">Register / Staff</div>
+              <div className="text-xs text-slate-500">Daftar / Pegawai</div>
               <Link to="/login" className="text-xs font-semibold text-sky-700 hover:underline">
                 Back to Login →
               </Link>
             </div>
 
-            <h2 className="mt-3 text-3xl font-black text-slate-900">Register Staff</h2>
+            <h2 className="mt-3 text-3xl font-black text-slate-900">Daftar Pegawai</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Lengkapi data berikut untuk membuat akun staff.
+              Lengkapi data berikut untuk membuat akun pegawai.
             </p>
 
             <AlertMessage type="error" message={err} className="mt-4" />
@@ -263,7 +263,7 @@ export default function Register() {
                       className={input}
                       value={position}
                       onChange={(e) => setPosition(e.target.value)}
-                      placeholder="Staff / Supervisor"
+                      placeholder="Pegawai / Supervisor"
                       disabled={loading}
                     />
                     {fieldErrs.position && <div className={errText}>{fieldErrs.position}</div>}
@@ -299,11 +299,11 @@ export default function Register() {
                 className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
                 title={!isRequiredFilled ? "Lengkapi field wajib (Step 1 & 2)" : ""}
               >
-                {loading ? "Loading..." : "Register Staff"}
+                {loading ? "Loading..." : "Daftar Pegawai"}
               </button>
 
               <div className="text-xs text-slate-500">
-                Catatan: role otomatis dibuat sebagai <b>staff</b>. FAT/Direktur tidak bisa register dari halaman ini.
+                Catatan: peran otomatis dibuat sebagai <b>Pegawai</b>. FAT/Direktur tidak bisa mendaftar dari halaman ini.
               </div>
 
               <div className="text-center text-xs text-slate-500">

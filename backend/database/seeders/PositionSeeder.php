@@ -61,9 +61,9 @@ class PositionSeeder extends Seeder
             ],
             [
                 'code' => 'staff',
-                'name' => 'Staff',
+                'name' => 'Pegawai',
                 'level' => 8,
-                'description' => 'Staff',
+                'description' => 'Pegawai',
                 'is_active' => true,
             ],
         ];

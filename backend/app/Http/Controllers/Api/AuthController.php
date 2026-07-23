@@ -50,7 +50,7 @@ class AuthController extends Controller
             if (!$employee) {
                 Auth::logout();
                 return response()->json([
-                    'message' => 'Akun staff belum terhubung ke data employee. Hubungi HCGA.'
+                    'message' => 'Akun pegawai belum terhubung ke data pegawai. Hubungi HCGA.'
                 ], 403);
             }
 

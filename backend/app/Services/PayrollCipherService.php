@@ -14,9 +14,6 @@ class PayrollCipherService
             'tunjangan' => 0,
             'potongan' => 0,
             'total' => 0,
-            'catatan' => '',
-            'total_allowances' => 0,
-            'total_deductions' => 0,
         ], $plain);
 
         if ($alg === 'HYBRID') {
@@ -36,11 +33,9 @@ class PayrollCipherService
             : CryptoService::encryptAESGCM($value);
         $fields = [];
 
-        foreach (['gaji_pokok', 'tunjangan', 'potongan', 'total', 'total_allowances', 'total_deductions'] as $field) {
+        foreach (['gaji_pokok', 'tunjangan', 'potongan', 'total'] as $field) {
             $fields[$field.'_enc'] = $encrypt((string) $plain[$field]);
         }
-        $fields['catatan_enc'] = $plain['catatan'] !== '' ? $encrypt((string) $plain['catatan']) : null;
-
         return [
             'alg' => $alg,
             'key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
@@ -62,14 +57,11 @@ class PayrollCipherService
                 'tunjangan_enc' => $payroll->tunjangan_enc,
                 'potongan_enc' => $payroll->potongan_enc,
                 'total_enc' => $payroll->total_enc,
-                'catatan_enc' => $payroll->catatan_enc,
-                'total_allowances_enc' => $payroll->total_allowances_enc,
-                'total_deductions_enc' => $payroll->total_deductions_enc,
             ]);
         }
 
         $result = [];
-        foreach (['gaji_pokok', 'tunjangan', 'potongan', 'total', 'catatan', 'total_allowances', 'total_deductions'] as $field) {
+        foreach (['gaji_pokok', 'tunjangan', 'potongan', 'total'] as $field) {
             $result[$field] = CryptoService::readEncryptedOrPlainSafe(
                 $payroll->{$field.'_enc'},
                 $payroll->{$field},

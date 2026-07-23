@@ -102,11 +102,11 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
             const currentPeriod = periodList.find((period) => {
               const start = parseLocalDate(period.start_date);
               const end = parseLocalDate(period.end_date);
-              return period.status === "open" && start && end && today >= start && today <= end;
+              return start && end && today >= start && today <= end;
             });
             const firstAvailablePeriod = currentPeriod || periodList.find((period) => {
               const end = parseLocalDate(period.end_date);
-              return period.status === "open" && end && end >= today;
+              return end && end >= today;
             });
 
             setForm({
@@ -324,7 +324,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                     >
                       <option value="">-- Pilih Bulan Payroll --</option>
                       {periods.map((period) => (
-                        <option key={period.id} value={period.period_month} disabled={period.status !== "open"}>
+                        <option key={period.id} value={period.period_month}>
                           {period.period_month}
                         </option>
                       ))}
@@ -416,7 +416,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
           <button
             form="mutation-form"
             type="submit"
-            disabled={saving || loading || !form.employee_id || !form.position_id || !hascurrentPositionLevel || !!activeMutation || selectedPeriod?.status === "closed"}
+            disabled={saving || loading || !form.employee_id || !form.position_id || !hascurrentPositionLevel || !!activeMutation}
             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-4 focus:ring-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Mengajukan..." : editData ? "Simpan Perubahan" : `Ajukan ${mutationLabel}`}

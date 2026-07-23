@@ -16,13 +16,13 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->char('period_month', 7); // e.g., 2026-06
             
-            $table->decimal('wfo_days', 8, 2)->default(0);
-            $table->decimal('wfh_days', 8, 2)->default(0);
-            $table->decimal('out_of_town_days', 8, 2)->default(0);
+            $table->unsignedInteger('wfo_days')->default(0);
+            $table->unsignedInteger('wfh_days')->default(0);
+            $table->unsignedInteger('out_of_town_days')->default(0);
             $table->integer('business_trips')->default(0);
-            $table->decimal('training_days', 8, 2)->default(0);
-            $table->decimal('overtime_hours', 8, 2)->default(0);
-            $table->decimal('total_mandays', 8, 2)->default(0);
+            $table->unsignedInteger('training_days')->default(0);
+            $table->unsignedInteger('overtime_hours')->default(0);
+            $table->unsignedInteger('total_mandays')->default(0);
             $table->unsignedInteger('late_count')->default(0);
             
             $table->boolean('is_finalized')->default(false);

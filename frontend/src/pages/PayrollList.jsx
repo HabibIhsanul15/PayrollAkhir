@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { getUser, isAuthed } from "@/lib/auth";
 import { currentPayrollMonth, formatRupiah } from "@/lib/utils";
 import AlertMessage from "@/components/AlertMessage";
-import { Search, FileText, CheckCircle2, Calculator, Trash2, Send, CheckCircle, CreditCard, AlertTriangle } from "lucide-react";
+import { Search, FileText, CheckCircle2, Calculator, Trash2, Send, CheckCircle, CreditCard, AlertTriangle, XCircle } from "lucide-react";
 import PayrollPreviewModal from "@/components/PayrollPreviewModal";
+import RejectPayrollModal from "@/components/RejectPayrollModal";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 const STATUS_CONFIG = {
@@ -34,6 +35,11 @@ const STATUS_CONFIG = {
     label: "Dibayar",
     icon: CreditCard,
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  rejected: {
+    label: "Ditolak",
+    icon: XCircle,
+    className: "bg-rose-50 text-rose-700 border-rose-200",
   },
   failed: {
     label: "Perlu Data",
@@ -109,6 +115,12 @@ export default function PayrollList() {
     paidNote: "",
     submitting: false,
   });
+  const [rejectModal, setRejectModal] = useState({
+    open: false,
+    payrollId: null,
+    submitting: false,
+    errorMessage: "",
+  });
 
   const isFAT = role === "fat";
   const isDirector = role === "director";
@@ -152,9 +164,9 @@ export default function PayrollList() {
   const rawResults = isStaff ? staffResults : (data?.results || []);
   const results = isStaff
     ? rawResults
-    : isDirector
-    ? rawResults.filter((r) => r.payroll_id && ["submitted", "approved", "paid"].includes(r.payroll_status))
-    : rawResults;
+      : isDirector
+        ? rawResults.filter((r) => r.payroll_id && ["submitted", "approved", "paid", "rejected"].includes(r.payroll_status))
+        : rawResults;
   const summary = buildSummary(results);
 
   const filtered = results.filter((r) =>
@@ -225,7 +237,7 @@ export default function PayrollList() {
   const handleRequestAllApproval = async () => {
     const candidates = results.filter((row) => {
       const statusKey = resolvePayrollStatus(row);
-      return statusKey === "ready" || statusKey === "draft";
+      return statusKey === "ready" || statusKey === "draft" || statusKey === "rejected";
     });
 
     if (candidates.length === 0) {
@@ -269,28 +281,49 @@ export default function PayrollList() {
     });
   };
   const handleAction = async (id, action) => {
+    if (action === "reject") {
+      setRejectModal({ open: true, payrollId: id, submitting: false, errorMessage: "" });
+      return;
+    }
+
     let confirmMsg = "";
     if (action === "submit") confirmMsg = "Ajukan payroll ini ke Direktur?";
     if (action === "approve") confirmMsg = "Setujui payroll ini?";
-    if (action === "reject") confirmMsg = "Tolak payroll ini?";
     
-    const ok = await confirm(confirmMsg);
+    const ok = await confirm(confirmMsg, {
+      title: action === "approve" ? "Setujui Payroll" : "Ajukan ke Direktur",
+      icon: action === "approve" ? "success" : "info",
+    });
     if (!ok) return;
 
-    let body = {};
-    if (action === "reject") {
-        const reason = window.prompt("Alasan penolakan:");
-        if (reason === null) return; // User cancelled prompt
-        if (reason.trim()) {
-            body.note = reason.trim();
-        }
-    }
-
     try {
-      await api(`/payrolls/${id}/${action}`, { method: "POST", body });
+      await api(`/payrolls/${id}/${action}`, { method: "POST", body: {} });
       load();
     } catch (e) {
       alert(e?.message || `Gagal melakukan aksi ${action}`);
+    }
+  };
+
+  const closeRejectModal = () => {
+    if (rejectModal.submitting) return;
+    setRejectModal({ open: false, payrollId: null, submitting: false, errorMessage: "" });
+  };
+
+  const submitReject = async (reason) => {
+    const payrollId = rejectModal.payrollId;
+    if (!payrollId) return;
+
+    setRejectModal((current) => ({ ...current, submitting: true, errorMessage: "" }));
+    try {
+      await api(`/payrolls/${payrollId}/reject`, { method: "POST", body: { note: reason } });
+      setRejectModal({ open: false, payrollId: null, submitting: false, errorMessage: "" });
+      load();
+    } catch (e) {
+      setRejectModal((current) => ({
+        ...current,
+        submitting: false,
+        errorMessage: e?.message || "Gagal menolak payroll.",
+      }));
     }
   };
 
@@ -342,7 +375,7 @@ export default function PayrollList() {
       });
       closeTransferModal();
       load();
-      await confirm("Transfer gaji berhasil dicatat. Slip gaji sudah tersedia untuk staff terkait.", {
+      await confirm("Transfer gaji berhasil dicatat. Slip gaji sudah tersedia untuk pegawai terkait.", {
         title: "Transfer Tercatat",
         isAlert: true,
         icon: "success",
@@ -468,7 +501,7 @@ export default function PayrollList() {
                       const statusKey = resolvePayrollStatus(r);
                       const statusMeta = STATUS_CONFIG[statusKey] || STATUS_CONFIG.ready;
                       const StatusIcon = statusMeta.icon;
-                      const canRequestApproval = isFAT && (statusKey === "ready" || statusKey === "draft");
+                      const canRequestApproval = isFAT && ["ready", "draft", "rejected"].includes(statusKey);
                       
                       return (
                         <tr key={i} className="hover:bg-slate-50/80 transition-colors">
@@ -514,7 +547,7 @@ export default function PayrollList() {
                                 {canRequestApproval && (
                                   <button onClick={() => handleRequestApproval(r)} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded">
                                     <Send size={12} />
-                                    Ajukan
+                                    {statusKey === "rejected" ? "Ajukan Ulang" : "Ajukan"}
                                   </button>
                                 )}
                                 {isDirector && r.payroll_status === 'submitted' && (
@@ -609,8 +642,16 @@ export default function PayrollList() {
         payrollId={previewModal.payrollId}
         periodMonth={period}
         isFAT={isFAT}
-        canEditDeductions={isFAT && (!previewModal.payrollStatus || previewModal.payrollStatus === "draft")}
+        canEditDeductions={isFAT && (!previewModal.payrollStatus || ["draft", "rejected"].includes(previewModal.payrollStatus))}
         onDeductionSaved={() => mutate()}
+      />
+
+      <RejectPayrollModal
+        open={rejectModal.open}
+        onClose={closeRejectModal}
+        onConfirm={submitReject}
+        isSubmitting={rejectModal.submitting}
+        errorMessage={rejectModal.errorMessage}
       />
 
       {transferModal.open && (

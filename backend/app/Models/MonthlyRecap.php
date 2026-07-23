@@ -12,14 +12,14 @@ class MonthlyRecap extends Model
     protected $guarded = ['id'];
     
     protected $casts = [
-        'wfo_days' => 'decimal:2',
-        'wfh_days' => 'decimal:2',
-        'out_of_town_days' => 'decimal:2',
+        'wfo_days' => 'integer',
+        'wfh_days' => 'integer',
+        'out_of_town_days' => 'integer',
         'business_trips' => 'integer',
-        'training_days' => 'decimal:2',
-        'overtime_hours' => 'decimal:2',
+        'training_days' => 'integer',
+        'overtime_hours' => 'integer',
         'late_count' => 'integer',
-        'total_mandays' => 'decimal:2',
+        'total_mandays' => 'integer',
         'is_finalized' => 'boolean',
         'finalized_at' => 'datetime',
     ];

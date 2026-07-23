@@ -18,7 +18,6 @@ class BenchmarkController extends Controller
             'tunjangan' => '2000000',
             'potongan' => '500000',
             'total' => '6500000',
-            'catatan' => 'Gaji bulan ini'
         ];
         $dummyPlainStr = json_encode($dummyPlain);
 

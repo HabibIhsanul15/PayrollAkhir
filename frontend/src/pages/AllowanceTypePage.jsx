@@ -127,7 +127,6 @@ export default function AllowanceTypePage() {
     name: "",
     calculation_type: "per_mandays",
     input_source: "total_mandays",
-    applies_to: "all",
     display_order: 0,
     description: "",
     is_active: true,
@@ -141,7 +140,6 @@ export default function AllowanceTypePage() {
       name: "",
       calculation_type: "per_mandays",
       input_source: "total_mandays",
-      applies_to: "all",
       display_order: rows.length,
       description: "",
       is_active: true,
@@ -156,7 +154,6 @@ export default function AllowanceTypePage() {
       name: r.name,
       calculation_type: r.calculation_type,
       input_source: r.input_source || defaultInputSource(r.calculation_type),
-      applies_to: "all",
       display_order: r.display_order,
       description: r.description || "",
       is_active: r.is_active,
@@ -170,10 +167,7 @@ export default function AllowanceTypePage() {
     e.preventDefault();
     setErr("");
     setSuccess("");
-    const payload = {
-      ...form,
-      applies_to: "all",
-    };
+    const payload = { ...form };
 
     try {
       if (isEdit) {

@@ -12,7 +12,6 @@ class PayrollPeriod extends Model
         'name',
         'start_date',
         'end_date',
-        'status',
     ];
 
     protected $casts = [

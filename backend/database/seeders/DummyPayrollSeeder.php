@@ -80,8 +80,6 @@ class DummyPayrollSeeder extends Seeder
                 'phone_enc' => CryptoService::encryptAESGCM('0812' . rand(10000000, 99999999)),
                 'address_enc' => CryptoService::encryptAESGCM('Jl. Pegawai No. ' . rand(1, 100) . ', Jakarta'),
                 'num_toddlers' => rand(0, 2),
-                'is_trainer' => false,
-                'is_on_probation' => false,
                 'bank_name' => 'Bank BCA',
                 'bank_account_name' => $d['name'],
                 'bank_account_number_enc' => CryptoService::encryptAESGCM('1234567890'),

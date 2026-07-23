@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import PeriodDisplay from "@/components/PeriodDisplay";
-import { Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard } from "lucide-react";
+import { Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard, AlertTriangle } from "lucide-react";
 
 import OverrideAllowanceModal from "@/components/OverrideAllowanceModal";
 import RecalculateConfirmModal from "@/components/RecalculateConfirmModal";
+import RejectPayrollModal from "@/components/RejectPayrollModal";
 import { useConfirm } from "@/components/ConfirmProvider";
 
 function formatIDR(n) {
@@ -55,7 +56,6 @@ function formatDetail(detail, mandays, rate_amount, allowanceName = "") {
   const parts = [];
   if (detail.num_trips != null) parts.push(`${formatPlainNumber(detail.num_trips)} Trip`);
   if (detail.project_assignments_mandays != null) parts.push(`${formatPlainNumber(detail.project_assignments_mandays)} Hr Project`);
-  if (detail.is_on_probation) parts.push("Probation 50%");
   if (detail.is_prorated) parts.push("Prorata Promosi/Demosi");
   if (detail.num_toddlers != null) parts.push(`${formatPlainNumber(detail.num_toddlers)} Anak`);
   if (detail.mandays_outside_city != null) parts.push(`${formatPlainNumber(detail.mandays_outside_city)} Hr Dinas`);
@@ -122,6 +122,11 @@ export default function PayrollDetailPage() {
     paidRef: "",
     paidNote: "",
     submitting: false,
+  });
+  const [rejectModal, setRejectModal] = useState({
+    open: false,
+    submitting: false,
+    errorMessage: "",
   });
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -207,7 +212,10 @@ export default function PayrollDetailPage() {
   }, [row]);
 
   const isPaid = useMemo(() => String(row?.status || "").toLowerCase() === "paid", [row?.status]);
-  const canOverrideOrRecalculate = useMemo(() => isFat && row?.status === "draft" && row?.calculation_mode === "auto", [isFat, row]);
+  const canOverrideOrRecalculate = useMemo(
+    () => isFat && ["draft", "rejected"].includes(row?.status) && row?.calculation_mode === "auto",
+    [isFat, row]
+  );
 
   const handleSaveOverride = async (payload) => {
     if (!overrideData) return;
@@ -244,28 +252,46 @@ export default function PayrollDetailPage() {
   };
 
   const handleAction = async (action) => {
+    if (action === "reject") {
+      setRejectModal({ open: true, submitting: false, errorMessage: "" });
+      return;
+    }
+
     let confirmMsg = "";
     if (action === "submit") confirmMsg = "Ajukan payroll ini ke Direktur?";
     if (action === "approve") confirmMsg = "Setujui payroll ini?";
-    if (action === "reject") confirmMsg = "Tolak payroll ini?";
     
-    const ok = await confirm(confirmMsg);
+    const ok = await confirm(confirmMsg, {
+      title: action === "approve" ? "Setujui Payroll" : "Ajukan ke Direktur",
+      icon: action === "approve" ? "success" : "info",
+    });
     if (!ok) return;
 
-    let body = {};
-    if (action === "reject") {
-        const reason = window.prompt("Alasan penolakan:");
-        if (reason === null) return; 
-        if (reason.trim()) {
-            body.approval_note = reason.trim();
-        }
-    }
-
     try {
-      await api(`/payrolls/${id}/${action}`, { method: "POST", body });
+      await api(`/payrolls/${id}/${action}`, { method: "POST", body: {} });
       loadDetail();
     } catch (e) {
       alert(e?.message || `Gagal melakukan aksi ${action}`);
+    }
+  };
+
+  const closeRejectModal = () => {
+    if (rejectModal.submitting) return;
+    setRejectModal({ open: false, submitting: false, errorMessage: "" });
+  };
+
+  const submitReject = async (reason) => {
+    setRejectModal((current) => ({ ...current, submitting: true, errorMessage: "" }));
+    try {
+      await api(`/payrolls/${id}/reject`, { method: "POST", body: { note: reason } });
+      setRejectModal({ open: false, submitting: false, errorMessage: "" });
+      loadDetail();
+    } catch (e) {
+      setRejectModal((current) => ({
+        ...current,
+        submitting: false,
+        errorMessage: e?.message || "Gagal menolak payroll.",
+      }));
     }
   };
 
@@ -317,7 +343,7 @@ export default function PayrollDetailPage() {
       });
       closeTransferModal();
       loadDetail();
-      await confirm("Transfer gaji berhasil dicatat. Slip gaji sudah tersedia untuk staff terkait.", {
+      await confirm("Transfer gaji berhasil dicatat. Slip gaji sudah tersedia untuk pegawai terkait.", {
         title: "Transfer Tercatat",
         isAlert: true,
         icon: "success",
@@ -364,12 +390,12 @@ export default function PayrollDetailPage() {
             {pdfLoading ? "Menyiapkan PDF..." : "Unduh PDF"}
           </Button>
 
-          {isFat && row?.status === "draft" && (
+          {isFat && ["draft", "rejected"].includes(row?.status) && (
             <Button
               onClick={() => handleAction("submit")}
               className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
             >
-              Ajukan ke Direktur
+              {row?.status === "rejected" ? "Ajukan Ulang ke Direktur" : "Ajukan ke Direktur"}
             </Button>
           )}
 
@@ -446,6 +472,9 @@ export default function PayrollDetailPage() {
                   {isPaid && (
                     <Badge className="bg-emerald-500 text-white border-none shadow-[0_0_15px_rgba(16,185,129,0.5)]">PAID</Badge>
                   )}
+                  {row.status === "rejected" && (
+                    <Badge className="bg-rose-500 text-white border-none">DITOLAK</Badge>
+                  )}
                   {row.calculation_mode === "auto" && (
                     <Badge className="bg-sky-500/20 text-sky-200 border-sky-500/30 backdrop-blur-md">AUTO-CALC</Badge>
                   )}
@@ -467,6 +496,19 @@ export default function PayrollDetailPage() {
               </div>
             </div>
           </div>
+
+          {row.status === "rejected" && (
+            <section className="flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-950" aria-labelledby="rejection-reason-title">
+              <AlertTriangle className="mt-0.5 shrink-0 text-rose-600" size={20} aria-hidden="true" />
+              <div>
+                <h2 id="rejection-reason-title" className="font-bold text-rose-800">Payroll Ditolak</h2>
+                <p className="mt-1 text-sm text-rose-700">Alasan penolakan</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-rose-950">
+                  {row.rejection_reason || "Alasan penolakan tidak tersedia."}
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* Cards Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -674,19 +716,18 @@ export default function PayrollDetailPage() {
                 </div>
 
               </div>
-
-              {/* Catatan Section */}
-              {!!row.catatan && (
-                <div className="bg-amber-50/50 rounded-2xl border border-amber-200/60 p-6">
-                  <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2">Catatan Khusus</h4>
-                  <p className="text-sm text-amber-900/80 leading-relaxed">{row.catatan}</p>
-                </div>
-              )}
         </div>
       )}
 
       <OverrideAllowanceModal isOpen={!!overrideData} onClose={() => setOverrideData(null)} data={overrideData} onSave={handleSaveOverride} isSaving={isSaving} />
       <RecalculateConfirmModal isOpen={recalcOpen} onClose={() => setRecalcOpen(false)} message={recalcMsg} onConfirm={(force) => handleRecalculate(force)} isSaving={isSaving} />
+      <RejectPayrollModal
+        open={rejectModal.open}
+        onClose={closeRejectModal}
+        onConfirm={submitReject}
+        isSubmitting={rejectModal.submitting}
+        errorMessage={rejectModal.errorMessage}
+      />
 
       {/* Catat Transfer Modal */}
       {transferModal.open && (

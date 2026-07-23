@@ -24,11 +24,11 @@ class PayrollReportController extends Controller
     }
 
     /**
-     * GET /api/reports/payroll?month=YYYY-MM&status=paid&employee_id=1
+     * GET /api/reports/payroll?month=YYYY-MM&employee_id=1
      * Akses: FAT + Director
      *
      * NOTE:
-     * - Default: status=paid
+     * - Hanya menampilkan payroll yang sudah paid
      * - Support HYBRID: decrypt via decryptHybridPayrollRow (butuh dek_enc + enc_meta)
      *
      * PERF LOG:
@@ -61,12 +61,9 @@ class PayrollReportController extends Controller
             $month = $start->format('Y-m');
         }
 
-        // ---- status filter (default paid)
-        $status = strtolower((string) $request->query('status', 'paid'));
-        $allowedStatus = ['paid', 'approved', 'requested', 'draft', 'rejected', 'all', 'semua'];
-        if (!in_array($status, $allowedStatus, true)) {
-            $status = 'paid';
-        }
+        // Laporan pembayaran hanya memuat payroll yang sudah benar-benar ditransfer.
+        // Nilai status dari query sengaja diabaikan agar status lain tidak bisa ikut terakumulasi.
+        $status = 'paid';
 
         // optional filter employee
         $employeeId = $request->query('employee_id');
@@ -78,9 +75,7 @@ class PayrollReportController extends Controller
             ])
             ->whereBetween('periode', [$start->toDateString(), $end->toDateString()]);
 
-        if (!in_array($status, ['all', 'semua'], true)) {
-            $q->where('status', $status);
-        }
+        $q->where('status', $status);
 
         if ($employeeId) {
             $q->where('employee_id', $employeeId);
@@ -98,8 +93,7 @@ class PayrollReportController extends Controller
                 'id','employee_id','periode','status',
 
                 // ciphertext
-                'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc','catatan_enc',
-                'total_allowances_enc','total_deductions_enc',
+                'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc',
 
                 // HYBRID meta
                 'dek_enc','enc_meta',
@@ -121,6 +115,9 @@ class PayrollReportController extends Controller
 
         $rows = $payrollRows->map(function (Payroll $p) use (&$decryptTotalMs) {
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
+            $periodMonth = $p->period_to
+                ? Carbon::parse($p->period_to)->format('Y-m')
+                : PayrollPeriod::forDate($p->periode)->period_month;
 
             $periodEnd = $p->period_to ?: $p->periode;
             $profile = $p->employee?->salaryProfiles
@@ -144,7 +141,6 @@ class PayrollReportController extends Controller
             $tDec0 = microtime(true);
 
             $gaji = $tunj = $pot = $total = null;
-            $tot_all = $tot_ded = null;
 
             try {
                 if ($alg === 'HYBRID') {
@@ -156,25 +152,18 @@ class PayrollReportController extends Controller
                         'tunjangan_enc'  => $p->tunjangan_enc,
                         'potongan_enc'   => $p->potongan_enc,
                         'total_enc'      => $p->total_enc,
-                        'catatan_enc'    => $p->catatan_enc,
-                        'total_allowances_enc' => $p->total_allowances_enc,
-                        'total_deductions_enc' => $p->total_deductions_enc,
                     ]);
 
                     $gaji  = $dec['gaji_pokok'] ?? null;
                     $tunj  = $dec['tunjangan']  ?? null;
                     $pot   = $dec['potongan']   ?? null;
                     $total = $dec['total']      ?? null;
-                    $tot_all = $dec['total_allowances'] ?? null;
-                    $tot_ded = $dec['total_deductions'] ?? null;
                 } else {
                     // AES / RSA
                     $gaji  = CryptoService::readEncryptedOrPlainSafe($p->gaji_pokok_enc, $p->gaji_pokok, $alg);
                     $tunj  = CryptoService::readEncryptedOrPlainSafe($p->tunjangan_enc,  $p->tunjangan,  $alg);
                     $pot   = CryptoService::readEncryptedOrPlainSafe($p->potongan_enc,   $p->potongan,   $alg);
                     $total = CryptoService::readEncryptedOrPlainSafe($p->total_enc,      $p->total,      $alg);
-                    $tot_all = CryptoService::readEncryptedOrPlainSafe($p->total_allowances_enc, $p->total_allowances, $alg);
-                    $tot_ded = CryptoService::readEncryptedOrPlainSafe($p->total_deductions_enc, $p->total_deductions, $alg);
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Report Decrypt Error pada row ' . $p->id . ': ' . $e->getMessage());
@@ -187,8 +176,6 @@ class PayrollReportController extends Controller
             $tunj = $tunj !== null ? (float) $tunj : 0.0;
             $pot  = $pot  !== null ? (float) $pot  : 0.0;
             $total = $total !== null ? (float) $total : ($gaji + $tunj - $pot);
-            $tot_all = $tot_all !== null ? (float) $tot_all : null;
-            $tot_ded = $tot_ded !== null ? (float) $tot_ded : null;
 
             foreach ($p->allowances as $al) {
                 if ($al->amount_enc) {
@@ -213,6 +200,7 @@ class PayrollReportController extends Controller
                 'position_name' => implode(' / ', $positionNames) ?: 'Belum ditentukan',
 
                 'periode' => optional($p->periode)->toDateString(),
+                'period_month' => $periodMonth,
                 'period_from' => optional($p->period_from)->toDateString(),
                 'period_to' => optional($p->period_to)->toDateString(),
                 'status' => $p->status,
@@ -222,8 +210,6 @@ class PayrollReportController extends Controller
                 'potongan'   => $pot,
                 'total'      => $total,
 
-                'total_allowances' => $tot_all,
-                'total_deductions' => $tot_ded,
                 'calculation_mode' => $p->calculation_mode,
                 'calculated_at'    => $p->calculated_at,
 

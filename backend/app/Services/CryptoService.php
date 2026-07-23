@@ -288,16 +288,9 @@ class CryptoService
 
         // 2) Encrypt fields pakai DEK
         $enc = [];
-        foreach (['gaji_pokok','tunjangan','potongan','total','catatan'] as $k) {
+        foreach (['gaji_pokok','tunjangan','potongan','total'] as $k) {
             $val = (string)($plainFields[$k] ?? '');
             $enc[$k . '_enc'] = self::aesGcmEncryptWithKey($val, $dek16);
-        }
-
-        // Additive for new fields
-        foreach (['total_allowances', 'total_deductions'] as $k) {
-            if (array_key_exists($k, $plainFields) && $plainFields[$k] !== null) {
-                $enc[$k . '_enc'] = self::aesGcmEncryptWithKey((string)$plainFields[$k], $dek16);
-            }
         }
 
         // 3) Bungkus DEK pakai RSA
@@ -348,21 +341,8 @@ class CryptoService
 
         // 2) AES decrypt fields
         $out = [];
-        foreach (['gaji_pokok','tunjangan','potongan','total','catatan'] as $k) {
+        foreach (['gaji_pokok','tunjangan','potongan','total'] as $k) {
             $out[$k] = self::aesGcmDecryptWithKey($row[$k . '_enc'] ?? null, $dek16);
-        }
-
-        // Additive for new fields
-        foreach (['total_allowances', 'total_deductions'] as $k) {
-            if (!empty($row[$k . '_enc'])) {
-                try {
-                    $out[$k] = self::aesGcmDecryptWithKey($row[$k . '_enc'], $dek16);
-                } catch (\Exception $e) {
-                    $out[$k] = null;
-                }
-            } else {
-                $out[$k] = null;
-            }
         }
 
         return $out;

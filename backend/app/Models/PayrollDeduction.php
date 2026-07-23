@@ -13,7 +13,6 @@ class PayrollDeduction extends Model
 
     protected $casts = [
         'calculation_detail' => 'array',
-        'is_manual_override' => 'boolean',
     ];
 
     public function payroll()

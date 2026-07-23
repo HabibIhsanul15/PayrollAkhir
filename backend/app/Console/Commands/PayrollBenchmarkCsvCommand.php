@@ -21,9 +21,6 @@ class PayrollBenchmarkCsvCommand extends Command
         'tunjangan',
         'potongan',
         'total',
-        'total_allowances',
-        'total_deductions',
-        'catatan',
     ];
 
     public function handle(PayrollCipherService $cipherService): int

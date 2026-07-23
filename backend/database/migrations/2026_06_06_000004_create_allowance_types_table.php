@@ -14,16 +14,11 @@ return new class extends Migration
             $table->string('name', 150);
             $table->enum('calculation_type', ['per_mandays', 'per_trip', 'flat', 'formula', 'per_hour', 'per_toddler']);
             $table->string('input_source', 50)->nullable();
-            $table->string('condition_field', 50)->nullable();
-            $table->string('condition_operator', 10)->nullable();
-            $table->decimal('condition_value', 14, 2)->nullable();
-            $table->enum('applies_to', ['all', 'project_only', 'fix_rate_only'])->default('all');
             $table->unsignedTinyInteger('display_order')->default(0);
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->index(['applies_to', 'is_active']);
             $table->index(['display_order']);
         });
     }

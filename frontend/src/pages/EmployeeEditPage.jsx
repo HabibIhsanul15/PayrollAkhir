@@ -31,7 +31,6 @@ export default function EmployeeEditPage() {
     base_salary_basis: "daily",
     base_salary_amount: "",
     num_toddlers: "",
-    is_trainer: false,
     nik: "",
     npwp: "",
     phone: "",
@@ -86,7 +85,6 @@ export default function EmployeeEditPage() {
       base_salary_amount:
         data.salary_profile_summary?.base_salary_amount ?? activePosition?.default_base_salary_amount ?? "",
       num_toddlers: data.num_toddlers ? String(data.num_toddlers) : "",
-      is_trainer: !!data.is_trainer,
       nik: data.nik ?? "",
       npwp: data.npwp ?? "",
       phone: data.phone ?? "",
@@ -135,7 +133,6 @@ export default function EmployeeEditPage() {
           name: form.name,
           join_date: form.join_date || null,
           num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
-          is_trainer: !!form.is_trainer,
           nik: form.nik || null,
           npwp: form.npwp || null,
           phone: form.phone || null,

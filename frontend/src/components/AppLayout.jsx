@@ -71,8 +71,8 @@ function roleLabel(role) {
     {
       fat: "Finance Admin",
       director: "Director",
-      staff: "Staff",
-      employee: "Staff",
+      staff: "Pegawai",
+      employee: "Pegawai",
       hcga: "HCGA",
       admin: "Admin",
     }[r] || r || "-"

@@ -34,8 +34,6 @@ return new class extends Migration {
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
 
             $table->unsignedTinyInteger('num_toddlers')->default(0)->comment('Jumlah balita, digunakan untuk syarat Tunjangan Pengasuh');
-            $table->boolean('is_trainer')->default(false)->comment('Kategori trainer, digunakan untuk Tunjangan Training (1.5x rate)');
-            $table->boolean('is_on_probation')->default(false)->comment('Masa percobaan promosi, Tunjangan Jabatan 50%');
 
             $table->enum('status', ['active','inactive'])->default('active');
 

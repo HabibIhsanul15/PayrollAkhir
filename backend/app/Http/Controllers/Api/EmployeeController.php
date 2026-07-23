@@ -221,8 +221,6 @@ class EmployeeController extends Controller
             // Phase 1 fields:
             'position_id' => $currentProfile?->position_id ?? $employee->position_id,
             'num_toddlers' => (int) $employee->num_toddlers,
-            'is_trainer' => (bool) $employee->is_trainer,
-            'is_on_probation' => (bool) $employee->is_on_probation,
             'Position' => $positionPayload,
             'salary_profile_summary' => $baseSalary ? [
                 'base_salary_basis' => $baseSalary['basis'],
@@ -445,8 +443,6 @@ class EmployeeController extends Controller
             // Phase 1 fields:
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'num_toddlers' => ['nullable', 'integer', 'min:0'],
-            'is_trainer' => ['nullable', 'boolean'],
-            'is_on_probation' => ['nullable', 'boolean'],
 
             // Create account fields
             'create_account' => ['nullable', 'boolean'],
@@ -485,8 +481,6 @@ class EmployeeController extends Controller
             $employeeData['status'] = 'active';
             $employeeData['join_date'] = $data['join_date'] ?? $effectiveFrom;
             $employeeData['num_toddlers'] = $data['num_toddlers'] ?? 0;
-            $employeeData['is_trainer'] = $data['is_trainer'] ?? false;
-            $employeeData['is_on_probation'] = $data['is_on_probation'] ?? false;
             $employeeData['nik_enc'] = ! empty($data['nik']) ? $encryptPii((string) $data['nik']) : null;
             $employeeData['npwp_enc'] = ! empty($data['npwp']) ? $encryptPii((string) $data['npwp']) : null;
             $employeeData['phone_enc'] = ! empty($data['phone']) ? $encryptPii((string) $data['phone']) : null;
@@ -720,8 +714,6 @@ class EmployeeController extends Controller
             'bank_account_number' => $this->digitStringRules(50, true),
 
             'num_toddlers' => ['sometimes', 'integer', 'min:0'],
-            'is_trainer' => ['sometimes', 'boolean'],
-            'is_on_probation' => ['sometimes', 'boolean'],
             'position_id' => ['sometimes', 'nullable', Rule::exists('positions', 'id')->where('is_active', true)],
         ], $this->digitFieldMessages());
 

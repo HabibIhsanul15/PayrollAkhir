@@ -32,15 +32,11 @@ class Employee extends Model
         // Phase 1 fields
         'position_id',
         'num_toddlers',
-        'is_trainer',
-        'is_on_probation',
     ];
 
     protected $casts = [
         'join_date' => 'date',
         'num_toddlers' => 'integer',
-        'is_trainer' => 'boolean',
-        'is_on_probation' => 'boolean',
     ];
 
     public function position()
