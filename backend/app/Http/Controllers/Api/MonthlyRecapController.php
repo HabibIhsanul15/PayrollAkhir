@@ -66,6 +66,7 @@ class MonthlyRecapController extends Controller
         $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
 
         $totalSubmittedMandays = 0;
+        $requestedProfileKeys = [];
 
         foreach ($validated['recaps'] as $index => $recapData) {
             $totalSubmittedMandays += $this->recapMandays($recapData);
@@ -76,12 +77,53 @@ class MonthlyRecapController extends Controller
                     "recaps.{$index}.salary_profile_id" => 'Profil gaji tidak sesuai dengan karyawan yang dipilih.',
                 ]);
             }
+
+            $profileKey = $salaryProfileId === null ? 'without-profile' : (string) $salaryProfileId;
+            if (in_array($profileKey, $requestedProfileKeys, true)) {
+                throw ValidationException::withMessages([
+                    "recaps.{$index}.salary_profile_id" => 'Satu profil gaji hanya boleh memiliki satu segmen rekap dalam periode yang sama.',
+                ]);
+            }
+
+            $requestedProfileKeys[] = $profileKey;
+        }
+
+        if ($totalSubmittedMandays < 1) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Total kehadiran minimal 1 hari. Jika pegawai tidak bekerja sepanjang periode, jangan buat rekap payroll untuk periode tersebut.',
+            ]);
         }
 
         if ($totalSubmittedMandays > $maxDays) {
             throw ValidationException::withMessages([
                 'recaps' => "Total hari dibayar ({$totalSubmittedMandays}) tidak boleh melebihi jumlah hari pada {$periodMonth} ({$maxDays} hari).",
             ]);
+        }
+
+        $existingRecaps = MonthlyRecap::query()
+            ->where('employee_id', $employeeId)
+            ->where('period_month', $periodMonth)
+            ->get();
+
+        if ($existingRecaps->contains('is_finalized', true)) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Rekap untuk karyawan dan periode ini sudah dikirim ke Finance dan tidak dapat dibuat ulang.',
+            ]);
+        }
+
+        if ($existingRecaps->isNotEmpty()) {
+            $existingProfileKeys = $existingRecaps
+                ->map(fn (MonthlyRecap $recap) => $recap->salary_profile_id === null ? 'without-profile' : (string) $recap->salary_profile_id)
+                ->sort()
+                ->values()
+                ->all();
+            $submittedProfileKeys = collect($requestedProfileKeys)->sort()->values()->all();
+
+            if ($existingProfileKeys !== $submittedProfileKeys) {
+                throw ValidationException::withMessages([
+                    'recaps' => 'Rekap untuk karyawan dan periode ini sudah ada. Gunakan Edit untuk memperbarui rekap yang sama.',
+                ]);
+            }
         }
 
         $createdRecaps = [];
@@ -141,6 +183,14 @@ class MonthlyRecapController extends Controller
             abort(403, 'Hanya HCGA yang dapat mengirim rekap ke Finance.');
         }
 
+        if ($recap->is_finalized) {
+            abort(422, 'Rekap ini sudah dikirim ke Finance.');
+        }
+
+        if ((int) $recap->total_mandays < 1) {
+            abort(422, 'Rekap tanpa kehadiran tidak dapat dikirim ke Finance.');
+        }
+
         $recap->update([
             'is_finalized' => true,
             'finalized_by' => $request->user()->id,
@@ -169,6 +219,18 @@ class MonthlyRecapController extends Controller
         if ($recaps->isEmpty()) {
             throw ValidationException::withMessages([
                 'recaps' => 'Belum ada draft rekap untuk karyawan dan periode ini.',
+            ]);
+        }
+
+        if ($recaps->every(fn (MonthlyRecap $recap) => $recap->is_finalized)) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Rekap untuk karyawan dan periode ini sudah dikirim ke Finance.',
+            ]);
+        }
+
+        if ($recaps->sum('total_mandays') < 1) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Rekap tanpa kehadiran tidak dapat dikirim ke Finance.',
             ]);
         }
 

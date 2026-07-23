@@ -52,6 +52,22 @@ class EmployeeController extends Controller
         ];
     }
 
+    private function indonesianMobilePhoneRules(bool $sometimes = false): array
+    {
+        $rules = [];
+
+        if ($sometimes) {
+            $rules[] = 'sometimes';
+        }
+
+        return [
+            ...$rules,
+            'nullable',
+            'string',
+            'regex:/^08[1-9][0-9]{7,10}$/',
+        ];
+    }
+
     private function digitFieldMessages(): array
     {
         return [
@@ -60,7 +76,7 @@ class EmployeeController extends Controller
             'npwp.regex' => 'NPWP hanya boleh berisi angka.',
             'npwp.min' => 'NPWP minimal berjumlah 15 digit.',
             'npwp.max' => 'NPWP maksimal berjumlah 16 digit.',
-            'phone.regex' => 'Nomor telepon hanya boleh berisi angka.',
+            'phone.regex' => 'Nomor telepon harus nomor seluler Indonesia, diawali 08 dan berjumlah 10-13 digit.',
             'bank_account_number.regex' => 'Nomor rekening hanya boleh berisi angka.',
         ];
     }
@@ -417,7 +433,7 @@ class EmployeeController extends Controller
 
             'nik' => ['nullable', 'string', 'digits:16'],
             'npwp' => ['nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
-            'phone' => $this->digitStringRules(20),
+            'phone' => $this->indonesianMobilePhoneRules(),
             'address' => ['nullable', 'string', 'max:500'],
 
             'bank_name' => ['nullable', 'string', 'max:100'],
@@ -690,7 +706,7 @@ class EmployeeController extends Controller
 
             'nik' => ['sometimes', 'nullable', 'string', 'digits:16'],
             'npwp' => ['sometimes', 'nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
-            'phone' => $this->digitStringRules(20, true),
+            'phone' => $this->indonesianMobilePhoneRules(true),
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
 
             'bank_name' => ['sometimes', 'nullable', 'string', 'max:100'],

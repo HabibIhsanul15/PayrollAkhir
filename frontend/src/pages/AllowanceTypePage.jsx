@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import AlertMessage from "@/components/AlertMessage";
+import ConfirmModal from "@/components/ConfirmModal";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -99,24 +100,14 @@ export default function AllowanceTypePage() {
   const err = localErr || error?.message;
 
   const [localRows, setLocalRows] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setLocalRows(Array.isArray(data) ? data : data?.data ?? []);
   }, [data]);
 
   const rows = localRows;
-
-  async function load() {
-    setErr("");
-    setSuccess("");
-    try {
-      const fresh = await mutate();
-      setLocalRows(sortByDisplayOrder(Array.isArray(fresh) ? fresh : fresh?.data ?? []));
-      setSuccess("Data jenis tunjangan berhasil disegarkan.");
-    } catch (refreshErr) {
-      setErr(refreshErr?.message || "Gagal menyegarkan jenis tunjangan.");
-    }
-  }
 
   // Form State
   const [modalOpen, setModalOpen] = useState(false);
@@ -192,18 +183,30 @@ export default function AllowanceTypePage() {
     }
   };
 
-  const onDelete = async (id) => {
-    const ok = confirm("Apakah Anda yakin ingin menghapus jenis tunjangan ini?");
-    if (!ok) return;
+  const openDeleteModal = (row) => {
     setErr("");
     setSuccess("");
+    setDeleteTarget(row);
+  };
+
+  const onDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+
+    const id = deleteTarget.id;
+    setErr("");
+    setSuccess("");
+    setIsDeleting(true);
+
     try {
       await api(`/master/allowance-types/${id}`, { method: "DELETE" });
       setLocalRows((prev) => prev.filter((row) => row.id !== id));
       mutate();
       setSuccess("Jenis tunjangan dihapus.");
+      setDeleteTarget(null);
     } catch (err) {
       setErr(err?.message || "Gagal menghapus jenis tunjangan");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -232,14 +235,6 @@ export default function AllowanceTypePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={load}
-              disabled={loading}
-              className="bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {loading ? "Menyegarkan..." : "Segarkan"}
-            </Button>
             <Button
               onClick={openAddModal}
               className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
@@ -340,7 +335,7 @@ export default function AllowanceTypePage() {
                               size="sm"
                               variant="destructive"
                               className="rounded-xl"
-                              onClick={() => onDelete(r.id)}
+                              onClick={() => openDeleteModal(r)}
                             >
                               Hapus
                             </Button>
@@ -474,6 +469,19 @@ export default function AllowanceTypePage() {
             </div>
           </div>
         )}
+
+        <ConfirmModal
+          isOpen={!!deleteTarget}
+          title="Hapus jenis tunjangan?"
+          message={`Jenis tunjangan \"${deleteTarget?.name || "ini"}\" akan dihapus dan tidak dapat dikembalikan.`}
+          confirmLabel="Ya, hapus"
+          tone="danger"
+          loading={isDeleting}
+          onCancel={() => {
+            if (!isDeleting) setDeleteTarget(null);
+          }}
+          onConfirm={onDelete}
+        />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import AlertMessage from "@/components/AlertMessage";
+import ConfirmModal from "@/components/ConfirmModal";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -46,6 +47,8 @@ export default function DeductionTypePage() {
   });
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setRows(sortRows(Array.isArray(data) ? data : data?.data || []));
@@ -92,18 +95,30 @@ export default function DeductionTypePage() {
     }
   };
 
-  const remove = async (id) => {
-    if (!confirm("Hapus jenis potongan ini?")) return;
+  const openDeleteModal = (row) => {
     setLocalError("");
     setSuccess("");
+    setDeleteTarget(row);
+  };
+
+  const remove = async () => {
+    if (!deleteTarget || isDeleting) return;
+
+    const id = deleteTarget.id;
+    setLocalError("");
+    setSuccess("");
+    setIsDeleting(true);
 
     try {
       await api(`/master/deduction-types/${id}`, { method: "DELETE" });
       setRows((current) => current.filter((row) => row.id !== id));
       setSuccess("Jenis potongan berhasil dihapus.");
       mutate();
+      setDeleteTarget(null);
     } catch (removeError) {
       setLocalError(removeError?.message || "Jenis potongan sudah digunakan dan tidak dapat dihapus.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -122,15 +137,7 @@ export default function DeductionTypePage() {
             Kelola pilihan potongan manual yang dapat ditambahkan ke payroll.
           </p>
         </div>
-          <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => mutate()}
-            disabled={isLoading}
-            className="bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isLoading ? "Menyegarkan..." : "Segarkan"}
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={openAdd}
             className="px-4 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
@@ -178,7 +185,7 @@ export default function DeductionTypePage() {
                   <TableCell className="py-4 pr-6">
                     <div className="flex justify-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEdit(row)}>Edit</Button>
-                      <Button size="sm" variant="destructive" onClick={() => remove(row.id)}>Hapus</Button>
+                      <Button size="sm" variant="destructive" onClick={() => openDeleteModal(row)}>Hapus</Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -235,6 +242,19 @@ export default function DeductionTypePage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Hapus jenis potongan?"
+        message={`Jenis potongan \"${deleteTarget?.name || "ini"}\" akan dihapus dan tidak dapat dikembalikan.`}
+        confirmLabel="Ya, hapus"
+        tone="danger"
+        loading={isDeleting}
+        onCancel={() => {
+          if (!isDeleting) setDeleteTarget(null);
+        }}
+        onConfirm={remove}
+      />
     </div>
   );
 }

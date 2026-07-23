@@ -56,6 +56,7 @@ export default function MonthlyRecapPage() {
   const [formRecaps, setFormRecaps] = useState([emptyRecap()]);
   const [employeeProfiles, setEmployeeProfiles] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [isEditingRecap, setIsEditingRecap] = useState(false);
   const [detailGroup, setDetailGroup] = useState(null);
 
   const { data: rawRecaps, mutate: mutateRecaps } = useSWR(`/monthly-recaps?period_month=${period}`);
@@ -123,6 +124,12 @@ export default function MonthlyRecapPage() {
     }
   ), [groupedRecaps]);
   const employees = Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || []);
+  const employeesAvailableForCreate = useMemo(
+    () => employees.filter((employee) => !groupedRecaps.some(
+      (group) => String(group.employee_id) === String(employee.id)
+    )),
+    [employees, groupedRecaps]
+  );
   const selectedEmployee = employees.find((employee) => String(employee.id) === String(selectedEmployeeId));
   const maxDays = useMemo(() => {
     if (!period) return 0;
@@ -262,6 +269,7 @@ export default function MonthlyRecapPage() {
     setSelectedEmployeeId("");
     setEmployeeProfiles([]);
     setFormRecaps([emptyRecap()]);
+    setIsEditingRecap(false);
     setShowModal(true);
   };
 
@@ -275,11 +283,21 @@ export default function MonthlyRecapPage() {
 
     setSelectedEmployeeId(String(employeeId));
     await loadEmployeeProfiles(employeeId, employeeRecaps);
+    setIsEditingRecap(true);
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (totalPaidDays < 1) {
+      setNotice({
+        type: "error",
+        title: "Kehadiran Belum Diisi",
+        message: "Total kehadiran minimal 1 hari. Jangan buat rekap payroll jika pegawai tidak bekerja sepanjang periode.",
+      });
+      return;
+    }
 
     if (totalPaidDays > maxDays) {
       setNotice({
@@ -325,7 +343,19 @@ export default function MonthlyRecapPage() {
   };
 
   const handleSubmitToFinance = async (group) => {
-    const ok = await confirm("Kirim rekap ini ke Finance? Setelah dikirim, data tidak bisa diedit lagi oleh HCGA.");
+    if (Number(group.total_attendance || 0) < 1) {
+      setNotice({
+        type: "error",
+        title: "Rekap Tidak Dapat Dikirim",
+        message: "Rekap tanpa kehadiran tidak dapat dikirim ke Finance.",
+      });
+      return;
+    }
+
+    const ok = await confirm(
+      "Kirim rekap ini ke Finance? Setelah dikirim, data tidak bisa diedit lagi oleh HCGA.",
+      { title: "Kirim Rekap ke Finance?", icon: "info" }
+    );
     if (!ok) return;
     try {
       await api("/monthly-recaps/submit-to-finance", {
@@ -501,17 +531,23 @@ export default function MonthlyRecapPage() {
                 <label className="block text-sm font-medium mb-1">Karyawan</label>
                 <select
                   required
-                  className="w-full border p-2 rounded"
+                  disabled={isEditingRecap}
+                  className="w-full border p-2 rounded disabled:cursor-not-allowed disabled:bg-slate-100"
                   value={selectedEmployeeId}
                   onChange={(e) => handleEmployeeChange(e.target.value)}
                 >
                   <option value="">Pilih Karyawan</option>
-                  {employees.map((emp) => (
+                  {(isEditingRecap ? employees : employeesAvailableForCreate).map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  {isEditingRecap
+                    ? "Karyawan tidak dapat diubah saat mengedit rekap yang sudah dibuat."
+                    : "Karyawan yang sudah memiliki rekap pada periode ini tidak dapat dipilih lagi."}
+                </p>
               </div>
 
               {selectedEmployeeId && (
@@ -633,11 +669,14 @@ export default function MonthlyRecapPage() {
 
               {selectedEmployeeId && (
                 <div className={`rounded px-4 py-3 text-xs ${
-                  totalPaidDays > maxDays
+                  totalPaidDays < 1
+                    ? "border border-amber-200 bg-amber-50 text-amber-800"
+                    : totalPaidDays > maxDays
                     ? "border border-rose-200 bg-rose-50 text-rose-700"
                     : "border border-emerald-200 bg-emerald-50 text-emerald-700"
                 }`}>
                   Total hari dibayar: <strong>{totalPaidDays}</strong> dari maksimal <strong>{maxDays}</strong> hari.
+                  {totalPaidDays < 1 ? " Minimal 1 hari kehadiran diperlukan untuk menyimpan rekap." : ""}
                 </div>
               )}
 
@@ -645,7 +684,7 @@ export default function MonthlyRecapPage() {
                 <Button type="button" variant="outline" className="mr-2" onClick={() => setShowModal(false)}>
                   Batal
                 </Button>
-                <Button type="submit" disabled={totalPaidDays > maxDays || hasAnyWarning}>Simpan Rekap</Button>
+                <Button type="submit" disabled={totalPaidDays < 1 || totalPaidDays > maxDays || hasAnyWarning}>Simpan Rekap</Button>
               </div>
             </form>
           </div>

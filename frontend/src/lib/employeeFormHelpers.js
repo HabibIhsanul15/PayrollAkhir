@@ -12,6 +12,20 @@ export function nonNegativeIntegerInput(value, maxLength = null) {
   return digitsOnly(value, maxLength);
 }
 
+export function indonesianMobilePhoneInput(value) {
+  const digits = digitsOnly(value, 13);
+
+  if (digits === "" || digits === "0" || digits === "08") {
+    return digits;
+  }
+
+  return /^08[1-9]/.test(digits) ? digits : digits.startsWith("08") ? "08" : "";
+}
+
+export function isIndonesianMobilePhone(value) {
+  return /^08[1-9][0-9]{7,10}$/.test(String(value ?? ""));
+}
+
 function randomIndex(max) {
   if (globalThis.crypto?.getRandomValues) {
     const array = new Uint32Array(1);

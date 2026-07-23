@@ -3,7 +3,12 @@ import useSWR from "swr";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser, updateAuthUser } from "@/lib/auth";
-import { digitsOnly, nonNegativeIntegerInput } from "@/lib/employeeFormHelpers";
+import {
+  digitsOnly,
+  indonesianMobilePhoneInput,
+  isIndonesianMobilePhone,
+  nonNegativeIntegerInput,
+} from "@/lib/employeeFormHelpers";
 import { Button } from "@/components/ui/button";
 import AlertMessage from "@/components/AlertMessage";
 import {
@@ -107,6 +112,10 @@ export default function EmployeeEditPage() {
     setField("num_toddlers", nonNegativeIntegerInput(value));
   }
 
+  function setPhoneField(value) {
+    setField("phone", indonesianMobilePhoneInput(value));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setErr("");
@@ -120,6 +129,12 @@ export default function EmployeeEditPage() {
 
     if (form.npwp && (form.npwp.length < 15 || form.npwp.length > 16)) {
       setErr("NPWP harus berjumlah 15-16 digit angka.");
+      setSaving(false);
+      return;
+    }
+
+    if (form.phone && !isIndonesianMobilePhone(form.phone)) {
+      setErr("Nomor telepon harus diawali 08 dan berjumlah 10-13 digit.");
       setSaving(false);
       return;
     }
@@ -292,9 +307,10 @@ export default function EmployeeEditPage() {
               <Input
                 label="No. Telepon"
                 value={form.phone}
-                onChange={(value) => setDigitField("phone", value, 20)}
+                onChange={setPhoneField}
                 inputMode="numeric"
-                maxLength={20}
+                maxLength={13}
+                placeholder="Contoh: 081234567890"
                 autoComplete="off"
               />
               <Textarea

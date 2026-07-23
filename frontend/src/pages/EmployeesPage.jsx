@@ -10,7 +10,7 @@ import AvatarInitial from "@/components/AvatarInitial";
 import AlertMessage from "@/components/AlertMessage";
 import Pagination from "@/components/Pagination";
 
-import { Search, ChevronDown, RefreshCw, Plus, Trash2, Eye, FileText } from "lucide-react";
+import { Search, ChevronDown, Plus, Trash2, Eye, FileText } from "lucide-react";
 
 export default function EmployeesPage() {
   const nav = useNavigate();
@@ -32,10 +32,6 @@ export default function EmployeesPage() {
     () => Array.isArray(data) ? data : data?.data ?? data?.value ?? [],
     [data]
   );
-
-  function load() {
-    mutate();
-  }
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -124,14 +120,6 @@ export default function EmployeesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
           {isHCGA && (
             <button 
               onClick={() => nav("/employees/new")}

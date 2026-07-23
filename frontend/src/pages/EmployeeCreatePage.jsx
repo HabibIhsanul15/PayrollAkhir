@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import {
   digitsOnly,
   generateEmployeeAccountPassword,
+  indonesianMobilePhoneInput,
+  isIndonesianMobilePhone,
   nonNegativeIntegerInput,
 } from "@/lib/employeeFormHelpers";
 import { Button } from "@/components/ui/button";
@@ -59,6 +61,10 @@ export default function EmployeeCreatePage() {
 
   function setNumToddlersField(value) {
     setField("num_toddlers", nonNegativeIntegerInput(value));
+  }
+
+  function setPhoneField(value) {
+    setField("phone", indonesianMobilePhoneInput(value));
   }
 
   function toggleCreateAccount(checked) {
@@ -172,6 +178,9 @@ export default function EmployeeCreatePage() {
     }
     if (form.npwp && (form.npwp.length < 15 || form.npwp.length > 16)) {
       nextErrors.npwp = "NPWP harus berjumlah 15-16 digit angka.";
+    }
+    if (form.phone && !isIndonesianMobilePhone(form.phone)) {
+      nextErrors.phone = "Nomor telepon harus diawali 08 dan berjumlah 10-13 digit.";
     }
 
     setErrors(nextErrors);
@@ -366,12 +375,12 @@ export default function EmployeeCreatePage() {
             />
             <Field
               label="No. Telepon"
-              placeholder="Contoh: 08xxxxxxxxxx"
+              placeholder="Contoh: 081234567890"
               value={form.phone}
-              onChange={(value) => setDigitField("phone", value, 20)}
+              onChange={setPhoneField}
               error={errors.phone}
               inputMode="numeric"
-              maxLength={20}
+              maxLength={13}
               autoComplete="off"
             />
             <Textarea

@@ -22,10 +22,6 @@ import {
 const inputClass =
   "w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500";
 
-function digitsOnly(value, maxLength = 30) {
-  return String(value ?? "").replace(/\D/g, "").slice(0, maxLength);
-}
-
 function makeJobCode(name) {
   const words = String(name || "")
     .trim()
@@ -110,6 +106,16 @@ export default function PositionManagementPage() {
       return normalizeName(row.name) === currentName;
     });
   }, [rows, form.name, isEdit, editId]);
+
+  const levelOptions = useMemo(() => {
+    const highestExistingLevel = rows.reduce(
+      (highest, row) => Math.max(highest, Number(row.level) || 0),
+      0
+    );
+    const highestSelectableLevel = Math.max(highestExistingLevel + 1, Number(form.level) || 1);
+
+    return Array.from({ length: highestSelectableLevel }, (_, index) => index + 1);
+  }, [rows, form.level]);
 
   function clearMessage() {
     setErr("");
@@ -435,14 +441,18 @@ export default function PositionManagementPage() {
                     </Field>
 
                     <Field label="Level" helper="Level 1 adalah jabatan tertinggi.">
-                      <input
-                        type="text"
-                        inputMode="numeric"
+                      <select
                         value={form.level}
-                        onChange={(event) => setForm({ ...form, level: digitsOnly(event.target.value, 3) || "1" })}
+                        onChange={(event) => setForm({ ...form, level: event.target.value })}
                         required
                         className={inputClass}
-                      />
+                      >
+                        {levelOptions.map((level) => (
+                          <option key={level} value={level}>
+                            Level {level}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
 
                     <Field label="Status" full>
