@@ -40,7 +40,7 @@ class PayrollDemoSeeder extends Seeder
             [
                 'name' => 'Andi Pratama',
                 'email' => 'andi.pegawai@payroll.test',
-                'code' => 'PGW-001',
+                'code' => 'EMP-0001',
                 'department' => 'Operasional',
                 'position' => $positions['pegawai'],
                 'base_salary' => 250000,
@@ -48,11 +48,12 @@ class PayrollDemoSeeder extends Seeder
                 'account' => '1234567801',
                 'wfo_days' => 20,
                 'business_trips' => 1,
+                'num_toddlers' => 0,
             ],
             [
                 'name' => 'Siti Rahma',
                 'email' => 'siti.pegawai@payroll.test',
-                'code' => 'PGW-002',
+                'code' => 'EMP-0002',
                 'department' => 'Keuangan',
                 'position' => $positions['supervisor'],
                 'base_salary' => 350000,
@@ -60,11 +61,12 @@ class PayrollDemoSeeder extends Seeder
                 'account' => '1234567802',
                 'wfo_days' => 21,
                 'business_trips' => 0,
+                'num_toddlers' => 0,
             ],
             [
                 'name' => 'Rina Wijaya',
                 'email' => 'rina.pegawai@payroll.test',
-                'code' => 'PGW-003',
+                'code' => 'EMP-0003',
                 'department' => 'Human Capital',
                 'position' => $positions['manager'],
                 'base_salary' => 450000,
@@ -72,6 +74,20 @@ class PayrollDemoSeeder extends Seeder
                 'account' => '1234567803',
                 'wfo_days' => 19,
                 'business_trips' => 2,
+                'num_toddlers' => 0,
+            ],
+            [
+                'name' => 'Habib',
+                'email' => 'habib.pegawai@payroll.test',
+                'code' => 'EMP-0004',
+                'department' => 'Manajemen Proyek',
+                'position' => $positions['project_director'],
+                'base_salary' => 250000,
+                'bank' => 'BRI',
+                'account' => '0987877734',
+                'wfo_days' => 5,
+                'business_trips' => 0,
+                'num_toddlers' => 0,
             ],
         ];
 
@@ -88,6 +104,13 @@ class PayrollDemoSeeder extends Seeder
     private function seedPositions(): array
     {
         $rows = [
+            'project_director' => [
+                'code' => 'pd',
+                'name' => 'Project Director',
+                'level' => 4,
+                'description' => 'Jabatan pimpinan proyek.',
+                'default_base_salary_amount' => 250000,
+            ],
             'manager' => [
                 'code' => 'manager',
                 'name' => 'Manager',
@@ -146,6 +169,14 @@ class PayrollDemoSeeder extends Seeder
                 'display_order' => 3,
                 'description' => 'Nominal tetap sesuai jabatan.',
             ],
+            'toddler' => [
+                'code' => 'tunjangan_anak',
+                'name' => 'Tunjangan Anak',
+                'calculation_type' => 'per_toddler',
+                'input_source' => 'total_mandays',
+                'display_order' => 4,
+                'description' => 'Tunjangan untuk anak balita karyawan.',
+            ],
         ];
 
         foreach ($rows as $key => $row) {
@@ -162,6 +193,7 @@ class PayrollDemoSeeder extends Seeder
             'pegawai' => ['meal' => 25000, 'transport_trip' => 150000],
             'supervisor' => ['meal' => 30000, 'transport_trip' => 200000, 'position' => 500000],
             'manager' => ['meal' => 35000, 'transport_trip' => 250000, 'position' => 1000000],
+            'project_director' => ['meal' => 50000, 'transport_trip' => 250000, 'position' => 4000000, 'toddler' => 1500000],
         ];
 
         foreach ($rates as $positionKey => $allowanceRates) {
@@ -188,7 +220,9 @@ class PayrollDemoSeeder extends Seeder
 
     private function seedActiveRsaKey(): void
     {
-        if (CryptoKey::where('status', 'active')->exists()) {
+        $activeKey = CryptoKey::where('status', 'active')->latest('id')->first();
+        if ($activeKey) {
+            $this->assertRsaKeyIsUsable($activeKey);
             return;
         }
 
@@ -215,13 +249,34 @@ class PayrollDemoSeeder extends Seeder
             throw new \RuntimeException('Kunci publik RSA demo tidak tersedia.');
         }
 
-        CryptoKey::create([
+        $key = CryptoKey::create([
             'name' => 'demo-rsa-'.now()->format('Y-m-d'),
             'alg' => 'RSA-2048',
             'public_key_pem' => $details['key'],
             'private_key_pem_enc' => Crypt::encryptString($privateKeyPem),
             'status' => 'active',
         ]);
+
+        // Jangan biarkan seeder selesai dengan key yang tidak dapat dipakai.
+        // Ini menangkap mismatch APP_KEY sebelum ada payroll yang terenkripsi.
+        $this->assertRsaKeyIsUsable($key);
+    }
+
+    private function assertRsaKeyIsUsable(CryptoKey $key): void
+    {
+        try {
+            $privateKeyPem = Crypt::decryptString($key->private_key_pem_enc);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                'Kunci RSA aktif tidak dapat dibuka dengan APP_KEY saat ini. '
+                .'Untuk lingkungan lokal, jalankan migrate:fresh --seed agar key dan data dibuat ulang bersamaan.',
+                previous: $e,
+            );
+        }
+
+        if (openssl_pkey_get_private($privateKeyPem) === false) {
+            throw new \RuntimeException('Private key RSA aktif tidak valid.');
+        }
     }
 
     /** @param array<string, mixed> $data */
@@ -240,7 +295,7 @@ class PayrollDemoSeeder extends Seeder
             'position' => $position->name,
             'position_id' => $position->id,
             'status' => 'active',
-            'num_toddlers' => 0,
+            'num_toddlers' => (int) ($data['num_toddlers'] ?? 0),
             'nik_enc' => CryptoService::encryptAESGCM('317400000000'.substr((string) $data['code'], -3)),
             'npwp_enc' => CryptoService::encryptAESGCM('12.345.678.9-012.000'),
             'phone_enc' => CryptoService::encryptAESGCM('0812345678'.substr((string) $data['code'], -1)),
@@ -259,7 +314,9 @@ class PayrollDemoSeeder extends Seeder
             'position_id' => $position->id,
             'position' => $position->name,
             'base_salary_amount_enc' => CryptoService::encryptAESGCM((string) $data['base_salary']),
-            'position_allowance_enc' => CryptoService::encryptAESGCM('0'),
+            // Nominal mengikuti tarif tunjangan jabatan pada master posisi.
+            // Null menandakan tidak ada override khusus untuk pegawai ini.
+            'position_allowance_enc' => null,
             'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
             'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
             'salary_alg' => 'AES',

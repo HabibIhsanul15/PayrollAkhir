@@ -112,8 +112,8 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        // HCGA/FAT/DIRECTOR boleh lihat list
-        if (! $this->inRoles($user, ['hcga', 'fat', 'director'])) {
+        // Daftar karyawan hanya diperlukan HCGA dan Finance.
+        if (! $this->inRoles($user, ['hcga', 'fat'])) {
             return $this->forbid();
         }
 
@@ -197,7 +197,7 @@ class EmployeeController extends Controller
             : null;
 
         $isOwner = $employee->user_id && (int) $employee->user_id === (int) $user->id;
-        $canSeePayrollNominal = in_array($role, ['fat', 'director'], true);
+        $canSeePayrollNominal = $role === 'fat';
         $positionPayload = $currentPosition?->toArray();
 
         if ($positionPayload && ! $canSeePayrollNominal) {
@@ -205,9 +205,9 @@ class EmployeeController extends Controller
         }
 
         // akses dasar:
-        // - HCGA/FAT/DIRECTOR boleh lihat employee mana pun
+        // - HCGA/FAT boleh lihat employee mana pun
         // - STAFF hanya boleh lihat dirinya sendiri
-        if (! in_array($role, ['hcga', 'fat', 'director'], true)) {
+        if (! in_array($role, ['hcga', 'fat'], true)) {
             if (! ($role === 'staff' && $isOwner)) {
                 return $this->forbid();
             }
@@ -356,8 +356,8 @@ class EmployeeController extends Controller
         $user = $request->user();
         $role = $this->roleOf($user);
 
-        // Nominal profil gaji hanya untuk Finance dan Director.
-        if (! in_array($role, ['fat', 'director'], true)) {
+        // Nominal profil gaji hanya untuk Finance.
+        if ($role !== 'fat') {
             return $this->forbid();
         }
 
@@ -381,7 +381,9 @@ class EmployeeController extends Controller
         $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $profile, $Position);
 
         $is_using_default_base = false;
-        if ($positionVal === null || $positionVal === '') {
+        // Profil bernilai 0 tidak menonaktifkan tarif master; nilai tersebut
+        // diperlakukan sebagai belum ada override per pegawai.
+        if ($positionVal === null || $positionVal === '' || (float) $positionVal <= 0) {
             if ($profile->position_allowance > 0) {
                 $base = (float) $profile->position_allowance;
                 $is_using_default_base = false;
@@ -534,11 +536,11 @@ class EmployeeController extends Controller
         $isSelf = (string) $user->employee_id === (string) $employee->id
             || ((int) ($employee->user_id ?? 0) === (int) $user->id);
         
-        if (! in_array($role, ['hcga', 'fat', 'director'], true) && !$isSelf) {
+        if (! in_array($role, ['hcga', 'fat'], true) && !$isSelf) {
             return $this->forbid();
         }
 
-        $canSeeNominal = in_array($role, ['fat', 'director'], true)
+        $canSeeNominal = $role === 'fat'
             || ($role === 'staff' && $isSelf);
 
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
@@ -556,7 +558,9 @@ class EmployeeController extends Controller
             $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $p, $Position);
 
             $is_using_default_base = false;
-            if ($positionVal === null || $positionVal === '') {
+            // Profil bernilai 0 tidak menonaktifkan tarif master; nilai tersebut
+            // diperlakukan sebagai belum ada override per pegawai.
+            if ($positionVal === null || $positionVal === '' || (float) $positionVal <= 0) {
                 if ($p->position_allowance > 0) {
                     $base = (float) $p->position_allowance;
                     $is_using_default_base = false;
@@ -865,7 +869,7 @@ class EmployeeController extends Controller
         $role = $this->roleOf($user);
         $isOwner = $employee->user_id && (int) $employee->user_id === (int) $user->id;
 
-        if (! in_array($role, ['hcga', 'fat', 'director'], true) && ! $isOwner) {
+        if (! in_array($role, ['hcga', 'fat'], true) && ! $isOwner) {
             return $this->forbid();
         }
 

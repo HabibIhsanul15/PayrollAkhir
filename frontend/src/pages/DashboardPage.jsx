@@ -2,9 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
-import { currentPayrollMonth, monthLabel } from "@/lib/utils";
+import { currentPayrollMonth, formatRupiah, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
-import EmployeeHistoryHub from "@/components/EmployeeHistoryHub";
 
 import {
   DollarSign,
@@ -13,7 +12,12 @@ import {
   ClipboardList,
   ChevronDown,
   TrendingUp,
-  Activity
+  Activity,
+  FileText,
+  Clock3,
+  CheckCircle2,
+  CreditCard,
+  BriefcaseBusiness,
 } from "lucide-react";
 
 function todayMonth() {
@@ -25,6 +29,17 @@ function periodeLabel(isoDate) {
   const d = new Date(isoDate);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("id-ID", { month: "short", year: "numeric" });
+}
+
+function payrollStatusLabel(status) {
+  return {
+    draft: "Draft",
+    submitted: "Menunggu Direktur",
+    requested: "Menunggu Direktur",
+    approved: "Disetujui",
+    paid: "Dibayar",
+    rejected: "Ditolak",
+  }[status] || "Belum ada payroll";
 }
 
 export default function DashboardPage() {
@@ -55,6 +70,8 @@ export default function DashboardPage() {
   const noAccountList = Array.isArray(hcgaLists?.no_account) ? hcgaLists.no_account : [];
 
   const kpi = data?.kpi || {};
+  const directorOverview = data?.director_overview || {};
+  const staffOverview = data?.staff_overview || {};
   const recent = Array.isArray(data?.recent_payrolls) ? data.recent_payrolls : [];
   const trend = useMemo(() => Array.isArray(data?.trend) ? data.trend : [], [data]);
   const statusCounts = Array.isArray(data?.status_counts) ? data.status_counts : [];
@@ -200,13 +217,75 @@ export default function DashboardPage() {
         ) : role === "staff" ? (
           /* STAFF DASHBOARD */
           <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div className="relative overflow-hidden rounded-3xl border border-white bg-white/90 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-indigo-500 opacity-10" />
+                <div className="relative z-10">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg">
+                    <Activity size={22} />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Payroll Periode Ini</div>
+                  <div className="mt-2 text-2xl font-extrabold text-slate-800">
+                    {loading ? "…" : payrollStatusLabel(staffOverview.current_payroll_status)}
+                  </div>
+                  <div className="mt-2 text-xs font-medium text-slate-400"><PeriodDisplay period={month} /></div>
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-white bg-white/90 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-emerald-500 opacity-10" />
+                <div className="relative z-10">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg">
+                    <DollarSign size={22} />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Gaji Bersih Periode Ini</div>
+                  <div className="mt-2 text-2xl font-extrabold text-slate-800">
+                    {loading
+                      ? "…"
+                      : staffOverview.current_payroll_status === "paid"
+                        ? formatRupiah(Number(staffOverview.current_payroll_total || 0))
+                        : "Belum tersedia"}
+                  </div>
+                  <div className="mt-2 text-xs font-medium text-slate-400">Ditampilkan setelah pembayaran dicatat.</div>
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-white bg-white/90 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-sky-500 opacity-10" />
+                <div className="relative z-10">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg">
+                    <FileText size={22} />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Slip Gaji Terakhir</div>
+                  <div className="mt-2 text-lg font-extrabold text-slate-800">
+                    {loading
+                      ? "…"
+                      : staffOverview.latest_paid_payroll_id
+                        ? `Periode ${staffOverview.latest_paid_period || "-"}`
+                        : "Belum ada slip"}
+                  </div>
+                  {staffOverview.latest_paid_payroll_id ? (
+                    <Link
+                      to={`/payrolls/${staffOverview.latest_paid_payroll_id}`}
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700"
+                    >
+                      <FileText size={13} />
+                      Lihat Slip Gaji
+                    </Link>
+                  ) : (
+                    <div className="mt-3 text-xs font-medium text-slate-400">Slip tersedia setelah payroll dibayar.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* 2 Charts (Trend & Status) */}
             <div className="grid grid-cols-2 gap-6">
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
                 <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white/50">
                   <div className="text-base font-bold text-slate-800 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-indigo-500" />
-                    Trend Gaji (6 Bulan)
+                    Riwayat Payroll (6 Bulan)
                   </div>
                 </div>
                 <div className="p-8">
@@ -285,19 +364,83 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Riwayat Jabatan dan Payroll */}
-            {user?.employee?.id ? (
-              <EmployeeHistoryHub employeeId={user.employee.id} role={role} />
-            ) : (
-              <div className="p-8 bg-white/90 rounded-3xl border border-white text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                <p className="text-slate-500">Akun Anda belum terhubung dengan profil Karyawan.</p>
-              </div>
-            )}
           </div>
         ) : (
           /* PAYROLL SUMMARY DASHBOARD */
           <div className="space-y-6">
             {/* Stat cards */}
+            {role === "director" ? (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
+                {[
+                  {
+                    label: "Menunggu Persetujuan",
+                    value: directorOverview.pending_payroll_count ?? 0,
+                    sub: "Payroll perlu keputusan Anda",
+                    icon: Clock3,
+                    gradient: "from-amber-500 to-orange-500",
+                    to: "/payrolls",
+                  },
+                  {
+                    label: "Total Menunggu",
+                    value: formatRupiah(Number(directorOverview.pending_payroll_total || 0)),
+                    sub: "Total nett yang menunggu persetujuan",
+                    icon: DollarSign,
+                    gradient: "from-blue-600 to-indigo-600",
+                    to: "/payrolls",
+                    compact: true,
+                  },
+                  {
+                    label: "Sudah Disetujui",
+                    value: directorOverview.approved_payroll_count ?? 0,
+                    sub: "Menunggu proses pembayaran Finance",
+                    icon: CheckCircle2,
+                    gradient: "from-sky-500 to-blue-600",
+                    to: "/payrolls",
+                  },
+                  {
+                    label: "Sudah Dibayar",
+                    value: directorOverview.paid_payroll_count ?? 0,
+                    sub: "Payroll selesai pada periode aktif",
+                    icon: CreditCard,
+                    gradient: "from-emerald-500 to-teal-600",
+                    to: "/payrolls",
+                  },
+                  {
+                    label: "Promosi Menunggu",
+                    value: directorOverview.pending_mutation_count ?? 0,
+                    sub: "Pengajuan promosi atau demosi",
+                    icon: BriefcaseBusiness,
+                    gradient: "from-violet-500 to-purple-600",
+                    to: "/mutation-approvals",
+                  },
+                ].map((card) => {
+                  const Icon = card.icon;
+
+                  return (
+                    <Link
+                      key={card.label}
+                      to={card.to}
+                      className="group relative overflow-hidden rounded-3xl border border-white bg-white/90 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgb(0,0,0,0.12)]"
+                    >
+                      <div className={`absolute -right-6 -top-6 h-32 w-32 rounded-full bg-gradient-to-br ${card.gradient} opacity-[0.07] transition-transform duration-700 group-hover:scale-150`} />
+                      <div className="relative z-10">
+                        <div className="mb-6 flex items-start justify-between">
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-lg`}>
+                            <Icon size={22} />
+                          </div>
+                        </div>
+                        <div className={`${card.compact ? "text-2xl" : "text-4xl"} mb-2 font-extrabold tracking-tight text-slate-800`}>
+                          {loading ? "…" : card.value}
+                        </div>
+                        <div className="text-sm font-bold text-slate-500">{card.label}</div>
+                        <div className="mt-2 text-[11px] font-medium text-slate-400">{card.sub}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
             <div className="grid grid-cols-3 gap-6">
               {[
                 {
@@ -437,6 +580,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+              </>
+            )}
 
             {/* Bottom row: Recent payrolls */}
             <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
@@ -451,12 +596,13 @@ export default function DashboardPage() {
               </div>
               
               <div className="p-0">
-                <div className="grid grid-cols-12 gap-4 px-8 py-4 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">
-                  <div className="col-span-1">ID</div>
-                  <div className="col-span-4">Pegawai</div>
-                  <div className="col-span-2">Periode</div>
-                  <div className="col-span-3">Status</div>
-                  <div className="col-span-2">Hari Kerja</div>
+                  <div className="grid grid-cols-12 gap-4 px-8 py-4 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">
+                    <div className="col-span-1">ID</div>
+                    <div className="col-span-4">Pegawai</div>
+                    <div className="col-span-2">Periode</div>
+                    <div className="col-span-2">Status</div>
+                    <div className="col-span-1">Hari Kerja</div>
+                    <div className="col-span-2 text-right">Aksi</div>
                 </div>
 
                 {loading ? (
@@ -472,10 +618,11 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {recent.map((r) => (
-                      <div 
-                        key={r.id} 
-                        onClick={() => navigate(`/payrolls/${r.id}`)}
+                      {recent.map((r) => {
+                        return (
+                          <div
+                            key={r.id}
+                            onClick={() => navigate("/payrolls")}
                         className="grid grid-cols-12 gap-4 px-8 py-5 items-center hover:bg-slate-50/80 transition-colors group cursor-pointer"
                       >
                         <div className="col-span-1 text-sm font-bold text-indigo-600">
@@ -493,7 +640,7 @@ export default function DashboardPage() {
                         <div className="col-span-2 text-xs font-semibold text-slate-500">
                           {periodeLabel(r.periode)}
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <span className={`inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-widest ${
                             r.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
                             r.status === 'approved' ? 'bg-blue-100 text-blue-700' :
@@ -502,13 +649,24 @@ export default function DashboardPage() {
                             {r.status}
                           </span>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1">
                           <span className="inline-flex text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-lg shadow-inner border border-slate-200">
                             {Number(r.total_mandays ?? 0)} Hari
                           </span>
                         </div>
-                      </div>
-                    ))}
+                        <div className="col-span-2 flex justify-end">
+                              <Link
+                                to="/payrolls"
+                                onClick={(event) => event.stopPropagation()}
+                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                              >
+                                <FileText size={12} />
+                                Buka Payroll
+                              </Link>
+                        </div>
+                       </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

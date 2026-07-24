@@ -291,7 +291,7 @@ export default function MyProfilePage() {
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              Riwayat Jabatan & Gaji
+              Riwayat Gaji & Jabatan
             </button>
           </div>
 

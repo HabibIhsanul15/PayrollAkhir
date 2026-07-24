@@ -20,8 +20,8 @@ class MonthlyRecapController extends Controller
     public function index(Request $request)
     {
         if ($request->user()->cannot('viewAny', MonthlyRecap::class)) {
-            // Simplified permission check: HCGA and FAT can view
-            if (!in_array(strtolower($request->user()->role), ['hcga', 'fat', 'director'])) {
+            // Rekap hanya dipakai HCGA untuk input dan FAT untuk meninjau hasilnya.
+            if (!in_array(strtolower($request->user()->role), ['hcga', 'fat'], true)) {
                 abort(403);
             }
         }

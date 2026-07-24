@@ -1015,7 +1015,9 @@ class PayrollController extends Controller
             ? CryptoService::decryptByAlg($profile->position_allowance_enc, $alg)
             : null;
 
-        if ($decrypted === null || $decrypted === '') {
+        // Nilai 0 pada profil lama berarti belum ada override per pegawai.
+        // Gunakan tarif tunjangan jabatan yang aktif pada master jabatan.
+        if ($decrypted === null || $decrypted === '' || (float) $decrypted <= 0) {
             if ($profile->position_allowance > 0) {
                 return (float) $profile->position_allowance;
             }

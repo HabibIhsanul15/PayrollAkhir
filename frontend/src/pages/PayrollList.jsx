@@ -125,6 +125,16 @@ export default function PayrollList() {
   const isFAT = role === "fat";
   const isDirector = role === "director";
   const isStaff = role === "staff" || role === "employee";
+  const pageTitle = isStaff
+    ? "Slip Gaji Saya"
+    : isDirector
+      ? "Persetujuan Payroll"
+      : "Pengajuan Payroll";
+  const pageDescription = isStaff
+    ? "Slip gaji yang sudah dibayar akan muncul di halaman ini."
+    : isDirector
+      ? "Tinjau payroll yang diajukan Finance, lalu setujui atau tolak sebelum pembayaran diproses."
+      : "Tinjau perhitungan gaji, lalu ajukan payroll ke Direktur untuk disetujui.";
   const payrollKey = !isAuthed()
     ? null
     : isStaff
@@ -411,12 +421,10 @@ export default function PayrollList() {
               <span className="text-[10px] font-semibold text-muted-foreground">Payroll App</span>
             </div>
             <h1 className="mt-4 text-lg font-semibold text-foreground">
-              {isStaff ? "Slip Gaji Saya" : "Pengajuan Payroll"}
+              {pageTitle}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              {isStaff
-                ? "Slip gaji yang sudah dibayar akan muncul di halaman ini."
-                : "Tinjau perhitungan gaji, lalu ajukan payroll ke Direktur untuk disetujui."}
+              {pageDescription}
             </p>
           </div>
 
@@ -492,7 +500,9 @@ export default function PayrollList() {
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-[13px] text-slate-500">
-                        Tidak ada data karyawan.
+                        {isDirector
+                          ? "Belum ada payroll yang diajukan untuk periode ini."
+                          : "Tidak ada data karyawan."}
                       </td>
                     </tr>
                   ) : (
@@ -566,7 +576,7 @@ export default function PayrollList() {
                                     Catat Transfer
                                   </button>
                                 )}
-                                {(isFAT || isDirector) && (
+                                {isFAT && r.payroll_status !== "paid" && (
                                   <button
                                     onClick={() => setPreviewModal({
                                       open: true,
@@ -580,6 +590,41 @@ export default function PayrollList() {
                                     <FileText size={12} />
                                     Detail
                                   </button>
+                                )}
+                                {isFAT && r.payroll_id && r.payroll_status === "paid" && (
+                                  <Link
+                                    to={`/payrolls/${r.payroll_id}`}
+                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                    title="Lihat slip gaji"
+                                  >
+                                    <FileText size={12} />
+                                    Lihat Slip Gaji
+                                  </Link>
+                                )}
+                                {isDirector && r.payroll_id && r.payroll_status !== "paid" && (
+                                  <button
+                                    onClick={() => setPreviewModal({
+                                      open: true,
+                                      employeeId: r.employee_id,
+                                      payrollId: r.payroll_id,
+                                      payrollStatus: r.payroll_status || null,
+                                    })}
+                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                    title="Detail perhitungan payroll"
+                                  >
+                                    <FileText size={12} />
+                                    Detail
+                                  </button>
+                                )}
+                                {isDirector && r.payroll_id && r.payroll_status === "paid" && (
+                                  <Link
+                                    to={`/payrolls/${r.payroll_id}`}
+                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                    title="Lihat slip gaji"
+                                  >
+                                    <FileText size={12} />
+                                    Lihat Slip Gaji
+                                  </Link>
                                 )}
                                 {isStaff && r.payroll_status === "paid" && (
                                   <Link

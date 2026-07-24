@@ -133,7 +133,7 @@ export default function App() {
           <Route
             path="/employees"
             element={
-              <RoleRoute allow={["hcga", "director"]}>
+              <RoleRoute allow={["hcga"]}>
                 <EmployeesPage />
               </RoleRoute>
             }
@@ -141,7 +141,7 @@ export default function App() {
           <Route
             path="/employees/:id"
             element={
-              <RoleRoute allow={["hcga", "director"]}>
+              <RoleRoute allow={["hcga"]}>
                 <EmployeeDetailPage />
               </RoleRoute>
             }
@@ -215,7 +215,7 @@ export default function App() {
           <Route
             path="/monthly-recaps"
             element={
-              <RoleRoute allow={["hcga", "fat", "director"]}>
+              <RoleRoute allow={["hcga", "fat"]}>
                 <MonthlyRecapPage />
               </RoleRoute>
             }

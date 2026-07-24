@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\MutationRequest;
 use App\Models\Payroll;
 use App\Models\PayrollPeriod;
+use App\Services\CryptoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -29,6 +31,35 @@ class DashboardController extends Controller
             return $month;
         }
         return PayrollPeriod::currentMonth();
+    }
+
+    private function decryptPayrollTotal(Payroll $payroll): float
+    {
+        try {
+            $alg = strtoupper((string) ($payroll->salary_alg ?? 'AES'));
+
+            if ($alg === 'HYBRID') {
+                $values = CryptoService::decryptHybridPayrollRow([
+                    'dek_enc' => $payroll->dek_enc,
+                    'enc_meta' => $payroll->enc_meta,
+                    'gaji_pokok_enc' => $payroll->gaji_pokok_enc,
+                    'tunjangan_enc' => $payroll->tunjangan_enc,
+                    'potongan_enc' => $payroll->potongan_enc,
+                    'total_enc' => $payroll->total_enc,
+                ]);
+
+                return (float) ($values['total'] ?? 0);
+            }
+
+            return (float) (CryptoService::readEncryptedOrPlainSafe(
+                $payroll->total_enc,
+                $payroll->total ?? null,
+                $alg,
+            ) ?? 0);
+        } catch (\Throwable) {
+            // Satu data lama yang tidak dapat didekripsi tidak boleh merusak Dashboard.
+            return 0;
+        }
     }
 
     /**
@@ -125,12 +156,70 @@ class DashboardController extends Controller
         $payrollQuery = Payroll::query();
         $this->applyPeriodFilter($payrollQuery, $month, $start, $end);
 
-        // staff: batasi ke payroll miliknya (kalau payrolls.user_id ada)
-        if (!$isPrivileged && $role === 'staff' && Schema::hasColumn('payrolls', 'user_id')) {
-            $payrollQuery->where('user_id', $user->id);
+        // Payroll dibuat oleh Finance, sehingga staff harus dibatasi melalui relasi
+        // employee.user_id, bukan payrolls.user_id (pembuat payroll).
+        if (!$isPrivileged && $role === 'staff') {
+            $payrollQuery->whereHas('employee', fn (mixed $query) => $query->where('user_id', $user->id));
         }
 
         $payrollCount = (clone $payrollQuery)->count();
+
+        $directorOverview = null;
+        if ($role === 'director') {
+            $pendingPayrolls = (clone $payrollQuery)
+                ->where('status', 'submitted')
+                ->get([
+                    'id', 'salary_alg', 'total_enc', 'dek_enc', 'enc_meta',
+                    'gaji_pokok_enc', 'tunjangan_enc', 'potongan_enc',
+                ]);
+
+            $directorOverview = [
+                'pending_payroll_count' => $pendingPayrolls->count(),
+                'pending_payroll_total' => $pendingPayrolls
+                    ->sum(fn (Payroll $payroll): float => $this->decryptPayrollTotal($payroll)),
+                'approved_payroll_count' => (clone $payrollQuery)
+                    ->where('status', 'approved')
+                    ->count(),
+                'paid_payroll_count' => (clone $payrollQuery)
+                    ->where('status', 'paid')
+                    ->count(),
+                'pending_mutation_count' => MutationRequest::query()
+                    ->where('status', 'pending')
+                    ->count(),
+            ];
+        }
+
+        $staffOverview = null;
+        if ($role === 'staff') {
+            $payrollFields = [
+                'id', 'periode', 'period_to', 'status', 'salary_alg', 'total_enc', 'dek_enc', 'enc_meta',
+                'gaji_pokok_enc', 'tunjangan_enc', 'potongan_enc',
+            ];
+
+            $currentPayroll = (clone $payrollQuery)
+                ->orderByDesc('id')
+                ->first($payrollFields);
+
+            $latestPaidPayroll = Payroll::query()
+                ->where('status', 'paid')
+                ->whereHas('employee', fn (mixed $query) => $query->where('user_id', $user->id))
+                ->orderByDesc('periode')
+                ->orderByDesc('id')
+                ->first($payrollFields);
+
+            $staffOverview = [
+                'current_payroll_id' => $currentPayroll?->id,
+                'current_payroll_status' => $currentPayroll?->status,
+                'current_payroll_total' => $currentPayroll?->status === 'paid'
+                    ? $this->decryptPayrollTotal($currentPayroll)
+                    : null,
+                'latest_paid_payroll_id' => $latestPaidPayroll?->id,
+                'latest_paid_period' => optional($latestPaidPayroll?->period_to ?? $latestPaidPayroll?->periode)->format('Y-m'),
+                'latest_paid_total' => $latestPaidPayroll
+                    ? $this->decryptPayrollTotal($latestPaidPayroll)
+                    : null,
+            ];
+        }
 
         // ===== Status counts =====
         $statusCounts = [];
@@ -176,8 +265,8 @@ class DashboardController extends Controller
                     $endMonth->endOfMonth()->toDateString(),
                 ]);
 
-            if ($role === 'staff' && Schema::hasColumn('payrolls', 'user_id')) {
-                $trendBase->where('user_id', $user->id);
+            if ($role === 'staff') {
+                $trendBase->whereHas('employee', fn (mixed $query) => $query->where('user_id', $user->id));
             }
 
             $trendRows = $trendBase
@@ -243,6 +332,8 @@ class DashboardController extends Controller
                 'employees_inactive' => (int) $employeeInactive,
                 'payroll_count' => (int) $payrollCount,
             ],
+            'director_overview' => $directorOverview,
+            'staff_overview' => $staffOverview,
             'status_counts' => $statusCounts,
             'alg_counts' => $algCounts,
             'trend' => $trend,

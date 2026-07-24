@@ -758,7 +758,9 @@ class PayrollCalculationService
             ? CryptoService::decryptByAlg($profile->position_allowance_enc, $profileAlg)
             : null;
 
-        if ($positionAllowanceDecrypted === null || $positionAllowanceDecrypted === '') {
+        // Nilai 0 pada profil lama berarti belum ada nominal khusus. Dalam kondisi
+        // tersebut, gunakan tarif tunjangan jabatan dari master jabatan.
+        if ($positionAllowanceDecrypted === null || $positionAllowanceDecrypted === '' || (float) $positionAllowanceDecrypted <= 0) {
             if ($profile->position_allowance > 0) {
                 return (string) $profile->position_allowance;
             }

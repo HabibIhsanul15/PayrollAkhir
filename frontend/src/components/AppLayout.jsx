@@ -38,10 +38,8 @@ function menuByRole(role) {
   if (r === "director") {
     return [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/employees", label: "Data Karyawan", icon: Users },
-      { to: "/payrolls", label: "Payroll", icon: DollarSign },
+      { to: "/payrolls", label: "Persetujuan Payroll", icon: DollarSign },
       { to: "/reports/payroll", label: "Laporan Payroll", icon: BarChart3 },
-      { to: "/monthly-recaps", label: "Rekap Bulanan", icon: ClipboardList },
       { to: "/mutation-approvals", label: "Persetujuan Promosi", icon: Briefcase },
       { to: "/my-profile", label: "Ubah Password", icon: User },
     ];
