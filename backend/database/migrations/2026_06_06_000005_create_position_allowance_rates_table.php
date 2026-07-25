@@ -12,7 +12,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('position_id')->constrained('positions')->cascadeOnDelete();
             $table->foreignId('allowance_type_id')->constrained('allowance_types')->cascadeOnDelete();
-            $table->decimal('rate_amount', 14, 2)->nullable()->comment('Nominal per unit (per manday/trip/bulan). Null = tidak berlaku untuk jabatan ini');
+            $table->longText('rate_amount_enc')->nullable();
+            $table->string('salary_alg', 20)->default('HYBRID');
+            $table->string('salary_key_id', 100)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

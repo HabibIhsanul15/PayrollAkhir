@@ -85,14 +85,32 @@ class DashboardController extends Controller
         $noSalaryCount = Employee::whereDoesntHave('salaryProfiles')->count();
 
         $noAccountList = Employee::whereNull('user_id')
+            ->with('position:id,name')
             ->orderBy('name')
             ->limit(5)
-            ->get(['id', 'employee_code', 'name', 'department', 'position', 'status', 'user_id']);
+            ->get(['id', 'employee_code', 'name', 'position_id', 'status', 'user_id'])
+            ->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'name' => $employee->name,
+                'position' => $employee->position?->name,
+                'status' => $employee->status,
+                'user_id' => $employee->user_id,
+            ]);
 
         $noSalaryList = Employee::whereDoesntHave('salaryProfiles')
+            ->with('position:id,name')
             ->orderBy('name')
             ->limit(5)
-            ->get(['id', 'employee_code', 'name', 'department', 'position', 'status', 'user_id']);
+            ->get(['id', 'employee_code', 'name', 'position_id', 'status', 'user_id'])
+            ->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'name' => $employee->name,
+                'position' => $employee->position?->name,
+                'status' => $employee->status,
+                'user_id' => $employee->user_id,
+            ]);
 
         $currentMonth = date('Y-m');
         $pendingRecapsCount = Employee::where('status', 'active')
@@ -296,7 +314,7 @@ class DashboardController extends Controller
         if (Schema::hasColumn('payrolls', 'status')) $select[] = 'status';
 
         $recentRows = (clone $payrollQuery)
-            ->with(['employee:id,name,employee_code,department,position'])
+            ->with(['employee:id,name,employee_code,position_id', 'employee.position:id,name'])
             ->orderByDesc('id')
             ->limit(8)
             ->get($select);
@@ -312,8 +330,7 @@ class DashboardController extends Controller
                 'employee_id' => $p->employee_id,
                 'employee_name' => $p->employee?->name,
                 'employee_code' => $p->employee?->employee_code,
-                'department' => $p->employee?->department,
-                'position' => $p->employee?->position,
+                'position' => $p->employee?->position?->name,
                 'periode' => optional($p->period_to)->toDateString() ?? optional($p->periode)->toDateString(),
                 'status' => $p->status ?? null,
                 'total_mandays' => $recap ? $recap->total_mandays : 0,

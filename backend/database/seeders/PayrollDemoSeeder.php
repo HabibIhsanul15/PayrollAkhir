@@ -12,6 +12,7 @@ use App\Models\PositionAllowanceRate;
 use App\Models\SalaryProfile;
 use App\Models\User;
 use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -41,7 +42,6 @@ class PayrollDemoSeeder extends Seeder
                 'name' => 'Andi Pratama',
                 'email' => 'andi.pegawai@payroll.test',
                 'code' => 'EMP-0001',
-                'department' => 'Operasional',
                 'position' => $positions['pegawai'],
                 'base_salary' => 250000,
                 'bank' => 'BCA',
@@ -54,7 +54,6 @@ class PayrollDemoSeeder extends Seeder
                 'name' => 'Siti Rahma',
                 'email' => 'siti.pegawai@payroll.test',
                 'code' => 'EMP-0002',
-                'department' => 'Keuangan',
                 'position' => $positions['supervisor'],
                 'base_salary' => 350000,
                 'bank' => 'Mandiri',
@@ -67,7 +66,6 @@ class PayrollDemoSeeder extends Seeder
                 'name' => 'Rina Wijaya',
                 'email' => 'rina.pegawai@payroll.test',
                 'code' => 'EMP-0003',
-                'department' => 'Human Capital',
                 'position' => $positions['manager'],
                 'base_salary' => 450000,
                 'bank' => 'BNI',
@@ -80,7 +78,6 @@ class PayrollDemoSeeder extends Seeder
                 'name' => 'Habib',
                 'email' => 'habib.pegawai@payroll.test',
                 'code' => 'EMP-0004',
-                'department' => 'Manajemen Proyek',
                 'position' => $positions['project_director'],
                 'base_salary' => 250000,
                 'bank' => 'BRI',
@@ -135,7 +132,15 @@ class PayrollDemoSeeder extends Seeder
         ];
 
         foreach ($rows as $key => $row) {
-            $rows[$key] = Position::updateOrCreate(['code' => $row['code']], $row + ['is_active' => true]);
+            $baseSalary = $row['default_base_salary_amount'];
+            unset($row['default_base_salary_amount']);
+            $rows[$key] = Position::updateOrCreate(['code' => $row['code']], [
+                ...$row,
+                'is_active' => true,
+                ...app(SensitiveFieldCipherService::class)->encryptAttributes([
+                    'default_base_salary_amount' => $baseSalary,
+                ]),
+            ]);
         }
 
         return $rows;
@@ -202,8 +207,10 @@ class PayrollDemoSeeder extends Seeder
                     'position_id' => $positions[$positionKey]->id,
                     'allowance_type_id' => $allowances[$allowanceKey]->id,
                 ], [
-                    'rate_amount' => $amount,
                     'is_active' => true,
+                    ...app(SensitiveFieldCipherService::class)->encryptAttributes([
+                        'rate_amount' => $amount,
+                    ]),
                 ]);
             }
         }
@@ -285,26 +292,24 @@ class PayrollDemoSeeder extends Seeder
         /** @var Position $position */
         $position = $data['position'];
         $effectiveFrom = $now->copy()->subYear()->startOfMonth()->toDateString();
-        $keyId = CryptoService::keyId();
+        $cipher = app(SensitiveFieldCipherService::class);
 
         $employee = Employee::updateOrCreate(['employee_code' => $data['code']], [
             'user_id' => $user->id,
             'name' => $data['name'],
             'join_date' => $effectiveFrom,
-            'department' => $data['department'],
-            'position' => $position->name,
             'position_id' => $position->id,
             'status' => 'active',
             'num_toddlers' => (int) ($data['num_toddlers'] ?? 0),
-            'nik_enc' => CryptoService::encryptAESGCM('317400000000'.substr((string) $data['code'], -3)),
-            'npwp_enc' => CryptoService::encryptAESGCM('12.345.678.9-012.000'),
-            'phone_enc' => CryptoService::encryptAESGCM('0812345678'.substr((string) $data['code'], -1)),
-            'address_enc' => CryptoService::encryptAESGCM('Jakarta, Indonesia'),
             'bank_name' => $data['bank'],
             'bank_account_name' => $data['name'],
-            'bank_account_number_enc' => CryptoService::encryptAESGCM((string) $data['account']),
-            'pii_alg' => 'AES',
-            'pii_key_id' => $keyId,
+            ...$cipher->encryptAttributes([
+                'nik' => '3174000000000'.substr((string) $data['code'], -3),
+                'npwp' => '123456789012'.substr((string) $data['code'], -3),
+                'phone' => '0812345678'.substr((string) $data['code'], -1),
+                'address' => 'Jakarta, Indonesia',
+                'bank_account_number' => (string) $data['account'],
+            ], 'pii_alg', 'pii_key_id'),
         ]);
 
         $profile = SalaryProfile::updateOrCreate([
@@ -312,20 +317,18 @@ class PayrollDemoSeeder extends Seeder
             'effective_from' => $effectiveFrom,
         ], [
             'position_id' => $position->id,
-            'position' => $position->name,
-            'base_salary_amount_enc' => CryptoService::encryptAESGCM((string) $data['base_salary']),
             // Nominal mengikuti tarif tunjangan jabatan pada master posisi.
             // Null menandakan tidak ada override khusus untuk pegawai ini.
-            'position_allowance_enc' => null,
-            'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
-            'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
-            'salary_alg' => 'AES',
-            'salary_key_id' => $keyId,
+            ...$cipher->encryptAttributes([
+                'base_salary_amount' => $data['base_salary'],
+                'position_allowance' => null,
+                'allowance_fixed' => 0,
+                'deduction_fixed' => 0,
+            ]),
         ]);
 
         $employee->jobHistories()->updateOrCreate(['start_date' => $effectiveFrom], [
             'position_id' => $position->id,
-            'position' => $position->name,
             'status' => 'active',
             'notes' => 'Data demo awal.',
         ]);

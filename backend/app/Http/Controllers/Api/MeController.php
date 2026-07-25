@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 
 class MeController extends Controller
 {
+    public function __construct(private SensitiveFieldCipherService $sensitiveCipher) {}
+
     private function digitStringRules(int $maxLength): array
     {
         return ['sometimes', 'nullable', 'string', "max:$maxLength", 'regex:/^[0-9]+$/'];
@@ -20,8 +23,9 @@ class MeController extends Controller
     {
         return [
             'nik.regex' => 'NIK hanya boleh berisi angka.',
+            'nik.digits' => 'NIK harus berjumlah tepat 16 digit angka.',
             'npwp.regex' => 'NPWP hanya boleh berisi angka.',
-            'phone.regex' => 'Nomor telepon hanya boleh berisi angka.',
+            'phone.regex' => 'Nomor telepon harus nomor seluler Indonesia, diawali 08 dan berjumlah 10-13 digit.',
             'bank_account_number.regex' => 'Nomor rekening hanya boleh berisi angka.',
         ];
     }
@@ -67,24 +71,16 @@ class MeController extends Controller
         }
 
         // Posisi aktif ditentukan dari profil gaji yang sudah efektif hari ini.
-        // Kolom position pada employee hanya menjadi data referensi lama.
         $currentProfile = $emp->currentSalaryProfile();
-        if ($currentProfile) {
-            $emp->position_id = $currentProfile->position_id;
-            $emp->position = $currentProfile->position ?: $emp->position;
-        }
+        $effectivePositionId = $currentProfile?->position_id ?? $emp->position_id;
+        $emp->position_id = $effectivePositionId;
+        $emp->setAttribute('position', $effectivePositionId ? Position::find($effectivePositionId)?->name : null);
 
-        $alg = strtoupper((string) ($emp->pii_alg ?? 'AES'));
-
-        $emp->nik = CryptoService::readEncryptedOrPlain($emp->nik_enc, null, $alg);
-        $emp->npwp = CryptoService::readEncryptedOrPlain($emp->npwp_enc, null, $alg);
-        $emp->bank_account_number = CryptoService::readEncryptedOrPlain(
-            $emp->bank_account_number_enc,
-            null,
-            $alg
-        );
-        $emp->phone = CryptoService::readEncryptedOrPlain($emp->phone_enc, null, $alg);
-        $emp->address = CryptoService::readEncryptedOrPlain($emp->address_enc, null, $alg);
+        $emp->nik = $emp->nik;
+        $emp->npwp = $emp->npwp;
+        $emp->bank_account_number = $emp->bank_account_number;
+        $emp->phone = $emp->phone;
+        $emp->address = $emp->address;
 
         unset(
             $emp->nik_enc,
@@ -115,54 +111,29 @@ class MeController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'phone' => $this->digitStringRules(30),
+            'phone' => ['sometimes', 'nullable', 'string', 'regex:/^08[1-9][0-9]{7,10}$/'],
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
 
-            'nik' => $this->digitStringRules(32),
-            'npwp' => $this->digitStringRules(32),
+            'nik' => ['sometimes', 'nullable', 'string', 'digits:16'],
+            'npwp' => ['sometimes', 'nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
 
             'bank_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'bank_account_name' => ['sometimes', 'nullable', 'string', 'max:150'],
             'bank_account_number' => $this->digitStringRules(50),
 
-            // optional kalau kamu mau staff bisa pilih alg:
-            // 'pii_alg' => ['sometimes', 'in:AES,RSA'],
+            // Algoritma PII ditetapkan server dan selalu HYBRID.
         ], $this->digitFieldMessages());
 
-        $piiAlg = strtoupper((string) ($emp->pii_alg ?? 'AES'));
-
-        $encPII = function (string $v) use ($piiAlg) {
-            return $piiAlg === 'RSA'
-                ? CryptoService::encryptRSA($v)
-                : CryptoService::encryptAESGCM($v);
-        };
-
-        if (array_key_exists('nik', $data)) {
-            $data['nik_enc'] = !empty($data['nik']) ? $encPII((string)$data['nik']) : null;
-            unset($data['nik']);
+        $piiFields = ['nik', 'npwp', 'bank_account_number', 'phone', 'address'];
+        $hasPiiChange = collect($piiFields)->contains(fn (string $field) => array_key_exists($field, $data));
+        if ($hasPiiChange) {
+            $piiValues = [];
+            foreach ($piiFields as $field) {
+                $piiValues[$field] = array_key_exists($field, $data) ? $data[$field] : $emp->{$field};
+                unset($data[$field]);
+            }
+            $data = [...$data, ...$this->sensitiveCipher->encryptAttributes($piiValues, 'pii_alg', 'pii_key_id')];
         }
-        if (array_key_exists('npwp', $data)) {
-            $data['npwp_enc'] = !empty($data['npwp']) ? $encPII((string)$data['npwp']) : null;
-            unset($data['npwp']);
-        }
-        if (array_key_exists('bank_account_number', $data)) {
-            $data['bank_account_number_enc'] = !empty($data['bank_account_number'])
-                ? $encPII((string)$data['bank_account_number'])
-                : null;
-            unset($data['bank_account_number']);
-        }
-        if (array_key_exists('phone', $data)) {
-            $data['phone_enc'] = !empty($data['phone']) ? $encPII((string)$data['phone']) : null;
-            unset($data['phone']);
-        }
-        if (array_key_exists('address', $data)) {
-            $data['address_enc'] = !empty($data['address']) ? $encPII((string)$data['address']) : null;
-            unset($data['address']);
-        }
-
-        // metadata
-        $data['pii_alg'] = $piiAlg;
-        $data['pii_key_id'] = CryptoService::keyId();
 
         $emp->update($data);
 
@@ -172,15 +143,11 @@ class MeController extends Controller
 
         $fresh = $emp->fresh();
 
-        $fresh->nik = CryptoService::readEncryptedOrPlain($fresh->nik_enc, null, $piiAlg);
-        $fresh->npwp = CryptoService::readEncryptedOrPlain($fresh->npwp_enc, null, $piiAlg);
-        $fresh->bank_account_number = CryptoService::readEncryptedOrPlain(
-            $fresh->bank_account_number_enc,
-            null,
-            $piiAlg
-        );
-        $fresh->phone = CryptoService::readEncryptedOrPlain($fresh->phone_enc, null, $piiAlg);
-        $fresh->address = CryptoService::readEncryptedOrPlain($fresh->address_enc, null, $piiAlg);
+        $fresh->nik = $fresh->nik;
+        $fresh->npwp = $fresh->npwp;
+        $fresh->bank_account_number = $fresh->bank_account_number;
+        $fresh->phone = $fresh->phone;
+        $fresh->address = $fresh->address;
 
         unset(
             $fresh->nik_enc,

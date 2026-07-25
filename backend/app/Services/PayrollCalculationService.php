@@ -22,7 +22,8 @@ class PayrollCalculationService
     public function __construct(
         private AllowanceCalculationService $allowanceCalculator,
         private AllowanceRateResolver $rateResolver,
-        private PayrollCipherService $cipherService
+        private PayrollCipherService $cipherService,
+        private SensitiveFieldCipherService $sensitiveCipher,
     ) {}
 
     public function validatePrerequisites(Employee $employee, string $periodMonth, ?int $ignorePayrollId = null): array
@@ -188,8 +189,6 @@ class PayrollCalculationService
             if (count($profilesData) > 1 && $amount > 0) {
                 $accumulatedAllowances[$typeCode]['calculation_detail']['segments'][] = [
                     'Position' => $positionName,
-                    'amount' => $amount,
-                    'rate' => $rate,
                     'mandays' => $mandays,
                 ];
             }
@@ -275,7 +274,7 @@ class PayrollCalculationService
             ->get();
 
         foreach ($specialDeductions as $sd) {
-            $sdAmount = (float) (CryptoService::readEncryptedOrPlainSafe($sd->amount_enc, $sd->amount, $sd->salary_alg ?? 'AES') ?? 0);
+            $sdAmount = (float) ($sd->amount ?? 0);
             $total_deductions += $sdAmount;
             $deductions_list[] = [
                 'deduction_type' => $sd->type,
@@ -314,7 +313,6 @@ class PayrollCalculationService
                 'amount' => $totalLatePenalty,
                 'calculation_detail' => [
                     'late_count' => $totalLateCount,
-                    'total_penalty' => $totalLatePenalty,
                 ],
             ];
         }
@@ -575,7 +573,7 @@ class PayrollCalculationService
                     'employee_id' => $employee->id,
                     'employee_name' => $employee->name,
                     'bank_name' => $employee->bank_name,
-                    'bank_account_number' => $employee->bank_account_number_enc ? CryptoService::readEncryptedOrPlainSafe($employee->bank_account_number_enc, $employee->bank_account_number, $employee->pii_alg ?? 'AES') : $employee->bank_account_number,
+                    'bank_account_number' => $employee->bank_account_number,
                     'status' => 'generated',
                     'payroll_id' => $existing->id,
                     'payroll_status' => $existing->status,
@@ -614,7 +612,7 @@ class PayrollCalculationService
                     'employee_id' => $employee->id,
                     'employee_name' => $employee->name,
                     'bank_name' => $employee->bank_name,
-                    'bank_account_number' => $employee->bank_account_number_enc ? CryptoService::readEncryptedOrPlainSafe($employee->bank_account_number_enc, $employee->bank_account_number, $employee->pii_alg ?? 'AES') : $employee->bank_account_number,
+                    'bank_account_number' => $employee->bank_account_number,
                     'status' => 'draft', // Simulated, not generated
                     'total_mandays' => $prereq['total_mandays'] ?? 0,
                     'gaji_pokok' => $gaji_pokok,
@@ -716,18 +714,14 @@ class PayrollCalculationService
         DB::beginTransaction();
         try {
             $allowance->update([
-                'amount_enc' => CryptoService::encryptAESGCM((string) round($amount)),
-                'salary_alg' => 'AES',
-                'salary_key_id' => CryptoService::keyId(),
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'amount' => round($amount),
+                ]),
                 'is_manual_override' => true,
             ]);
 
             $totalAllowances = $payroll->allowances()->get()->sum(function (PayrollAllowance $row) {
-                return (float) (CryptoService::readEncryptedOrPlainSafe(
-                    $row->amount_enc,
-                    $row->amount,
-                    $row->salary_alg ?? 'AES'
-                ) ?? 0);
+                return (float) ($row->amount ?? 0);
             });
             $plain = $this->cipherService->decrypt($payroll);
             $gaji = (float) ($plain['gaji_pokok'] ?? 0);
@@ -753,10 +747,7 @@ class PayrollCalculationService
 
     private function resolvePositionAllowance(SalaryProfile $profile, ?Position $Position, string $periodStart): string
     {
-        $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-        $positionAllowanceDecrypted = $profile->position_allowance_enc
-            ? CryptoService::decryptByAlg($profile->position_allowance_enc, $profileAlg)
-            : null;
+        $positionAllowanceDecrypted = $profile->position_allowance;
 
         // Nilai 0 pada profil lama berarti belum ada nominal khusus. Dalam kondisi
         // tersebut, gunakan tarif tunjangan jabatan dari master jabatan.
@@ -778,22 +769,11 @@ class PayrollCalculationService
 
     private function resolveBaseSalary(SalaryProfile $profile, ?Position $Position, Employee $employee): array
     {
-        $profileAlg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-        $amount = $profile->base_salary_amount_enc
-            ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $profileAlg)
-            : null;
+        $amount = $profile->base_salary_amount;
 
         if ($amount === null || $amount === '') {
-            if ($profile->base_salary_amount !== null && $profile->base_salary_amount !== '') {
-                $amount = (string) $profile->base_salary_amount;
-            } elseif ($profile->mandays_rate_enc) {
-                $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $profileAlg);
-            } elseif ($profile->mandays_rate !== null && $profile->mandays_rate !== '') {
-                $amount = (string) $profile->mandays_rate;
-            } elseif ($Position?->default_base_salary_amount !== null) {
+            if ($Position?->default_base_salary_amount !== null) {
                 $amount = (string) $Position->default_base_salary_amount;
-            } elseif ($Position?->default_mandays_rate !== null) {
-                $amount = (string) $Position->default_mandays_rate;
             }
         }
 
@@ -873,10 +853,10 @@ class PayrollCalculationService
                 'payroll_id' => $payroll->id,
                 'allowance_type_id' => $allowance['allowance_type_id'],
                 'mandays' => $allowance['mandays'],
-                'amount_enc' => CryptoService::encryptAESGCM((string) round($allowance['amount'])),
                 'calculation_detail' => $allowance['calculation_detail'],
-                'salary_alg' => 'AES',
-                'salary_key_id' => CryptoService::keyId(),
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'amount' => round($allowance['amount']),
+                ]),
             ]);
         }
     }
@@ -888,10 +868,10 @@ class PayrollCalculationService
                 'payroll_id' => $payroll->id,
                 'deduction_type' => $deduction['deduction_type'],
                 'deduction_label' => $deduction['deduction_label'],
-                'amount_enc' => CryptoService::encryptAESGCM((string) round($deduction['amount'])),
                 'calculation_detail' => $deduction['calculation_detail'],
-                'salary_alg' => 'AES',
-                'salary_key_id' => CryptoService::keyId(),
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'amount' => round($deduction['amount']),
+                ]),
             ]);
         }
     }

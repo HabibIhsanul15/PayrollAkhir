@@ -8,6 +8,7 @@ use App\Models\Position;
 use App\Models\User;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -15,7 +16,10 @@ use Illuminate\Validation\Rule;
 
 class EmployeeController extends Controller
 {
-    public function __construct(private AllowanceRateResolver $rateResolver) {}
+    public function __construct(
+        private AllowanceRateResolver $rateResolver,
+        private SensitiveFieldCipherService $sensitiveCipher,
+    ) {}
 
     private function roleOf(mixed $user): string
     {
@@ -85,9 +89,7 @@ class EmployeeController extends Controller
     {
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null && $data['base_salary_amount'] !== ''
             ? (float) $data['base_salary_amount']
-            : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null && $data['mandays_rate'] !== ''
-                ? (float) $data['mandays_rate']
-                : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
+            : (float) ($Position->default_base_salary_amount ?? 0);
 
         return [
             'amount' => $amount,
@@ -97,11 +99,8 @@ class EmployeeController extends Controller
     private function resolveBaseSalaryFromProfile(Employee $employee, mixed $profile, ?Position $Position = null): array
     {
         $Position ??= $profile->Position ?? $employee->Position;
-        $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-
-        $amount = $profile->base_salary_amount_enc
-            ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $alg)
-            : (string) ($Position?->default_base_salary_amount ?? $Position?->default_mandays_rate ?? 0);
+        $amount = $profile->base_salary_amount
+            ?? ($Position?->default_base_salary_amount ?? 0);
 
         return [
             'amount' => $amount,
@@ -201,7 +200,7 @@ class EmployeeController extends Controller
         $positionPayload = $currentPosition?->toArray();
 
         if ($positionPayload && ! $canSeePayrollNominal) {
-            unset($positionPayload['default_base_salary_amount'], $positionPayload['default_mandays_rate']);
+            unset($positionPayload['default_base_salary_amount']);
         }
 
         // akses dasar:
@@ -219,8 +218,7 @@ class EmployeeController extends Controller
             'employee_code' => $employee->employee_code,
             'name' => $employee->name,
             'join_date' => optional($employee->join_date)->toDateString(),
-            'department' => $employee->department,
-            'position' => $currentProfile?->position ?? $employee->Position?->name ?? $employee->position,
+            'position' => $currentProfile?->Position?->name ?? $employee->Position?->name,
             'status' => $employee->status,
             'user_id' => $employee->user_id,
 
@@ -238,18 +236,16 @@ class EmployeeController extends Controller
             'payroll_readiness' => $employee->payrollReadiness(),
         ];
 
-        $alg = strtoupper((string) ($employee->pii_alg ?? 'AES'));
-
         // aturan lihat PII vs Bank
         $canSeePII = ($role === 'hcga') || $isOwner; // NIK/NPWP/Phone/Address
         $canSeeBank = in_array($role, ['hcga', 'fat'], true) || $isOwner; // bank utk transfer
 
         if ($canSeePII) {
             $base += [
-                'nik' => CryptoService::readEncryptedOrPlain($employee->nik_enc, null, $alg),
-                'npwp' => CryptoService::readEncryptedOrPlain($employee->npwp_enc, null, $alg),
-                'phone' => CryptoService::readEncryptedOrPlain($employee->phone_enc, null, $alg),
-                'address' => CryptoService::readEncryptedOrPlain($employee->address_enc, null, $alg),
+                'nik' => $employee->nik,
+                'npwp' => $employee->npwp,
+                'phone' => $employee->phone,
+                'address' => $employee->address,
             ];
         }
 
@@ -257,11 +253,7 @@ class EmployeeController extends Controller
             $base += [
                 'bank_name' => $employee->bank_name,
                 'bank_account_name' => $employee->bank_account_name,
-                'bank_account_number' => CryptoService::readEncryptedOrPlain(
-                    $employee->bank_account_number_enc,
-                    null,
-                    $alg
-                ),
+                'bank_account_number' => $employee->bank_account_number,
             ];
         }
 
@@ -368,14 +360,12 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Salary profile not found'], 404);
         }
 
-        $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-
-        $positionVal = $profile->position_allowance_enc ? CryptoService::decryptByAlg($profile->position_allowance_enc, $alg) : null;
-        $allow = $profile->allowance_fixed_enc ? (float) CryptoService::decryptByAlg($profile->allowance_fixed_enc, $alg) : (float) $profile->allowance_fixed;
-        $ded = $profile->deduction_fixed_enc ? (float) CryptoService::decryptByAlg($profile->deduction_fixed_enc, $alg) : (float) $profile->deduction_fixed;
+        $positionVal = $profile->position_allowance;
+        $allow = (float) ($profile->allowance_fixed ?? 0);
+        $ded = (float) ($profile->deduction_fixed ?? 0);
 
         $effectivepositionId = $profile->position_id ?? $employee->position_id;
-        $effectivePosition = $profile->position ?? $employee->position;
+        $effectivePosition = $profile->Position?->name ?? $employee->Position?->name;
 
         $Position = $effectivepositionId ? \App\Models\Position::find($effectivepositionId) : null;
         $baseSalary = $this->resolveBaseSalaryFromProfile($employee, $profile, $Position);
@@ -398,9 +388,7 @@ class EmployeeController extends Controller
         }
 
         $is_using_default_salary = $profile->base_salary_amount_enc === null
-            && $profile->base_salary_amount === null
-            && $profile->mandays_rate_enc === null
-            && $profile->mandays_rate === null;
+            && $profile->base_salary_amount === null;
 
         return response()->json([
             'employee_id' => $employee->id,
@@ -411,7 +399,6 @@ class EmployeeController extends Controller
             'position_allowance' => (string) $base,
             'allowance_fixed' => (string) $allow,
             'deduction_fixed' => (string) $ded,
-            'mandays_rate' => $baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null,
             'is_using_default_base' => $is_using_default_base,
             'is_using_default_salary' => $is_using_default_salary,
             'suggested_total' => (string) ($base + $allow - $ded),
@@ -431,7 +418,6 @@ class EmployeeController extends Controller
             'employee_code' => ['required', 'string', 'max:50', 'unique:employees,employee_code'],
             'name' => ['required', 'string', 'max:255'],
             'join_date' => ['nullable', 'date'],
-            'department' => ['nullable', 'string', 'max:255'],
 
             'nik' => ['nullable', 'string', 'digits:16'],
             'npwp' => ['nullable', 'string', 'min:15', 'max:16', 'regex:/^[0-9]+$/'],
@@ -442,7 +428,7 @@ class EmployeeController extends Controller
             'bank_account_name' => ['nullable', 'string', 'max:100'],
             'bank_account_number' => $this->digitStringRules(50),
 
-            'pii_alg' => ['nullable', 'in:AES,RSA'],
+            'pii_alg' => ['nullable', 'in:HYBRID'],
 
             // Phase 1 fields:
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
@@ -474,47 +460,38 @@ class EmployeeController extends Controller
                 $userId = $account->id;
             }
 
-            $piiAlg = strtoupper((string) ($data['pii_alg'] ?? 'AES'));
-            $encryptPii = fn (string $value) => $piiAlg === 'RSA'
-                ? CryptoService::encryptRSA($value)
-                : CryptoService::encryptAESGCM($value);
-
             $employeeData = $data;
             $employeeData['user_id'] = $userId;
-            $employeeData['position'] = $Position->name;
             $employeeData['status'] = 'active';
             $employeeData['join_date'] = $data['join_date'] ?? $effectiveFrom;
             $employeeData['num_toddlers'] = $data['num_toddlers'] ?? 0;
-            $employeeData['nik_enc'] = ! empty($data['nik']) ? $encryptPii((string) $data['nik']) : null;
-            $employeeData['npwp_enc'] = ! empty($data['npwp']) ? $encryptPii((string) $data['npwp']) : null;
-            $employeeData['phone_enc'] = ! empty($data['phone']) ? $encryptPii((string) $data['phone']) : null;
-            $employeeData['address_enc'] = ! empty($data['address']) ? $encryptPii((string) $data['address']) : null;
-            $employeeData['bank_account_number_enc'] = ! empty($data['bank_account_number'])
-                ? $encryptPii((string) $data['bank_account_number'])
-                : null;
-            $employeeData['pii_alg'] = $piiAlg;
-            $employeeData['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
+            $employeeData = [
+                ...$employeeData,
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'nik' => $data['nik'] ?? null,
+                    'npwp' => $data['npwp'] ?? null,
+                    'phone' => $data['phone'] ?? null,
+                    'address' => $data['address'] ?? null,
+                    'bank_account_number' => $data['bank_account_number'] ?? null,
+                ], 'pii_alg', 'pii_key_id'),
+            ];
 
             unset($employeeData['nik'], $employeeData['npwp'], $employeeData['phone'], $employeeData['address'], $employeeData['bank_account_number']);
 
             $employee = Employee::create($employeeData);
-            $salaryAlg = 'AES';
-
             $employee->salaryProfiles()->create([
                 'position_id' => $Position->id,
-                'position' => $Position->name,
-                'base_salary_amount_enc' => CryptoService::encryptAESGCM((string) $baseSalaryAmount),
                 'effective_from' => $effectiveFrom,
-                'position_allowance_enc' => CryptoService::encryptAESGCM((string) $base),
-                'allowance_fixed_enc' => CryptoService::encryptAESGCM('0'),
-                'deduction_fixed_enc' => CryptoService::encryptAESGCM('0'),
-                'salary_alg' => $salaryAlg,
-                'salary_key_id' => CryptoService::keyId(),
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'base_salary_amount' => $baseSalaryAmount,
+                    'position_allowance' => $base,
+                    'allowance_fixed' => 0,
+                    'deduction_fixed' => 0,
+                ]),
             ]);
 
             $employee->jobHistories()->create([
                 'position_id' => $Position->id,
-                'position' => $Position->name,
                 'start_date' => $effectiveFrom,
                 'status' => 'active',
                 'notes' => 'Penempatan awal karyawan',
@@ -547,11 +524,9 @@ class EmployeeController extends Controller
         $employeePosition = $employee->Position;
 
         $results = $profiles->map(function (mixed $p) use ($employeePosition, $canSeeNominal, $employee) {
-            $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
-
-            $positionVal = $p->position_allowance_enc ? CryptoService::decryptByAlg($p->position_allowance_enc, $alg) : null;
-            $allow = $p->allowance_fixed_enc ? (float) CryptoService::decryptByAlg($p->allowance_fixed_enc, $alg) : (float) $p->allowance_fixed;
-            $ded = $p->deduction_fixed_enc ? (float) CryptoService::decryptByAlg($p->deduction_fixed_enc, $alg) : (float) $p->deduction_fixed;
+            $positionVal = $p->position_allowance;
+            $allow = (float) ($p->allowance_fixed ?? 0);
+            $ded = (float) ($p->deduction_fixed ?? 0);
 
             $effectivepositionId = $p->position_id ?? null;
             $Position = $effectivepositionId ? \App\Models\Position::find($effectivepositionId) : $employeePosition;
@@ -581,7 +556,7 @@ class EmployeeController extends Controller
                 'effective_from' => $p->effective_from->toDateString(),
                 'position_id' => $effectivepositionId,
                 'position_name' => $Position ? $Position->name : '-',
-                'position' => $p->position,
+                'position' => $Position?->name,
                 'base_salary_amount' => $canSeeNominal ? ($baseSalary['amount'] !== null ? (string) $baseSalary['amount'] : null) : null,
                 'position_allowance' => $canSeeNominal ? (string) $base : null,
                 'allowance_fixed' => $canSeeNominal ? (string) $allow : null,
@@ -612,23 +587,14 @@ class EmployeeController extends Controller
             'effective_from' => ['required', 'date'],
             'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
 
-            'daily_rate' => ['nullable', 'numeric', 'min:0'],
-            'overtime_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
-            'late_penalty_per_minute' => ['nullable', 'numeric', 'min:0'],
-            'mandays_rate' => ['nullable', 'numeric', 'min:0'],
-
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
 
-            'salary_alg' => ['nullable', 'in:AES,RSA'],
+            'salary_alg' => ['nullable', 'in:HYBRID'],
         ]);
 
         $profile = DB::transaction(function () use ($data, $employee) {
             $Position = Position::findOrFail($data['position_id']);
             $effectiveFrom = \Carbon\Carbon::parse($data['effective_from'])->startOfDay();
-            $alg = strtoupper((string) ($data['salary_alg'] ?? 'AES'));
-            $encrypt = fn (string $value) => $alg === 'RSA'
-                ? CryptoService::encryptRSA($value)
-                : CryptoService::encryptAESGCM($value);
             $salaryConfig = $this->resolveBaseSalaryPayload($Position, $data);
 
             $positionRate = $this->rateResolver->resolveByCode($Position->id, 'position');
@@ -638,21 +604,16 @@ class EmployeeController extends Controller
             $baseSalaryAmount = $salaryConfig['amount'];
             $allow = (float) ($data['allowance_fixed'] ?? 0);
             $deduction = (float) ($data['deduction_fixed'] ?? 0);
-            $daily = array_key_exists('daily_rate', $data) ? (float) ($data['daily_rate'] ?? 0) : null;
-            $overtime = array_key_exists('overtime_rate_per_hour', $data) ? (float) ($data['overtime_rate_per_hour'] ?? 0) : null;
-            $latePenalty = array_key_exists('late_penalty_per_minute', $data) ? (float) ($data['late_penalty_per_minute'] ?? 0) : null;
-
             $profile = $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveFrom->toDateString()],
                 [
                     'position_id' => $Position->id,
-                    'position' => $Position->name,
-                    'base_salary_amount_enc' => $encrypt((string) $baseSalaryAmount),
-                    'position_allowance_enc' => $encrypt((string) $base),
-                    'allowance_fixed_enc' => $encrypt((string) $allow),
-                    'deduction_fixed_enc' => $encrypt((string) $deduction),
-                    'salary_alg' => $alg,
-                    'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                    ...$this->sensitiveCipher->encryptAttributes([
+                        'base_salary_amount' => $baseSalaryAmount,
+                        'position_allowance' => $base,
+                        'allowance_fixed' => $allow,
+                        'deduction_fixed' => $deduction,
+                    ]),
                 ]
             );
 
@@ -672,7 +633,6 @@ class EmployeeController extends Controller
                 ['start_date' => $effectiveFrom->toDateString()],
                 [
                     'position_id' => $Position->id,
-                    'position' => $Position->name,
                     'end_date' => null,
                     'status' => $effectiveFrom->isFuture() ? 'inactive' : 'active',
                     'notes' => $effectiveFrom->isFuture() ? 'Perubahan jabatan terjadwal' : 'Perubahan jabatan diterapkan',
@@ -680,7 +640,7 @@ class EmployeeController extends Controller
             );
 
             if (! $effectiveFrom->isFuture()) {
-                $employee->update(['position_id' => $Position->id, 'position' => $Position->name]);
+                $employee->update(['position_id' => $Position->id]);
             }
 
             return $profile;
@@ -705,7 +665,6 @@ class EmployeeController extends Controller
             'employee_code' => ['sometimes'], // <- diterima biar validator gak error kalau kekirim, tapi nanti kita buang
             'name' => ['sometimes', 'string', 'max:255'],
             'join_date' => ['sometimes', 'nullable', 'date'],
-            'department' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
 
             'nik' => ['sometimes', 'nullable', 'string', 'digits:16'],
@@ -735,42 +694,18 @@ class EmployeeController extends Controller
             }
         }
 
-        $piiAlg = strtoupper((string) ($employee->pii_alg ?? 'AES'));
-
-        $encPII = function (string $v) use ($piiAlg) {
-            return $piiAlg === 'RSA'
-                ? CryptoService::encryptRSA($v)
-                : CryptoService::encryptAESGCM($v);
-        };
-
-        if (array_key_exists('nik', $data)) {
-            $data['nik_enc'] = ! empty($data['nik']) ? $encPII((string) $data['nik']) : null;
-            unset($data['nik']);
-        }
-        if (array_key_exists('npwp', $data)) {
-            $data['npwp_enc'] = ! empty($data['npwp']) ? $encPII((string) $data['npwp']) : null;
-            unset($data['npwp']);
-        }
-        if (array_key_exists('phone', $data)) {
-            $data['phone_enc'] = ! empty($data['phone']) ? $encPII((string) $data['phone']) : null;
-            unset($data['phone']);
-        }
-        if (array_key_exists('address', $data)) {
-            $data['address_enc'] = ! empty($data['address']) ? $encPII((string) $data['address']) : null;
-            unset($data['address']);
-        }
-        if (array_key_exists('bank_account_number', $data)) {
-            $data['bank_account_number_enc'] = ! empty($data['bank_account_number'])
-                ? $encPII((string) $data['bank_account_number'])
-                : null;
-            unset($data['bank_account_number']);
+        $piiFields = ['nik', 'npwp', 'phone', 'address', 'bank_account_number'];
+        $hasPiiChange = collect($piiFields)->contains(fn (string $field) => array_key_exists($field, $data));
+        if ($hasPiiChange) {
+            $piiValues = [];
+            foreach ($piiFields as $field) {
+                $piiValues[$field] = array_key_exists($field, $data) ? $data[$field] : $employee->{$field};
+                unset($data[$field]);
+            }
+            $data = [...$data, ...$this->sensitiveCipher->encryptAttributes($piiValues, 'pii_alg', 'pii_key_id')];
         }
 
-        if (collect(['nik_enc', 'npwp_enc', 'phone_enc', 'address_enc', 'bank_account_number_enc'])->contains(fn (mixed $field) => array_key_exists($field, $data))) {
-            $data['pii_key_id'] = $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId();
-        }
-
-        DB::transaction(function () use ($data, $employee, $piiAlg, $oldJoinDate, $newJoinDate) {
+        DB::transaction(function () use ($data, $employee, $oldJoinDate, $newJoinDate) {
             // Jika employee belum punya jabatan dan dikirim position_id baru (Penempatan Awal)
             if (empty($employee->position_id) && !empty($data['position_id'])) {
                 $Position = Position::findOrFail($data['position_id']);
@@ -782,27 +717,20 @@ class EmployeeController extends Controller
                 $base = (float) ($positionRate?->rate_amount ?? 0);
                 $baseSalaryAmount = $salaryConfig['amount'];
                 
-                $encryptPii = fn (string $value) => $piiAlg === 'RSA'
-                    ? CryptoService::encryptRSA($value)
-                    : CryptoService::encryptAESGCM($value);
-
                 $employee->salaryProfiles()->create([
                     'position_id' => $Position->id,
-                    'position' => $Position->name,
-                    'base_salary_amount_enc' => $encryptPii((string) $baseSalaryAmount),
-                    'position_allowance_enc' => $encryptPii((string) $base),
-                    'salary_alg' => $piiAlg,
-                    'salary_key_id' => $piiAlg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                    ...$this->sensitiveCipher->encryptAttributes([
+                        'base_salary_amount' => $baseSalaryAmount,
+                        'position_allowance' => $base,
+                    ]),
                     'effective_from' => \Carbon\Carbon::parse($effectiveFrom)->startOfDay()->toDateString(),
                 ]);
 
                 $employee->jobHistories()->create([
                     'position_id' => $Position->id,
-                    'position_name' => $Position->name,
                     'start_date' => $effectiveFrom,
                     'notes' => 'Penempatan awal (Update)',
                 ]);
-                $data['position'] = $Position->name;
             } else {
                 // Jangan update position_id kalau sudah punya
                 unset($data['position_id']);

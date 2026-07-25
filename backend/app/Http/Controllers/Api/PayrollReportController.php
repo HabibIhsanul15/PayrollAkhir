@@ -71,7 +71,8 @@ class PayrollReportController extends Controller
         $q = Payroll::query()
             ->with([
                 'employee:id,name,employee_code,position_id',
-                'employee.salaryProfiles',
+                'employee.position:id,name',
+                'employee.salaryProfiles.position:id,name',
             ])
             ->whereBetween('periode', [$start->toDateString(), $end->toDateString()]);
 
@@ -125,12 +126,12 @@ class PayrollReportController extends Controller
                 ->sortByDesc('effective_from')
                 ->first();
 
-            $positionName = $profile?->getAttribute('position')
+            $positionName = $profile?->Position?->name
                 ?: Position::find($profile?->position_id)?->name;
             $positionNames = $positionName ? [$positionName] : [];
 
             if ($positionNames === []) {
-                $fallbackPosition = $p->employee?->getAttribute('position')
+                $fallbackPosition = $p->employee?->Position?->name
                     ?: Position::find($p->employee?->position_id)?->name;
 
                 if ($fallbackPosition) {
@@ -178,18 +179,10 @@ class PayrollReportController extends Controller
             $total = $total !== null ? (float) $total : ($gaji + $tunj - $pot);
 
             foreach ($p->allowances as $al) {
-                if ($al->amount_enc) {
-                    $al->amount = (float) CryptoService::readEncryptedOrPlainSafe($al->amount_enc, $al->amount, $al->salary_alg ?? 'AES');
-                } else if ($al->amount !== null) {
-                    $al->amount = (float) $al->amount;
-                }
+                $al->amount = (float) ($al->amount ?? 0);
             }
             foreach ($p->deductions as $dd) {
-                if ($dd->amount_enc) {
-                    $dd->amount = (float) CryptoService::readEncryptedOrPlainSafe($dd->amount_enc, $dd->amount, $dd->salary_alg ?? 'AES');
-                } else if ($dd->amount !== null) {
-                    $dd->amount = (float) $dd->amount;
-                }
+                $dd->amount = (float) ($dd->amount ?? 0);
             }
 
             return [

@@ -26,10 +26,8 @@ class SyncEffectiveEmployeeJobs extends Command
                 }
 
                 DB::transaction(function () use ($employee, $profile, $date, &$updated) {
-                    $position = $profile->position;
                     $employee->update([
                         'position_id' => $profile->position_id,
-                        'position' => $profile->position ?? $position?->name,
                     ]);
 
                     $employee->jobHistories()->update(['status' => 'inactive']);

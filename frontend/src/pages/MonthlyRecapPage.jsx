@@ -123,7 +123,10 @@ export default function MonthlyRecapPage() {
       late_count: 0,
     }
   ), [groupedRecaps]);
-  const employees = Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || []);
+  const employees = useMemo(
+    () => (Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || [])),
+    [rawEmployees]
+  );
   const employeesAvailableForCreate = useMemo(
     () => employees.filter((employee) => !groupedRecaps.some(
       (group) => String(group.employee_id) === String(employee.id)

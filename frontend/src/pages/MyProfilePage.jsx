@@ -157,6 +157,21 @@ export default function MyProfilePage() {
       return;
     }
 
+    if (empForm.nik && !/^\d{16}$/.test(empForm.nik)) {
+      setEmpErr("NIK harus berjumlah tepat 16 digit angka.");
+      return;
+    }
+
+    if (empForm.npwp && !/^\d{15,16}$/.test(empForm.npwp)) {
+      setEmpErr("NPWP harus berjumlah 15–16 digit angka.");
+      return;
+    }
+
+    if (empForm.phone && !/^08[1-9]\d{7,10}$/.test(empForm.phone)) {
+      setEmpErr("Nomor telepon harus nomor seluler Indonesia, diawali 08 dan berjumlah 10–13 digit.");
+      return;
+    }
+
     setEmpSaving(true);
     try {
       const res = await updateMeEmployee(empForm);
@@ -350,9 +365,9 @@ export default function MyProfilePage() {
 
                 <div className="mt-5 grid md:grid-cols-2 gap-5">
                   <Input label="Nama" value={empForm.name} onChange={onChangeEmp("name")} disabled={!isEditingEmp} />
-                  <Input label="Phone" value={empForm.phone} onChange={onChangeEmpDigits("phone", 30)} disabled={!isEditingEmp} inputMode="numeric" maxLength={30} autoComplete="off" />
-                  <Input label="NIK" value={empForm.nik} onChange={onChangeEmpDigits("nik", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
-                  <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmpDigits("npwp", 32)} disabled={!isEditingEmp} inputMode="numeric" maxLength={32} autoComplete="off" />
+                  <Input label="Phone" value={empForm.phone} onChange={onChangeEmpDigits("phone", 13)} disabled={!isEditingEmp} inputMode="numeric" maxLength={13} autoComplete="off" />
+                  <Input label="NIK" value={empForm.nik} onChange={onChangeEmpDigits("nik", 16)} disabled={!isEditingEmp} inputMode="numeric" maxLength={16} autoComplete="off" />
+                  <Input label="NPWP" value={empForm.npwp} onChange={onChangeEmpDigits("npwp", 16)} disabled={!isEditingEmp} inputMode="numeric" maxLength={16} autoComplete="off" />
                   <Input label="Bank Name" value={empForm.bank_name} onChange={onChangeEmp("bank_name")} disabled={!isEditingEmp} />
                   <Input
                     label="Bank Account Name"

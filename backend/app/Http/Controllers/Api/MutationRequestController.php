@@ -12,6 +12,7 @@ use App\Models\PayrollPeriod;
 use App\Models\MonthlyRecap;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,10 @@ use Illuminate\Validation\ValidationException;
 
 class MutationRequestController extends Controller
 {
-    public function __construct(private AllowanceRateResolver $rateResolver) {}
+    public function __construct(
+        private AllowanceRateResolver $rateResolver,
+        private SensitiveFieldCipherService $sensitiveCipher,
+    ) {}
 
     public function index(Request $request)
     {
@@ -149,7 +153,7 @@ class MutationRequestController extends Controller
 
             $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
 
-            $amount = (float) ($targetPosition->default_base_salary_amount ?? $targetPosition->default_mandays_rate ?? 0);
+            $amount = (float) ($targetPosition->default_base_salary_amount ?? 0);
 
             if ($amount <= 0) {
                 abort(422, 'Gaji pokok jabatan tujuan belum diatur. Lengkapi master gaji jabatan sebelum menyetujui pengajuan.');
@@ -158,35 +162,19 @@ class MutationRequestController extends Controller
             $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position');
             $baseAllowance = (float) ($positionRate?->rate_amount ?? 0);
 
-            $currentAlg = strtoupper((string) ($currentProfile?->salary_alg ?? 'AES'));
-            $alg = $currentAlg === 'RSA' ? 'RSA' : 'AES';
-            $encrypt = fn (string $value) => $alg === 'RSA'
-                ? CryptoService::encryptRSA($value)
-                : CryptoService::encryptAESGCM($value);
-            $readCurrent = function (?string $cipher, mixed $plain = 0) use ($alg): float {
-                return (float) (CryptoService::readEncryptedOrPlainSafe($cipher, $plain, $alg) ?? 0);
-            };
-            
-            $allowanceFixed = $currentProfile ? $readCurrent($currentProfile->allowance_fixed_enc, $currentProfile->allowance_fixed) : 0;
-            $deductionFixed = $currentProfile ? $readCurrent($currentProfile->deduction_fixed_enc, $currentProfile->deduction_fixed) : 0;
+            $allowanceFixed = $currentProfile ? (float) ($currentProfile->allowance_fixed ?? 0) : 0;
+            $deductionFixed = $currentProfile ? (float) ($currentProfile->deduction_fixed ?? 0) : 0;
 
             $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
-                    'position' => $targetPosition->name,
-                    'base_salary_amount' => 0,
-                    'position_allowance' => 0,
-                    'mandays_rate' => null,
-                    'allowance_fixed' => 0,
-                    'deduction_fixed' => 0,
-                    'base_salary_amount_enc' => $encrypt((string) $amount),
-                    'position_allowance_enc' => $encrypt((string) $baseAllowance),
-                    'mandays_rate_enc' => $encrypt((string) $amount),
-                    'allowance_fixed_enc' => $encrypt((string) $allowanceFixed),
-                    'deduction_fixed_enc' => $encrypt((string) $deductionFixed),
-                    'salary_alg' => $alg,
-                    'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                    ...$this->sensitiveCipher->encryptAttributes([
+                        'base_salary_amount' => $amount,
+                        'position_allowance' => $baseAllowance,
+                        'allowance_fixed' => $allowanceFixed,
+                        'deduction_fixed' => $deductionFixed,
+                    ]),
                 ]
             );
 
@@ -206,7 +194,6 @@ class MutationRequestController extends Controller
                 ['employee_id' => $employee->id, 'start_date' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
-                    'position' => $targetPosition->name,
                     'end_date' => null,
                     'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
                     'notes' => ucfirst($mutationRequest->mutation_type).': '.($mutationRequest->reason ?? '-').' (Approved by Dir)',
@@ -214,7 +201,7 @@ class MutationRequestController extends Controller
             );
 
             if (! $effectiveDate->isFuture()) {
-                $employee->update(['position_id' => $targetPosition->id, 'position' => $targetPosition->name]);
+                $employee->update(['position_id' => $targetPosition->id]);
             }
 
             $mutationRequest->update([

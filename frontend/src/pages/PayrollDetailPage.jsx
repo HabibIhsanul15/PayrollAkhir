@@ -137,27 +137,34 @@ export default function PayrollDetailPage() {
       const token = getToken();
       if (!token) throw new Error("Token login tidak ditemukan. Silakan login ulang.");
 
-      const newTab = window.open("", "_blank", "noopener,noreferrer");
       const res = await fetch(`${API_BASE}/api/payrolls/${payrollId}/pdf`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" },
       });
 
-        if (!res.ok) {
-          if (newTab) newTab.close();
-          let msg = `Gagal membuka PDF (HTTP ${res.status}).`;
-          try {
-            const j = await res.json();
-            if (j?.message) msg = j.message;
-          } catch {
-            // Ignore non-JSON error payloads.
-          }
-          throw new Error(msg);
+      if (!res.ok) {
+        let msg = `Gagal mengunduh PDF (HTTP ${res.status}).`;
+        try {
+          const j = await res.json();
+          if (j?.message) msg = j.message;
+        } catch {
+          // Ignore non-JSON error payloads.
         }
+        throw new Error(msg);
+      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      if (newTab) newTab.location.href = url; else window.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const contentDisposition = res.headers.get("content-disposition") || "";
+      const filename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1]
+        || `slip-gaji-${payrollId}.pdf`;
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1_000);
     } catch (e) {
       alert(e?.message || "Gagal membuka PDF.");
     } finally {
@@ -528,9 +535,6 @@ export default function PayrollDetailPage() {
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Briefcase size={12} /> Posisi & Departemen</p>
                   <p className="font-medium text-slate-700">{row.employee?.position_name || row.employee?.Position?.name || row.employee?.position || "-"}</p>
-                  {row.employee?.department && row.employee?.department !== "-" && (
-                    <p className="text-sm text-slate-500 mt-0.5">Departemen: {row.employee.department}</p>
-                  )}
                 </div>
               </div>
             </div>

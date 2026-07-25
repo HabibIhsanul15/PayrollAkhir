@@ -11,7 +11,6 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
-            $table->string('position', 255)->nullable();
 
             // aturan dasar (nanti presensi tinggal tambah)
             $table->longText('base_salary_amount_enc')->nullable();
@@ -19,8 +18,10 @@ return new class extends Migration {
             $table->longText('allowance_fixed_enc')->nullable();
             $table->longText('deduction_fixed_enc')->nullable();
 
-            $table->string('salary_alg', 20)->default('AES');
+            $table->string('salary_alg', 20)->default('HYBRID');
             $table->string('salary_key_id', 50)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
 
             $table->date('effective_from')->default(now()); // mulai berlaku
             $table->timestamps();

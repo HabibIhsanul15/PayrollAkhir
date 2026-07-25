@@ -15,8 +15,10 @@ return new class extends Migration
             $table->string('deduction_label', 100)->nullable();
             $table->json('calculation_detail')->nullable();
             $table->text('amount_enc')->nullable();
-            $table->string('salary_alg', 20)->nullable();
+            $table->string('salary_alg', 20)->default('HYBRID');
             $table->string('salary_key_id', 100)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
             $table->timestamps();
         });
     }

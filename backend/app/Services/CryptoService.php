@@ -36,7 +36,7 @@ class CryptoService
 
     public static function writeAlg(): string
     {
-        return strtoupper((string) config('crypto.payroll_write_alg', 'AES'));
+        return 'HYBRID';
     }
 
     public static function readMode(): string
@@ -281,19 +281,43 @@ class CryptoService
 
     public static function encryptHybridPayroll(array $plainFields): array
     {
-        $rsa = self::activeRsaKey();
+        return self::encryptHybridFields([
+            'gaji_pokok' => $plainFields['gaji_pokok'] ?? '',
+            'tunjangan' => $plainFields['tunjangan'] ?? '',
+            'potongan' => $plainFields['potongan'] ?? '',
+            'total' => $plainFields['total'] ?? '',
+        ]);
+    }
 
-        // 1) DEK
-        $dek16 = random_bytes(16);
+    public static function decryptHybridPayrollRow(array $row): array
+    {
+        return self::decryptHybridFields($row, ['gaji_pokok', 'tunjangan', 'potongan', 'total']);
+    }
 
-        // 2) Encrypt fields pakai DEK
-        $enc = [];
-        foreach (['gaji_pokok','tunjangan','potongan','total'] as $k) {
-            $val = (string)($plainFields[$k] ?? '');
-            $enc[$k . '_enc'] = self::aesGcmEncryptWithKey($val, $dek16);
+    /**
+     * Enkripsi sejumlah field pada satu record memakai satu DEK acak.
+     * DEK hanya disimpan dalam bentuk terbungkus RSA pada kolom dek_enc.
+     *
+     * @param array<string, scalar> $plainFields key tanpa suffix _enc
+     * @return array{dek_enc: string, enc_meta: array<string, mixed>, fields: array<string, string>}
+     */
+    public static function encryptHybridFields(array $plainFields): array
+    {
+        if ($plainFields === []) {
+            throw new CryptoException('Hybrid encryption membutuhkan minimal satu field.');
         }
 
-        // 3) Bungkus DEK pakai RSA
+        $rsa = self::activeRsaKey();
+        $dek16 = random_bytes(16);
+        $enc = [];
+
+        foreach ($plainFields as $field => $value) {
+            if (!is_string($field) || $field === '') {
+                throw new CryptoException('Nama field hybrid tidak valid.');
+            }
+            $enc[$field . '_enc'] = self::aesGcmEncryptWithKey((string) $value, $dek16);
+        }
+
         $ok = openssl_public_encrypt($dek16, $dekWrappedBin, $rsa->public_key_pem, OPENSSL_PKCS1_OAEP_PADDING);
         if (!$ok) throw new CryptoException('HYBRID RSA encrypt DEK failed: ' . openssl_error_string());
 
@@ -310,7 +334,14 @@ class CryptoService
         ];
     }
 
-    public static function decryptHybridPayrollRow(array $row): array
+    /**
+     * Dekripsi field hybrid dari satu record yang memiliki dek_enc dan enc_meta.
+     *
+     * @param array<string, mixed> $row
+     * @param array<int, string> $fields key tanpa suffix _enc
+     * @return array<string, ?string>
+     */
+    public static function decryptHybridFields(array $row, array $fields): array
     {
         $meta = $row['enc_meta'] ?? null;
         if (is_string($meta)) $meta = json_decode($meta, true);
@@ -341,7 +372,10 @@ class CryptoService
 
         // 2) AES decrypt fields
         $out = [];
-        foreach (['gaji_pokok','tunjangan','potongan','total'] as $k) {
+        foreach ($fields as $k) {
+            if (!is_string($k) || $k === '') {
+                throw new CryptoException('Nama field hybrid tidak valid.');
+            }
             $out[$k] = self::aesGcmDecryptWithKey($row[$k . '_enc'] ?? null, $dek16);
         }
 

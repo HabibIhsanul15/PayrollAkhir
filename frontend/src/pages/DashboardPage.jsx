@@ -198,7 +198,7 @@ export default function DashboardPage() {
                             </div>
                             <div>
                               <div className="text-sm font-bold text-slate-800">{e.name}</div>
-                              <div className="text-xs font-medium text-slate-500">{e.employee_code} • {e.department || "-"}</div>
+                              <div className="text-xs font-medium text-slate-500">{e.employee_code} • {e.position || "-"}</div>
                             </div>
                           </div>
                           <div className="text-right">
@@ -634,7 +634,7 @@ export default function DashboardPage() {
                           </div>
                           <div>
                             <div className="text-sm font-bold text-slate-800">{r.employee_name || "—"}</div>
-                            <div className="text-xs font-semibold text-slate-400 mt-0.5">{r.employee_code || "—"} • {r.position || "—"} • {r.department || "—"}</div>
+                            <div className="text-xs font-semibold text-slate-400 mt-0.5">{r.employee_code || "—"} • {r.position || "—"}</div>
                           </div>
                         </div>
                         <div className="col-span-2 text-xs font-semibold text-slate-500">

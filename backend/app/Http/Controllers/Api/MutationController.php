@@ -8,6 +8,7 @@ use App\Models\Position;
 use App\Models\JobHistory;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,15 +17,16 @@ use Illuminate\Validation\ValidationException;
 
 class MutationController extends Controller
 {
-    public function __construct(private AllowanceRateResolver $rateResolver) {}
+    public function __construct(
+        private AllowanceRateResolver $rateResolver,
+        private SensitiveFieldCipherService $sensitiveCipher,
+    ) {}
 
     private function resolveBaseSalaryPayload(Position $Position, array $data): array
     {
         $amount = array_key_exists('base_salary_amount', $data) && $data['base_salary_amount'] !== null
             ? (float) $data['base_salary_amount']
-            : (array_key_exists('mandays_rate', $data) && $data['mandays_rate'] !== null
-                ? (float) $data['mandays_rate']
-                : (float) ($Position->default_base_salary_amount ?? $Position->default_mandays_rate ?? 0));
+            : (float) ($Position->default_base_salary_amount ?? 0);
 
         return [
             'amount' => $amount,
@@ -50,7 +52,6 @@ class MutationController extends Controller
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'position_allowance' => ['nullable', 'numeric', 'min:0'],
             'base_salary_amount' => ['nullable', 'numeric', 'min:0'],
-            'mandays_rate' => ['nullable', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -100,36 +101,23 @@ class MutationController extends Controller
                 : (float) ($positionRate?->rate_amount ?? 0);
             $baseSalaryAmount = $salaryConfig['amount'];
 
-            $currentAlg = strtoupper((string) ($currentProfile?->salary_alg ?? 'AES'));
-            $alg = $currentAlg === 'RSA' ? 'RSA' : 'AES';
-            $encrypt = fn (string $value) => $alg === 'RSA'
-                ? CryptoService::encryptRSA($value)
-                : CryptoService::encryptAESGCM($value);
-            $readCurrent = function (?string $cipher, mixed $plain = 0) use ($alg): float {
-                return (float) (CryptoService::readEncryptedOrPlainSafe($cipher, $plain, $alg) ?? 0);
-            };
             $allowanceFixed = $currentProfile
-                ? $readCurrent($currentProfile->allowance_fixed_enc, $currentProfile->allowance_fixed)
+                ? (float) ($currentProfile->allowance_fixed ?? 0)
                 : 0;
             $deductionFixed = $currentProfile
-                ? $readCurrent($currentProfile->deduction_fixed_enc, $currentProfile->deduction_fixed)
+                ? (float) ($currentProfile->deduction_fixed ?? 0)
                 : 0;
 
             $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
-                    'position' => $targetPosition->name,
-                    'base_salary_amount' => 0,
-                    'position_allowance' => 0,
-                    'allowance_fixed' => 0,
-                    'deduction_fixed' => 0,
-                    'base_salary_amount_enc' => $encrypt((string) $baseSalaryAmount),
-                    'position_allowance_enc' => $encrypt((string) $base),
-                    'allowance_fixed_enc' => $encrypt((string) $allowanceFixed),
-                    'deduction_fixed_enc' => $encrypt((string) $deductionFixed),
-                    'salary_alg' => $alg,
-                    'salary_key_id' => $alg === 'RSA' ? CryptoService::rsaKeyId() : CryptoService::keyId(),
+                    ...$this->sensitiveCipher->encryptAttributes([
+                        'base_salary_amount' => $baseSalaryAmount,
+                        'position_allowance' => $base,
+                        'allowance_fixed' => $allowanceFixed,
+                        'deduction_fixed' => $deductionFixed,
+                    ]),
                 ]
             );
 
@@ -149,7 +137,6 @@ class MutationController extends Controller
                 ['employee_id' => $employee->id, 'start_date' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
-                    'position' => $targetPosition->name,
                     'end_date' => null,
                     'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
                     'notes' => ucfirst($data['mutation_type']).': '.($data['notes'] ?? '-'),
@@ -157,7 +144,7 @@ class MutationController extends Controller
             );
 
             if (! $effectiveDate->isFuture()) {
-                $employee->update(['position_id' => $targetPosition->id, 'position' => $targetPosition->name]);
+                $employee->update(['position_id' => $targetPosition->id]);
             }
         });
 

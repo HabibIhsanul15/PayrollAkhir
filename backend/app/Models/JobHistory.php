@@ -9,7 +9,6 @@ class JobHistory extends Model
     protected $fillable = [
         'employee_id',
         'position_id',
-        'position',
         'start_date',
         'end_date',
         'status',

@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Position;
+use App\Services\SensitiveFieldCipherService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class PositionController extends Controller
 {
+    public function __construct(private SensitiveFieldCipherService $sensitiveCipher) {}
+
     private function makeCodeFromName(string $name): string
     {
         $words = preg_split('/\s+/', strtolower(trim(preg_replace('/[^a-zA-Z0-9\s]/', ' ', $name)))) ?: [];
@@ -81,6 +84,27 @@ class PositionController extends Controller
         return $data;
     }
 
+    /** @param array<string, mixed> $data */
+    private function moveAmountsToHybrid(array &$data, ?Position $current = null): void
+    {
+        $fields = ['default_base_salary_amount', 'default_late_penalty_amount'];
+        $hasChange = collect($fields)->contains(fn (string $field) => array_key_exists($field, $data));
+
+        if (! $hasChange) {
+            return;
+        }
+
+        $values = [];
+        foreach ($fields as $field) {
+            $values[$field] = array_key_exists($field, $data)
+                ? $data[$field]
+                : $current?->{$field};
+            unset($data[$field]);
+        }
+
+        $data = [...$data, ...$this->sensitiveCipher->encryptAttributes($values)];
+    }
+
     public function index(Request $request)
     {
         if (! $this->inRoles($request->user(), ['hcga', 'fat'])) {
@@ -136,6 +160,7 @@ class PositionController extends Controller
         ]);
 
         $data['code'] = $this->uniqueCode($data['code'] ?? $this->makeCodeFromName($data['name']));
+        $this->moveAmountsToHybrid($data);
         
         $Position = Position::create($data);
 
@@ -164,6 +189,8 @@ class PositionController extends Controller
                 $Position->id
             );
         }
+
+        $this->moveAmountsToHybrid($data, $Position);
 
         $Position->update($data);
 

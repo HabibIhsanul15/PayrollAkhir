@@ -17,9 +17,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
-// Kalau mau staff bisa register dari halaman login, aktifkan ini:
-// Route::post('/register', [AuthController::class, 'registerStaff']);
-
 Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
 /*

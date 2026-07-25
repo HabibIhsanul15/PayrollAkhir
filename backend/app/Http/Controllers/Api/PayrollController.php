@@ -27,7 +27,7 @@ class PayrollController extends Controller
         $query = Payroll::query()
             ->with([
                 'user:id,name',
-                'employee:id,user_id,employee_code,name,status,bank_name,bank_account_number_enc,pii_alg',
+                'employee:id,user_id,employee_code,name,status,bank_name,bank_account_number_enc,pii_alg,pii_key_id,dek_enc,enc_meta',
             ])
             ->orderByDesc('id');
 
@@ -115,9 +115,7 @@ class PayrollController extends Controller
                     'employee_status' => $p->employee?->status,
                     ...($canSeeBank ? [
                         'bank_name' => $p->employee?->bank_name,
-                        'bank_account_number' => $p->employee?->bank_account_number_enc
-                            ? CryptoService::readEncryptedOrPlainSafe($p->employee->bank_account_number_enc, $p->employee->bank_account_number, $p->employee->pii_alg ?? 'AES')
-                            : $p->employee?->bank_account_number,
+                        'bank_account_number' => $p->employee?->bank_account_number,
                     ] : []),
 
                     'created_by' => $p->user?->name,
@@ -182,13 +180,8 @@ class PayrollController extends Controller
         $alg = strtoupper((string) ($payroll->salary_alg ?? 'AES'));
 
         if ($payroll->employee) {
-            $empAlg = strtoupper((string) ($payroll->employee->pii_alg ?? 'AES'));
             if ($this->canSeeBank($user, $payroll)) {
-                $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
-                    $payroll->employee->bank_account_number_enc,
-                    $payroll->employee->bank_account_number,
-                    $empAlg
-                );
+                $payroll->employee->bank_account_number_decrypted = $payroll->employee->bank_account_number;
             }
         }
 
@@ -231,18 +224,10 @@ class PayrollController extends Controller
                 $total = $total !== null ? (float) $total : null;
 
                 foreach ($payroll->allowances as $al) {
-                    if ($al->amount_enc) {
-                        $al->amount = (float) CryptoService::readEncryptedOrPlainSafe($al->amount_enc, $al->amount, $al->salary_alg ?? 'AES');
-                    } elseif ($al->amount !== null) {
-                        $al->amount = (float) $al->amount;
-                    }
+                    $al->amount = (float) ($al->amount ?? 0);
                 }
                 foreach ($payroll->deductions as $dd) {
-                    if ($dd->amount_enc) {
-                        $dd->amount = (float) CryptoService::readEncryptedOrPlainSafe($dd->amount_enc, $dd->amount, $dd->salary_alg ?? 'AES');
-                    } elseif ($dd->amount !== null) {
-                        $dd->amount = (float) $dd->amount;
-                    }
+                    $dd->amount = (float) ($dd->amount ?? 0);
                 }
 
                 $dec_ms = (hrtime(true) - $t0_dec) / 1e6;
@@ -311,8 +296,7 @@ class PayrollController extends Controller
 
         $employeePayload = $payroll->employee ? [
             'join_date' => optional($payroll->employee->join_date)->toDateString(),
-            'department' => $payroll->employee->department,
-            'position' => $payroll->employee->position,
+            'position' => $payroll->employee->Position?->name,
             'position_name' => $payroll->employee->Position?->name,
         ] : null;
 
@@ -590,13 +574,8 @@ class PayrollController extends Controller
         $alg = strtoupper((string) ($payroll->salary_alg ?? 'AES'));
 
         if ($payroll->employee) {
-            $empAlg = strtoupper((string) ($payroll->employee->pii_alg ?? 'AES'));
             if ($this->canSeeBank($user, $payroll)) {
-                $payroll->employee->bank_account_number_decrypted = \App\Services\CryptoService::readEncryptedOrPlain(
-                    $payroll->employee->bank_account_number_enc,
-                    $payroll->employee->bank_account_number,
-                    $empAlg
-                );
+                $payroll->employee->bank_account_number_decrypted = $payroll->employee->bank_account_number;
             }
         }
 
@@ -634,18 +613,10 @@ class PayrollController extends Controller
         $payroll->potongan = $payroll->potongan !== null ? (float) $payroll->potongan : 0;
 
         foreach ($payroll->allowances as $al) {
-            if ($al->amount_enc) {
-                $al->amount = (float) CryptoService::readEncryptedOrPlainSafe($al->amount_enc, $al->amount, $al->salary_alg ?? 'AES');
-            } elseif ($al->amount !== null) {
-                $al->amount = (float) $al->amount;
-            }
+            $al->amount = (float) ($al->amount ?? 0);
         }
         foreach ($payroll->deductions as $dd) {
-            if ($dd->amount_enc) {
-                $dd->amount = (float) CryptoService::readEncryptedOrPlainSafe($dd->amount_enc, $dd->amount, $dd->salary_alg ?? 'AES');
-            } elseif ($dd->amount !== null) {
-                $dd->amount = (float) $dd->amount;
-            }
+            $dd->amount = (float) ($dd->amount ?? 0);
         }
 
         $payroll->total = $payroll->total !== null
@@ -720,14 +691,10 @@ class PayrollController extends Controller
         $pot = (float) ($data['potongan'] ?? 0);
         $total = $gaji + $tunj - $pot;
 
-        $alg = strtoupper((string) CryptoService::writeAlg());
+        $alg = 'HYBRID';
 
         // salary_key_id buat audit/rotasi/pembanding TA
-        $keyId = match ($alg) {
-            'RSA' => CryptoService::rsaKeyId(),
-            'HYBRID' => CryptoService::hybridKeyId(),
-            default => CryptoService::keyId(),
-        };
+        $keyId = CryptoService::hybridKeyId();
 
         // ===== encrypt timer =====
         $t0_enc = hrtime(true);
@@ -865,7 +832,7 @@ class PayrollController extends Controller
         ]);
 
         // 1) Algoritma target dari config/env (jangan terima dari FE)
-        $alg = CryptoService::writeAlg(); // pastikan ini return AES/RSA/HYBRID
+        $alg = 'HYBRID';
 
         // 2) Ambil nilai lama (cipher-only => decrypt dari *_enc)
         $oldAlg = strtoupper((string) ($payroll->salary_alg ?? 'AES'));
@@ -974,11 +941,7 @@ class PayrollController extends Controller
         }
 
         // 7) salary_key_id
-        $keyId = match ($alg) {
-            'RSA' => CryptoService::rsaKeyId(),
-            'HYBRID' => CryptoService::hybridKeyId(), // harus berisi rsa key id yang dipakai bungkus DEK
-            default => CryptoService::keyId(),
-        };
+        $keyId = CryptoService::hybridKeyId();
 
         $data['salary_alg'] = $alg;
         $data['salary_key_id'] = $keyId;
@@ -1010,10 +973,7 @@ class PayrollController extends Controller
 
     private function resolvePositionAllowanceFromProfile(mixed $profile, ?Employee $employee): float
     {
-        $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-        $decrypted = $profile->position_allowance_enc
-            ? CryptoService::decryptByAlg($profile->position_allowance_enc, $alg)
-            : null;
+        $decrypted = $profile->position_allowance;
 
         // Nilai 0 pada profil lama berarti belum ada override per pegawai.
         // Gunakan tarif tunjangan jabatan yang aktif pada master jabatan.
@@ -1037,22 +997,11 @@ class PayrollController extends Controller
 
     private function resolveBaseSalaryFromProfile(mixed $profile, ?Employee $employee): array
     {
-        $alg = strtoupper((string) ($profile->salary_alg ?? 'AES'));
-        $amount = $profile->base_salary_amount_enc
-            ? CryptoService::decryptByAlg($profile->base_salary_amount_enc, $alg)
-            : null;
+        $amount = $profile->base_salary_amount;
 
         if ($amount === null || $amount === '') {
-            if ($profile->base_salary_amount !== null) {
-                $amount = $profile->base_salary_amount;
-            } elseif ($profile->mandays_rate_enc) {
-                $amount = CryptoService::decryptByAlg($profile->mandays_rate_enc, $alg);
-            } elseif ($profile->mandays_rate !== null) {
-                $amount = $profile->mandays_rate;
-            } else {
-                $Position = $profile->Position ?? $employee?->Position;
-                $amount = $Position?->default_base_salary_amount ?? $Position?->default_mandays_rate ?? 0;
-            }
+            $Position = $profile->Position ?? $employee?->Position;
+            $amount = $Position?->default_base_salary_amount ?? 0;
         }
 
         return [
@@ -1178,31 +1127,6 @@ class PayrollController extends Controller
         return response()->json([
             'message' => 'Payroll ditandai PAID + bukti transfer tersimpan.',
             'payroll' => $payroll,
-        ]);
-    }
-
-    public function rejectPayment(Request $request, Payroll $payroll)
-    {
-        $user = $request->user();
-        $this->ensureRole($user, ['director']); // Director saja
-
-        if (! in_array($payroll->status, ['requested', 'approved'], true)) {
-            return response()->json(['message' => 'Tidak bisa reject untuk status ini.'], 422);
-        }
-
-        $from = $payroll->status;
-
-        $payroll->update([
-            'status' => 'rejected',
-            'approval_note' => $request->input('approval_note'),
-            // optional: kalau mau bersih, bisa juga null-kan approved_by/approved_at kalau reject dari approved
-            // 'approved_by' => null,
-            // 'approved_at' => null,
-        ]);
-
-        return response()->json([
-            'message' => 'Payroll di-reject.',
-            'payroll' => $payroll->fresh(),
         ]);
     }
 

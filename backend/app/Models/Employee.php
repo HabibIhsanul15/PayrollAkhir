@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SensitiveFieldCipherService;
 use Illuminate\Database\Eloquent\Model;
 
 class Employee extends Model
@@ -11,8 +12,6 @@ class Employee extends Model
         'employee_code',
         'name',
         'join_date',
-        'department',
-        'position',
         'status',
 
         'bank_name',
@@ -24,6 +23,8 @@ class Employee extends Model
         'phone_enc',
         'address_enc',
         'bank_account_number_enc',
+        'dek_enc',
+        'enc_meta',
 
         // metadata
         'pii_alg',
@@ -37,7 +38,54 @@ class Employee extends Model
     protected $casts = [
         'join_date' => 'date',
         'num_toddlers' => 'integer',
+        'enc_meta' => 'array',
     ];
+
+    protected $hidden = [
+        'nik_enc',
+        'npwp_enc',
+        'phone_enc',
+        'address_enc',
+        'bank_account_number_enc',
+        'pii_alg',
+        'pii_key_id',
+        'dek_enc',
+        'enc_meta',
+    ];
+
+    public function getNikAttribute(mixed $value): ?string
+    {
+        return $this->decryptedPii('nik', $value);
+    }
+
+    public function getNpwpAttribute(mixed $value): ?string
+    {
+        return $this->decryptedPii('npwp', $value);
+    }
+
+    public function getPhoneAttribute(mixed $value): ?string
+    {
+        return $this->decryptedPii('phone', $value);
+    }
+
+    public function getAddressAttribute(mixed $value): ?string
+    {
+        return $this->decryptedPii('address', $value);
+    }
+
+    public function getBankAccountNumberAttribute(mixed $value): ?string
+    {
+        return $this->decryptedPii('bank_account_number', $value);
+    }
+
+    private function decryptedPii(string $field, mixed $legacyValue): ?string
+    {
+        if ($legacyValue !== null && $legacyValue !== '') {
+            return (string) $legacyValue;
+        }
+
+        return app(SensitiveFieldCipherService::class)->decryptField($this, $field, 'pii_alg');
+    }
 
     public function position()
     {

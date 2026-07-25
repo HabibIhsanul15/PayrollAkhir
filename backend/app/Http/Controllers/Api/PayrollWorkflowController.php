@@ -49,26 +49,6 @@ class PayrollWorkflowController extends Controller
         return response()->json(['message' => 'Payroll berhasil disetujui.', 'payroll' => $payroll]);
     }
 
-    public function pay(Request $request, Payroll $payroll)
-    {
-        if ($request->user()->role !== 'fat') {
-            abort(403, 'Hanya Finance yang berhak mentransfer payroll.');
-        }
-
-        if ($payroll->status !== 'approved') {
-            return response()->json(['message' => 'Payroll harus disetujui oleh Direktur terlebih dahulu.'], 422);
-        }
-
-        $payroll->update([
-            'status' => 'paid',
-            'paid_by' => $request->user()->id,
-            'paid_at' => Carbon::now(),
-            'paid_note' => $request->note,
-        ]);
-
-        return response()->json(['message' => 'Payroll berhasil ditandai sebagai dibayar.', 'payroll' => $payroll]);
-    }
-
     public function reject(Request $request, Payroll $payroll)
     {
         if ($request->user()->role !== 'director') {

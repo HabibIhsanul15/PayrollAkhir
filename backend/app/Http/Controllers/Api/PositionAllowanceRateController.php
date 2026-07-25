@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PositionAllowanceRate;
+use App\Services\SensitiveFieldCipherService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class PositionAllowanceRateController extends Controller
 {
+    public function __construct(private SensitiveFieldCipherService $sensitiveCipher) {}
+
     private function forbid(string $msg = 'Forbidden')
     {
         return response()->json(['message' => $msg], 403);
@@ -69,8 +72,10 @@ class PositionAllowanceRateController extends Controller
                 'allowance_type_id' => $data['allowance_type_id'],
             ],
             [
-                'rate_amount' => $data['rate_amount'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
+                ...$this->sensitiveCipher->encryptAttributes([
+                    'rate_amount' => $data['rate_amount'] ?? null,
+                ]),
             ]
         );
 
@@ -88,10 +93,15 @@ class PositionAllowanceRateController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $PositionAllowanceRate->update([
-            'rate_amount' => $data['rate_amount'] ?? null,
+        $attributes = [
             'is_active' => $data['is_active'] ?? $PositionAllowanceRate->is_active,
-        ]);
+        ];
+        if (array_key_exists('rate_amount', $data)) {
+            $attributes = [...$attributes, ...$this->sensitiveCipher->encryptAttributes([
+                'rate_amount' => $data['rate_amount'],
+            ])];
+        }
+        $PositionAllowanceRate->update($attributes);
 
         return response()->json($PositionAllowanceRate->load(['position', 'allowanceType']));
     }

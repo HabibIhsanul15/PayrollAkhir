@@ -23,8 +23,10 @@ return new class extends Migration
             $table->text('amount_enc')->nullable();
             $table->string('description')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('salary_alg', 20)->nullable();
+            $table->string('salary_alg', 20)->default('HYBRID');
             $table->string('salary_key_id', 100)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
             $table->timestamps();
 
             $table->unique(

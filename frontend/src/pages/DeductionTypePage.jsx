@@ -246,7 +246,7 @@ export default function DeductionTypePage() {
       <ConfirmModal
         isOpen={!!deleteTarget}
         title="Hapus jenis potongan?"
-        message={`Jenis potongan \"${deleteTarget?.name || "ini"}\" akan dihapus dan tidak dapat dikembalikan.`}
+        message={`Jenis potongan "${deleteTarget?.name || "ini"}" akan dihapus dan tidak dapat dikembalikan.`}
         confirmLabel="Ya, hapus"
         tone="danger"
         loading={isDeleting}

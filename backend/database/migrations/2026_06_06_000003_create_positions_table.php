@@ -14,8 +14,12 @@ return new class extends Migration
             $table->string('name', 100);
             $table->unsignedTinyInteger('level')->comment('Hierarki jabatan: 1 = tertinggi');
             $table->text('description')->nullable();
-            $table->decimal('default_base_salary_amount', 14, 2)->nullable();
-            $table->decimal('default_late_penalty_amount', 14, 2)->nullable();
+            $table->longText('default_base_salary_amount_enc')->nullable();
+            $table->longText('default_late_penalty_amount_enc')->nullable();
+            $table->string('salary_alg', 20)->default('HYBRID');
+            $table->string('salary_key_id', 100)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

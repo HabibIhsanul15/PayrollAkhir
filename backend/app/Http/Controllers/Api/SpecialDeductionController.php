@@ -7,10 +7,13 @@ use App\Models\DeductionType;
 use App\Models\Employee;
 use App\Models\SpecialDeduction;
 use App\Services\CryptoService;
+use App\Services\SensitiveFieldCipherService;
 use Illuminate\Http\Request;
 
 class SpecialDeductionController extends Controller
 {
+    public function __construct(private SensitiveFieldCipherService $sensitiveCipher) {}
+
     private function forbid(string $msg = 'Forbidden')
     {
         return response()->json(['message' => $msg], 403);
@@ -38,7 +41,7 @@ class SpecialDeductionController extends Controller
             $query->where('employee_id', $request->employee_id);
         }
         $deductions = $query->latest()->get()->map(function (mixed $item) {
-            $item->amount = (float) (CryptoService::readEncryptedOrPlainSafe($item->amount_enc, $item->amount, $item->salary_alg ?? 'AES') ?? 0);
+            $item->amount = (float) ($item->amount ?? 0);
 
             return $item;
         });
@@ -105,9 +108,9 @@ class SpecialDeductionController extends Controller
             'deduction_type_id' => $deductionType?->id,
             'type' => $deductionType?->code ?? $data['type'],
             'period_month' => $data['period_month'],
-            'amount_enc' => CryptoService::encryptAESGCM((string) round($data['amount'])),
-            'salary_alg' => 'AES',
-            'salary_key_id' => CryptoService::keyId(),
+            ...$this->sensitiveCipher->encryptAttributes([
+                'amount' => round($data['amount']),
+            ]),
             'description' => $data['description'] ?? null,
             'created_by' => $request->user()->id,
         ]);

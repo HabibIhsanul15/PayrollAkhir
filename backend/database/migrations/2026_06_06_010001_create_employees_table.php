@@ -22,14 +22,13 @@ return new class extends Migration {
             $table->longText('npwp_enc')->nullable();
             $table->longText('phone_enc')->nullable();
             $table->longText('address_enc')->nullable();
-            $table->string('pii_alg', 20)->default('AES');
+            $table->string('pii_alg', 20)->default('HYBRID');
             $table->string('pii_key_id', 50)->nullable();
+            $table->longText('dek_enc')->nullable();
+            $table->json('enc_meta')->nullable();
             $table->string('bank_name', 100)->nullable();
             $table->string('bank_account_name', 150)->nullable();
             $table->longText('bank_account_number_enc')->nullable();
-
-            $table->string('department')->nullable();
-            $table->string('position')->nullable();
 
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
 

@@ -9,7 +9,6 @@ import RoleRoute from "@/components/RoleRoute";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
 
 import Login from "./pages/Login";
-import Register from "./pages/Register";
 import DashboardPage from "./pages/DashboardPage";
 
 import PayrollList from "./pages/PayrollList";
@@ -78,7 +77,6 @@ export default function App() {
 
         {/* PUBLIC */}
         <Route path="/login" element={authed ? <Navigate to={home} replace /> : <Login />} />
-        <Route path="/register" element={authed ? <Navigate to={home} replace /> : <Register />} />
 
         {/* PROTECTED + LAYOUT */}
         <Route

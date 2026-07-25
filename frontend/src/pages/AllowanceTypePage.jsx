@@ -473,7 +473,7 @@ export default function AllowanceTypePage() {
         <ConfirmModal
           isOpen={!!deleteTarget}
           title="Hapus jenis tunjangan?"
-          message={`Jenis tunjangan \"${deleteTarget?.name || "ini"}\" akan dihapus dan tidak dapat dikembalikan.`}
+          message={`Jenis tunjangan "${deleteTarget?.name || "ini"}" akan dihapus dan tidak dapat dikembalikan.`}
           confirmLabel="Ya, hapus"
           tone="danger"
           loading={isDeleting}

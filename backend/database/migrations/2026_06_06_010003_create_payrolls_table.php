@@ -45,7 +45,7 @@ return new class extends Migration
 
         $table->longText('total_enc')->nullable();
 
-        $table->string('salary_alg', 20)->default('AES');
+        $table->string('salary_alg', 20)->default('HYBRID');
         $table->string('salary_key_id', 50)->nullable();
         $table->longText('dek_enc')->nullable();
         $table->longText('enc_meta')->nullable();

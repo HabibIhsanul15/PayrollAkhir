@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MonthlyRecap;
-use App\Models\Employee;
 use App\Models\SalaryProfile;
 use App\Models\PayrollPeriod;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -272,86 +270,4 @@ class MonthlyRecapController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
-    public function prorataSuggestion(Request $request)
-    {
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'period_month' => 'required|date_format:Y-m',
-        ]);
-
-        $employeeId = $validated['employee_id'];
-        $periodMonth = $validated['period_month'];
-
-        $payrollPeriod = PayrollPeriod::forMonth($periodMonth);
-        $startDate = Carbon::parse($payrollPeriod->start_date);
-        $endDate = Carbon::parse($payrollPeriod->end_date);
-
-        $totalDays = $startDate->diffInDays($endDate) + 1;
-
-        $profiles = \App\Models\SalaryProfile::where('employee_id', $employeeId)
-            ->where(function (mixed $q) use ($startDate, $endDate) {
-                $q->whereBetween('effective_from', [$startDate, $endDate])
-                  ->orWhere('effective_from', '<=', $startDate);
-            })
-            ->orderBy('effective_from', 'asc')
-            ->get();
-
-        if ($profiles->isEmpty()) {
-            return response()->json([
-                'suggestion' => [
-                    [
-                        'salary_profile_id' => null,
-                        'days_suggested' => $totalDays,
-                        'percentage' => 100
-                    ]
-                ]
-            ]);
-        }
-
-        // If only 1 profile is active, no need to prorate
-        if ($profiles->count() === 1 || $profiles->last()->effective_from <= $startDate) {
-            return response()->json([
-                'suggestion' => [
-                    [
-                        'salary_profile_id' => $profiles->last()->id,
-                        'days_suggested' => $totalDays,
-                        'percentage' => 100
-                    ]
-                ]
-            ]);
-        }
-
-        // Calculate prorated days
-        $suggestion = [];
-        $currentStart = $startDate;
-
-        foreach ($profiles as $index => $profile) {
-            if ($profile->effective_from > $endDate) continue;
-
-            $profileStart = max($currentStart, Carbon::parse($profile->effective_from));
-            
-            $nextProfile = $profiles[$index + 1] ?? null;
-            $profileEnd = $nextProfile && $nextProfile->effective_from <= $endDate
-                ? Carbon::parse($nextProfile->effective_from)->subDay()
-                : $endDate;
-
-            if ($profileStart > $profileEnd) continue;
-
-            $days = $profileStart->diffInDays($profileEnd) + 1;
-            
-            $suggestion[] = [
-                'salary_profile_id' => $profile->id,
-                'days_suggested' => $days,
-                'percentage' => round(($days / $totalDays) * 100, 2),
-                'Position' => \App\Models\Position::find($profile->position_id)?->name
-            ];
-
-            $currentStart = $profileEnd->addDay();
-        }
-
-        return response()->json([
-            'suggestion' => $suggestion,
-            'total_period_days' => $totalDays
-        ]);
-    }
 }
