@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getUser, updateAuthUser } from "@/lib/auth";
@@ -140,26 +140,52 @@ export default function EmployeeEditPage() {
     }
 
     try {
+      const body = {
+        name: form.name,
+        join_date: form.join_date || null,
+        num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
+        bank_name: form.bank_name || null,
+        bank_account_name: form.bank_account_name || null,
+      };
+
+      const piiFields = ["nik", "npwp", "phone", "address", "bank_account_number"];
+      for (const field of piiFields) {
+        const nextValue = form[field] || null;
+        const currentValue = swrData?.data?.[field] || null;
+
+        if (nextValue !== currentValue) {
+          body[field] = nextValue;
+        }
+      }
+
       await api(`/employees/${id}`, {
         method: "PUT",
-        body: {
-          name: form.name,
-          join_date: form.join_date || null,
-          num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
-          nik: form.nik || null,
-          npwp: form.npwp || null,
-          phone: form.phone || null,
-          address: form.address || null,
-          bank_name: form.bank_name || null,
-          bank_account_name: form.bank_account_name || null,
-          bank_account_number: form.bank_account_number || null,
-        },
+        body,
       });
 
-      try {
-        const me = await api("/me");
-        updateAuthUser({ name: me?.name, role: me?.role });
-      } catch {
+      const updatedDetail = {
+        ...(swrData?.data || {}),
+        name: form.name,
+        join_date: form.join_date || null,
+        num_toddlers: form.num_toddlers === "" ? 0 : (parseInt(form.num_toddlers, 10) || 0),
+        nik: form.nik || null,
+        npwp: form.npwp || null,
+        phone: form.phone || null,
+        address: form.address || null,
+        bank_name: form.bank_name || null,
+        bank_account_name: form.bank_account_name || null,
+        bank_account_number: form.bank_account_number || null,
+      };
+
+      if (updatedDetail.user) {
+        updatedDetail.user = { ...updatedDetail.user, name: form.name };
+      }
+
+      // Detail yang sama sudah dimuat untuk form ini. Perbarui cache langsung
+      // agar halaman detail muncul seketika tanpa request GET /me tambahan.
+      await mutate(`/employees/${id}`, updatedDetail, { revalidate: false });
+
+      if (Number(swrData?.data?.user_id) === Number(user?.id)) {
         updateAuthUser({ name: form.name });
       }
 

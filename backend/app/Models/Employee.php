@@ -7,6 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 
 class Employee extends Model
 {
+    /** @var array<int, string> */
+    private const PII_FIELDS = [
+        'nik',
+        'npwp',
+        'phone',
+        'address',
+        'bank_account_number',
+    ];
+
+    /** @var array<string, ?string> */
+    private array $decryptedPiiCache = [];
+
+    private bool $decryptedPiiLoaded = false;
+
     protected $fillable = [
         'user_id',
         'employee_code',
@@ -84,7 +98,19 @@ class Employee extends Model
             return (string) $legacyValue;
         }
 
-        return app(SensitiveFieldCipherService::class)->decryptField($this, $field, 'pii_alg');
+        // Seluruh PII pada employee memakai DEK yang sama. Dekripsi sekaligus
+        // lalu simpan selama hidup model ini agar private RSA/DEK tidak dibuka
+        // ulang untuk setiap accessor (nik, npwp, phone, alamat, rekening).
+        if (! $this->decryptedPiiLoaded) {
+            $this->decryptedPiiCache = app(SensitiveFieldCipherService::class)->decrypt(
+                $this,
+                self::PII_FIELDS,
+                'pii_alg'
+            );
+            $this->decryptedPiiLoaded = true;
+        }
+
+        return $this->decryptedPiiCache[$field] ?? null;
     }
 
     public function position()

@@ -695,14 +695,27 @@ class EmployeeController extends Controller
         }
 
         $piiFields = ['nik', 'npwp', 'phone', 'address', 'bank_account_number'];
-        $hasPiiChange = collect($piiFields)->contains(fn (string $field) => array_key_exists($field, $data));
-        if ($hasPiiChange) {
+        $hasPiiInput = collect($piiFields)->contains(fn (string $field) => array_key_exists($field, $data));
+        if ($hasPiiInput) {
             $piiValues = [];
+            $hasActualPiiChange = false;
+
             foreach ($piiFields as $field) {
-                $piiValues[$field] = array_key_exists($field, $data) ? $data[$field] : $employee->{$field};
+                $currentValue = $employee->{$field};
+                $nextValue = array_key_exists($field, $data) ? $data[$field] : $currentValue;
+
+                $piiValues[$field] = $nextValue;
+                $hasActualPiiChange = $hasActualPiiChange
+                    || $this->normalizePiiValue($nextValue) !== $this->normalizePiiValue($currentValue);
+
                 unset($data[$field]);
             }
-            $data = [...$data, ...$this->sensitiveCipher->encryptAttributes($piiValues, 'pii_alg', 'pii_key_id')];
+
+            // Jangan putar ulang DEK/ciphertext ketika client mengirim PII
+            // yang ternyata nilainya sama dengan data yang sudah tersimpan.
+            if ($hasActualPiiChange) {
+                $data = [...$data, ...$this->sensitiveCipher->encryptAttributes($piiValues, 'pii_alg', 'pii_key_id')];
+            }
         }
 
         DB::transaction(function () use ($data, $employee, $oldJoinDate, $newJoinDate) {
@@ -767,6 +780,11 @@ class EmployeeController extends Controller
             'message' => 'Employee updated',
             'employee' => $employee->fresh(['Position']),
         ]);
+    }
+
+    private function normalizePiiValue(mixed $value): ?string
+    {
+        return $value === null || $value === '' ? null : (string) $value;
     }
 
     public function destroy(Request $request, Employee $employee)
