@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\MonthlyRecap;
 use App\Models\Payroll;
+use App\Models\PayrollPeriod;
 use App\Models\PerfLog;
+use App\Models\SalaryProfile;
 use App\Services\CryptoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -623,11 +626,17 @@ class PayrollController extends Controller
             ? (float) $payroll->total
             : ($payroll->gaji_pokok + $payroll->tunjangan - $payroll->potongan);
 
-        $payrollPeriod = \App\Models\PayrollPeriod::forDate($payroll->periode);
+        $payrollPeriod = PayrollPeriod::forDate($payroll->periode);
+        $baseSalaryRows = $this->baseSalaryRows($payroll, $payrollPeriod);
+        $payrollPosition = $baseSalaryRows !== []
+            ? $baseSalaryRows[array_key_last($baseSalaryRows)]['position']
+            : $payroll->employee?->position;
 
         $pdf = Pdf::loadView('pdf.payroll-slip', [
             'payroll' => $payroll,
             'payrollPeriod' => $payrollPeriod,
+            'baseSalaryRows' => $baseSalaryRows,
+            'payrollPosition' => $payrollPosition,
             'canSeeBank' => $this->canSeeBank($user, $payroll),
         ])->setPaper('A4', 'portrait');
 
@@ -638,6 +647,58 @@ class PayrollController extends Controller
         return response($pdf->output(), 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
+    }
+
+    /**
+     * Build tampilan gaji pokok dari rekap dan profile yang dipakai pada periode
+     * payroll, sehingga slip lama tidak berubah saat jabatan pegawai berubah.
+     *
+     * @return array<int, array{position: ?\App\Models\Position, mandays: float, rate: float, amount: float}>
+     */
+    private function baseSalaryRows(Payroll $payroll, PayrollPeriod $period): array
+    {
+        if (! $payroll->employee_id) {
+            return [];
+        }
+
+        $recaps = MonthlyRecap::query()
+            ->where('employee_id', $payroll->employee_id)
+            ->where('period_month', $period->period_month)
+            ->orderBy('id')
+            ->get(['total_mandays', 'salary_profile_id']);
+
+        $profileIds = $recaps->pluck('salary_profile_id')->filter()->unique()->values();
+        $profiles = SalaryProfile::query()
+            ->with('position')
+            ->whereIn('id', $profileIds)
+            ->get()
+            ->keyBy('id');
+
+        $fallbackProfile = SalaryProfile::query()
+            ->with('position')
+            ->where('employee_id', $payroll->employee_id)
+            ->whereDate('effective_from', '<=', $payroll->period_from ?? $payroll->periode)
+            ->orderByDesc('effective_from')
+            ->first();
+
+        return $recaps->map(function (MonthlyRecap $recap) use ($profiles, $fallbackProfile): ?array {
+            $profile = $recap->salary_profile_id
+                ? $profiles->get($recap->salary_profile_id)
+                : $fallbackProfile;
+            $mandays = (float) $recap->total_mandays;
+            $rate = (float) ($profile?->base_salary_amount ?? 0);
+
+            if (! $profile || $mandays <= 0 || $rate <= 0) {
+                return null;
+            }
+
+            return [
+                'position' => $profile->position,
+                'mandays' => $mandays,
+                'rate' => $rate,
+                'amount' => round($rate * $mandays),
+            ];
+        })->filter()->values()->all();
     }
 
     /**

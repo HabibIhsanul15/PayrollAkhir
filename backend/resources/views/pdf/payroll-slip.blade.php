@@ -74,13 +74,29 @@
     $emp = $payroll->employee;
     
     $incomes = [];
-    $incomes[] = [
-        'name' => 'FIXED RATE',
-        'mandays' => '-',
-        'rate' => '-',
-        'amount' => $payroll->gaji_pokok,
-        'is_subrow' => false
-    ];
+    $baseSalaryRows = $baseSalaryRows ?? [];
+    if ($baseSalaryRows !== []) {
+        foreach ($baseSalaryRows as $index => $baseSalaryRow) {
+            $positionName = $baseSalaryRow['position']?->name ?? 'Jabatan';
+            $incomes[] = [
+                'name' => count($baseSalaryRows) === 1
+                    ? 'GAJI POKOK (Harian)'
+                    : 'GAJI POKOK - ' . strtoupper($positionName),
+                'mandays' => $unit($baseSalaryRow['mandays']),
+                'rate' => $rupiah($baseSalaryRow['rate']),
+                'amount' => $baseSalaryRow['amount'],
+                'is_subrow' => false,
+            ];
+        }
+    } else {
+        $incomes[] = [
+            'name' => 'GAJI POKOK',
+            'mandays' => '-',
+            'rate' => '-',
+            'amount' => $payroll->gaji_pokok,
+            'is_subrow' => false,
+        ];
+    }
     
     // Fetch actual allowances from payroll
     $actualAllowances = isset($payroll->allowances) ? collect($payroll->allowances) : collect();
@@ -113,15 +129,20 @@
 
         $typeName = strtoupper($type ? $type->name : $al->allowance_type);
         
-        $calculatedRate = 0;
-        if (!$hasSegments && $al->mandays > 0) {
+        $calculatedRate = $calcDetail['rate_amount'] ?? null;
+        if ($calculatedRate === null && !$hasSegments && $al->mandays > 0) {
             $calculatedRate = $al->amount / $al->mandays;
+        }
+        if ($calculatedRate === null && !$hasSegments && ($type?->calculation_type ?? null) === 'flat' && empty($calcDetail['is_prorated'])) {
+            // Fallback untuk payroll lama: pada tunjangan flat tanpa prorata,
+            // total allowance sama dengan rate master per bulan.
+            $calculatedRate = $al->amount;
         }
 
         $incomes[] = [
             'name' => $typeName . $typeLabel,
             'mandays' => (!$hasSegments && $al->mandays > 0) ? $unit($al->mandays) : '-',
-            'rate' => (!$hasSegments && $calculatedRate > 0) ? $rupiah($calculatedRate) : '-',
+            'rate' => (!$hasSegments && (float) $calculatedRate > 0) ? $rupiah($calculatedRate) : '-',
             'amount' => $al->amount,
             'is_subrow' => false
         ];
@@ -193,12 +214,12 @@
 
   <table style="font-size: 9px;">
     <tr>
-      <td style="width: 10%;">NIK</td>
+      <td style="width: 10%;">Kode Pegawai</td>
       <td style="width: 2%;">:</td>
       <td style="width: 38%;" class="bold">{{ $emp?->employee_code ?? '-' }}</td>
       <td style="width: 15%;">Level Jabatan</td>
       <td style="width: 2%;">:</td>
-      <td style="width: 33%;">{{ $emp?->position()->first()?->level ?? '-' }}</td>
+      <td style="width: 33%;">{{ $payrollPosition?->level ?? '-' }}</td>
     </tr>
     <tr>
       <td>Nama</td>
@@ -206,15 +227,15 @@
       <td class="bold">{{ strtoupper($emp?->name ?? '-') }}</td>
       <td>Kode Sistem</td>
       <td>:</td>
-      <td>{{ strtoupper($emp?->position()->first()?->code ?? '-') }}</td>
+      <td>{{ strtoupper($payrollPosition?->code ?? '-') }}</td>
     </tr>
     <tr>
       <td>Jabatan</td>
       <td>:</td>
-      <td>{{ $emp?->position ?? '-' }}</td>
+      <td>{{ $payrollPosition?->name ?? '-' }}</td>
       <td>Keterangan</td>
       <td>:</td>
-      <td>{{ $emp?->position()->first()?->description ?? '-' }}</td>
+      <td>{{ $payrollPosition?->description ?? '-' }}</td>
     </tr>
   </table>
 
@@ -258,7 +279,7 @@
       <tr class="bg-blue-dark bold">
         <td colspan="3">Take Home Pay</td>
         <td class="right">{{ $rupiah($payroll->total) }}</td>
-        <td colspan="2" style="background-color: #fff; color: #000; font-size: 8px;">*)</td>
+        <td colspan="2" style="background-color: #fff; color: #000; font-size: 8px;"></td>
       </tr>
     </tbody>
   </table>

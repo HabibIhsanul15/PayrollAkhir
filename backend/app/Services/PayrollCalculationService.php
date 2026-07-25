@@ -165,7 +165,10 @@ class PayrollCalculationService
                     'amount' => 0,
                     'rate_amount' => count($profilesData) > 1 ? null : $rate, // if prorated, rate is blended
                     'mandays' => 0,
-                    'calculation_detail' => $detail,
+                    'calculation_detail' => [
+                        ...$detail,
+                        ...(count($profilesData) === 1 && $rate !== null ? ['rate_amount' => $rate] : []),
+                    ],
                 ];
                 if (count($profilesData) > 1) {
                     $accumulatedAllowances[$typeCode]['calculation_detail']['is_prorated'] = true;
@@ -188,8 +191,10 @@ class PayrollCalculationService
             }
             if (count($profilesData) > 1 && $amount > 0) {
                 $accumulatedAllowances[$typeCode]['calculation_detail']['segments'][] = [
-                    'Position' => $positionName,
+                    'grade' => $positionName,
                     'mandays' => $mandays,
+                    'rate' => $rate,
+                    'amount' => $amount,
                 ];
             }
         };
