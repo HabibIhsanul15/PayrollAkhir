@@ -564,6 +564,7 @@ class PayrollCalculationService
                     'status' => 'generated',
                     'payroll_id' => $existing->id,
                     'payroll_status' => $existing->status,
+                    'rejection_reason' => $existing->status === 'rejected' ? $existing->approval_note : null,
                     'total_mandays' => $recap->total_mandays ?? 0,
                     'gaji_pokok' => $gaji_pokok,
                     'total_allowances' => $tunjangan,
@@ -638,18 +639,13 @@ class PayrollCalculationService
         ];
     }
 
-    public function recalculate(Payroll $payroll, bool $force, int $recordedBy): Payroll
+    public function recalculate(Payroll $payroll): Payroll
     {
         if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
             throw new \Exception('Hanya payroll draft atau yang ditolak yang bisa direcalculate.');
         }
         if ($payroll->calculation_mode !== 'auto') {
             throw new \Exception('Hanya auto payroll yang bisa direcalculate.');
-        }
-
-        $hasOverride = $payroll->allowances()->where('is_manual_override', true)->exists();
-        if ($hasOverride && ! $force) {
-            throw new \Exception('Terdapat manual override allowance. Recalculate ditolak tanpa force.');
         }
 
         $employee = $payroll->employee;
@@ -670,58 +666,6 @@ class PayrollCalculationService
             ]);
 
             $this->createAllowanceRows($payroll, $res['allowances']);
-
-            DB::commit();
-
-            return $payroll;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
-    }
-
-    public function overrideAllowance(
-        Payroll $payroll,
-        PayrollAllowance $allowance,
-        float $amount,
-        string $reason,
-        int $recordedBy
-    ): Payroll
-    {
-        if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
-            throw new \Exception('Hanya payroll draft atau yang ditolak yang dapat di override.');
-        }
-        if ($payroll->calculation_mode !== 'auto') {
-            throw new \Exception('Hanya auto payroll yang dapat di override.');
-        }
-        if ($allowance->payroll_id !== $payroll->id) {
-            throw new \Exception('Allowance tidak valid untuk payroll ini.');
-        }
-
-        DB::beginTransaction();
-        try {
-            $allowance->update([
-                ...$this->sensitiveCipher->encryptAttributes([
-                    'amount' => round($amount),
-                ]),
-                'is_manual_override' => true,
-            ]);
-
-            $totalAllowances = $payroll->allowances()->get()->sum(function (PayrollAllowance $row) {
-                return (float) ($row->amount ?? 0);
-            });
-            $plain = $this->cipherService->decrypt($payroll);
-            $gaji = (float) ($plain['gaji_pokok'] ?? 0);
-            $deductions = (float) ($plain['potongan'] ?? 0);
-            $total = $gaji + $totalAllowances - $deductions;
-            $cipher = $this->cipherService->encrypt([
-                'gaji_pokok' => $gaji,
-                'tunjangan' => $totalAllowances,
-                'potongan' => $deductions,
-                'total' => $total,
-            ]);
-
-            $payroll->update($this->cipherAttributes($cipher));
 
             DB::commit();
 

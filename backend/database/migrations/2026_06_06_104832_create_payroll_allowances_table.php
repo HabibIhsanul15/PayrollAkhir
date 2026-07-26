@@ -14,7 +14,6 @@ return new class extends Migration
             $table->foreignId('allowance_type_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('mandays')->nullable();
             $table->json('calculation_detail')->nullable();
-            $table->boolean('is_manual_override')->default(false);
             $table->text('amount_enc')->nullable();
             $table->string('salary_alg', 20)->default('HYBRID');
             $table->string('salary_key_id', 100)->nullable();

@@ -9,8 +9,6 @@ import { api } from "@/lib/api";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import { Briefcase, UserCircle, Wallet, FileText, Download, ChevronLeft, CreditCard, AlertTriangle } from "lucide-react";
 
-import OverrideAllowanceModal from "@/components/OverrideAllowanceModal";
-import RecalculateConfirmModal from "@/components/RecalculateConfirmModal";
 import RejectPayrollModal from "@/components/RejectPayrollModal";
 import { useConfirm } from "@/components/ConfirmProvider";
 
@@ -111,10 +109,6 @@ export default function PayrollDetailPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [proofLoading, setProofLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  const [overrideData, setOverrideData] = useState(null);
-  const [recalcOpen, setRecalcOpen] = useState(false);
-  const [recalcMsg, setRecalcMsg] = useState("");
 
   const [transferModal, setTransferModal] = useState({
     open: false,
@@ -219,40 +213,19 @@ export default function PayrollDetailPage() {
   }, [row]);
 
   const isPaid = useMemo(() => String(row?.status || "").toLowerCase() === "paid", [row?.status]);
-  const canOverrideOrRecalculate = useMemo(
+  const canRecalculate = useMemo(
     () => isFat && ["draft", "rejected"].includes(row?.status) && row?.calculation_mode === "auto",
     [isFat, row]
   );
 
-  const handleSaveOverride = async (payload) => {
-    if (!overrideData) return;
+  const handleRecalculate = async () => {
     setIsSaving(true);
     try {
-      await api(`/payrolls/${id}/allowances/${overrideData.id}`, { method: "PATCH", body: payload });
-      setOverrideData(null);
+      await api(`/payrolls/${id}/recalculate`, { method: "POST", body: {} });
       loadDetail();
     } catch (e) {
-      alert(e?.data?.message || "Gagal override allowance");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleRecalculate = async (force = false) => {
-    setIsSaving(true);
-    try {
-      await api(`/payrolls/${id}/recalculate`, { method: "POST", body: { force } });
-      setRecalcOpen(false);
-      loadDetail();
-    } catch (e) {
-      const status = e?.status;
       const msg = e?.data?.message || "Gagal recalculate";
-      if (status === 422 && msg.toLowerCase().includes("manual override")) {
-        setRecalcMsg(msg);
-        setRecalcOpen(true);
-      } else {
-        alert(msg);
-      }
+      alert(msg);
     } finally {
       setIsSaving(false);
     }
@@ -377,10 +350,10 @@ export default function PayrollDetailPage() {
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          {canOverrideOrRecalculate && (
+          {canRecalculate && (
             <Button
               variant="outline"
-              onClick={() => handleRecalculate(false)}
+              onClick={handleRecalculate}
               disabled={isSaving}
               className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
             >
@@ -632,19 +605,13 @@ export default function PayrollDetailPage() {
                             <div key={`al-${idx}`} className="group flex flex-col p-3 bg-white rounded-xl border border-slate-100 hover:border-emerald-200 transition-colors">
                               <div className="flex justify-between items-start">
                                 <div className="flex flex-col">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-slate-800">{al.allowance_type?.name || al.allowance_type || 'Tunjangan'}</span>
-                                    {al.is_manual_override && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">OVERRIDE</Badge>}
-                                  </div>
+                                  <span className="font-semibold text-slate-800">{al.allowance_type?.name || al.allowance_type || 'Tunjangan'}</span>
                                   <span className="text-xs text-slate-500 mt-1">
-                                    {al.is_manual_override ? 'Penyesuaian manual oleh Finance' : formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
+                                    {formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
                                   </span>
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
+                                <div className="flex flex-col items-end">
                                   <span className="font-bold text-emerald-700">{formatIDR(al.amount)}</span>
-                                  {canOverrideOrRecalculate && (
-                                    <button onClick={() => setOverrideData(al)} className="text-[10px] text-indigo-500 hover:text-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity font-medium">✏️ Edit</button>
-                                  )}
                                 </div>
                               </div>
                               {al.calculation_detail?.segments && al.calculation_detail.segments.length > 0 && (
@@ -723,8 +690,6 @@ export default function PayrollDetailPage() {
         </div>
       )}
 
-      <OverrideAllowanceModal isOpen={!!overrideData} onClose={() => setOverrideData(null)} data={overrideData} onSave={handleSaveOverride} isSaving={isSaving} />
-      <RecalculateConfirmModal isOpen={recalcOpen} onClose={() => setRecalcOpen(false)} message={recalcMsg} onConfirm={(force) => handleRecalculate(force)} isSaving={isSaving} />
       <RejectPayrollModal
         open={rejectModal.open}
         onClose={closeRejectModal}

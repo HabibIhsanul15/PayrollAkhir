@@ -49,10 +49,6 @@ class PayrollPolicy
     {
         return $user->role === 'fat';
     }
-    public function override(User $user, Payroll $payroll): bool
-    {
-        return $user->role === 'fat';
-    }
 
         /**
          * Determine whether the user can restore the model.

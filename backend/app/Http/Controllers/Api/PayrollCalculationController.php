@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PayrollCalculationRequest;
 use App\Models\Payroll;
-use App\Models\PayrollAllowance;
 use App\Services\PayrollCalculationService;
 use Illuminate\Http\Request;
 
@@ -63,9 +62,8 @@ class PayrollCalculationController extends Controller
         if ($request->user()->cannot('recalculate', $payroll)) {
             abort(403);
         }
-        $force = $request->boolean('force', false);
         try {
-            $result = $this->service->recalculate($payroll, $force, $request->user()->id);
+            $result = $this->service->recalculate($payroll);
 
             return response()->json($result);
         } catch (\Exception $e) {
@@ -73,21 +71,4 @@ class PayrollCalculationController extends Controller
         }
     }
 
-    public function overrideAllowance(Request $request, Payroll $payroll, PayrollAllowance $allowance)
-    {
-        if ($request->user()->cannot('override', $payroll)) {
-            abort(403);
-        }
-        $request->validate([
-            'amount' => 'required|numeric',
-            'override_reason' => 'required|string|max:255',
-        ]);
-        try {
-            $result = $this->service->overrideAllowance($payroll, $allowance, $request->amount, $request->override_reason, $request->user()->id);
-
-            return response()->json($result);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-    }
 }

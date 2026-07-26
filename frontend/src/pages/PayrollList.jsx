@@ -106,6 +106,7 @@ export default function PayrollList() {
     employeeId: null,
     payrollId: null,
     payrollStatus: null,
+    rejectionReason: null,
   });
   const [transferModal, setTransferModal] = useState({
     open: false,
@@ -583,6 +584,7 @@ export default function PayrollList() {
                                       employeeId: r.employee_id,
                                       payrollId: r.payroll_id || null,
                                       payrollStatus: r.payroll_status || null,
+                                      rejectionReason: r.rejection_reason || null,
                                     })}
                                     className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
                                     title="Detail perhitungan payroll"
@@ -608,6 +610,7 @@ export default function PayrollList() {
                                       employeeId: r.employee_id,
                                       payrollId: r.payroll_id,
                                       payrollStatus: r.payroll_status || null,
+                                      rejectionReason: r.rejection_reason || null,
                                     })}
                                     className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
                                     title="Detail perhitungan payroll"
@@ -682,9 +685,11 @@ export default function PayrollList() {
       {/* Preview & Deduction Modal */}
       <PayrollPreviewModal
         isOpen={previewModal.open}
-        onClose={() => setPreviewModal({ open: false, employeeId: null, payrollId: null, payrollStatus: null })}
+        onClose={() => setPreviewModal({ open: false, employeeId: null, payrollId: null, payrollStatus: null, rejectionReason: null })}
         employeeId={previewModal.employeeId}
         payrollId={previewModal.payrollId}
+        payrollStatus={previewModal.payrollStatus}
+        rejectionReason={previewModal.rejectionReason}
         periodMonth={period}
         isFAT={isFAT}
         canEditDeductions={isFAT && (!previewModal.payrollStatus || ["draft", "rejected"].includes(previewModal.payrollStatus))}

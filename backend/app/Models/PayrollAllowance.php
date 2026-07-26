@@ -15,7 +15,6 @@ class PayrollAllowance extends Model
     protected $casts = [
         'mandays' => 'integer',
         'calculation_detail' => 'array',
-        'is_manual_override' => 'boolean',
         'enc_meta' => 'array',
     ];
 

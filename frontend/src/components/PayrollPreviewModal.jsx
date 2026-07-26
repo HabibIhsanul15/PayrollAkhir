@@ -17,6 +17,8 @@ export default function PayrollPreviewModal({
   employeeId,
   payrollId,
   periodMonth,
+  payrollStatus,
+  rejectionReason,
   isFAT,
   canEditDeductions = false,
   onDeductionSaved,
@@ -168,6 +170,15 @@ export default function PayrollPreviewModal({
                   <li key={i}>{w}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {!loading && !error && data && payrollStatus === "rejected" && (
+            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+              <p className="font-semibold">Payroll ditolak</p>
+              <p className="mt-1 whitespace-pre-wrap text-rose-800">
+                {rejectionReason || "Alasan penolakan tidak tersedia."}
+              </p>
             </div>
           )}
 

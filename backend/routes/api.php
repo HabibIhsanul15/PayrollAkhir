@@ -49,7 +49,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Phase 4 Specific Item Routes
     Route::post('/payrolls/{payroll}/recalculate', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'recalculate']);
-    Route::patch('/payrolls/{payroll}/allowances/{allowance}', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'overrideAllowance']);
 
     Route::get('/payrolls', [PayrollController::class, 'index']);
     Route::post('/payrolls', [PayrollController::class, 'store']);
