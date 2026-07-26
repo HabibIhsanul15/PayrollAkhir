@@ -74,10 +74,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // export
     Route::get('/payrolls/{payroll}/pdf', [PayrollController::class, 'pdf']);
 
-    // Security Inspection
-    Route::get('/payrolls/{payroll}/inspection', [PayrollController::class, 'inspection']);
-    Route::get('/payrolls/{payroll}/inspection-pdf', [PayrollController::class, 'inspectionPdf']);
-
     Route::get('/payrolls/{payroll}/proof', [PayrollController::class, 'proof']);
 
     /*
