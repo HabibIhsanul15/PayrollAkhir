@@ -11,9 +11,6 @@ class PerfLog extends Model
     protected $casts = [
         'encrypt_ms' => 'float',
         'decrypt_ms' => 'float',
-        'db_ms' => 'float',
-        'total_ms' => 'float',
         'cipher_bytes' => 'integer',
-        'meta' => 'array',
     ];
 }

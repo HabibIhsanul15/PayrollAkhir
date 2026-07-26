@@ -33,12 +33,10 @@ class PayrollReportController extends Controller
      *
      * PERF LOG:
      * - Akan insert 1 row ke perf_logs untuk setiap hit report:
-     *   scenario=REPORT, alg=... (AES/RSA/HYBRID/MIXED), db_ms, decrypt_ms, total_ms, meta
+     *   scenario=REPORT, alg=... (AES/RSA/HYBRID/MIXED), decrypt_ms
      */
     public function index(Request $request)
     {
-        $t0 = microtime(true);
-
         $user = $request->user();
         $role = $this->roleOf($user);
 
@@ -82,9 +80,6 @@ class PayrollReportController extends Controller
             $q->where('employee_id', $employeeId);
         }
 
-        // ========== DB TIME ==========
-        $tDb0 = microtime(true);
-
         // WAJIB ambil dek_enc + enc_meta supaya HYBRID bisa decrypt
         $payrollRows = (clone $q)
             ->with(['allowances.allowanceType', 'deductions'])
@@ -108,8 +103,6 @@ class PayrollReportController extends Controller
                 'created_at',
                 'paid_at',
             ]);
-
-        $dbMs = (microtime(true) - $tDb0) * 1000;
 
         // ========== DECRYPT TIME ==========
         $decryptTotalMs = 0.0;
@@ -225,8 +218,6 @@ class PayrollReportController extends Controller
             'sum_total'      => (float) $rows->sum('total'),
         ];
 
-        $totalMs = (microtime(true) - $t0) * 1000;
-
         // ========== TENTUKAN ALG UNTUK REPORT ==========
         // kalau isinya campur (AES/RSA/HYBRID), tandai MIXED
         $algList = $payrollRows->pluck('salary_alg')->filter()->map(fn (mixed $a) => strtoupper((string) $a))->unique()->values();
@@ -241,25 +232,11 @@ class PayrollReportController extends Controller
                 // report tidak spesifik payroll_id
                 'payroll_id' => null,
 
-                // report tidak melakukan encrypt, jadi 0
-                'encrypt_ms' => 0,
+                // report tidak melakukan encrypt
+                'encrypt_ms' => null,
 
                 // total decrypt dari semua row (akumulasi)
                 'decrypt_ms' => round($decryptTotalMs, 3),
-
-                'db_ms'      => round($dbMs, 3),
-                'total_ms'   => round($totalMs, 3),
-
-                'meta'       => json_encode([
-                    'month' => $month,
-                    'start' => $start->toDateString(),
-                    'end' => $end->toDateString(),
-                    'status' => $status,
-                    'employee_id' => $employeeId,
-                    'row_count' => (int) $rows->count(),
-                    'read_mode' => CryptoService::readMode(),
-                    'storage_mode' => CryptoService::salaryStorageMode(),
-                ], JSON_UNESCAPED_SLASHES),
             ]);
         } catch (\Throwable $e) {
             // jangan bikin report gagal hanya karena logging perf gagal

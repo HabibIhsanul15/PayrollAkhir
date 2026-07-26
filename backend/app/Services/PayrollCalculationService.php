@@ -376,7 +376,6 @@ class PayrollCalculationService
 
     public function calculateAndSave(int $employeeId, string $periodMonth, int $recordedBy): Payroll
     {
-        $t0Total = hrtime(true);
         $employee = Employee::find($employeeId);
         if (! $employee) {
             throw new \Exception('Employee not found');
@@ -390,8 +389,6 @@ class PayrollCalculationService
         $t0Encrypt = hrtime(true);
         $encryptedPayroll = $this->encryptedPayrollAttributes($res);
         $encryptMs = (hrtime(true) - $t0Encrypt) / 1e6;
-        $t0Db = hrtime(true);
-
         DB::beginTransaction();
         try {
             $payroll = Payroll::create([
@@ -411,13 +408,7 @@ class PayrollCalculationService
 
             DB::commit();
 
-            $this->logCreatePerformance(
-                $payroll,
-                $encryptMs,
-                (hrtime(true) - $t0Db) / 1e6,
-                (hrtime(true) - $t0Total) / 1e6,
-                'auto_single'
-            );
+            $this->logCreatePerformance($payroll, $encryptMs);
 
             return $payroll;
         } catch (\Exception $e) {
@@ -439,7 +430,6 @@ class PayrollCalculationService
         $failed = 0;
 
         foreach ($employees as $employee) {
-            $t0Total = hrtime(true);
             DB::beginTransaction();
             try {
                 $prereq = $this->validatePrerequisites($employee, $periodMonth);
@@ -455,8 +445,6 @@ class PayrollCalculationService
                 $t0Encrypt = hrtime(true);
                 $encryptedPayroll = $this->encryptedPayrollAttributes($res);
                 $encryptMs = (hrtime(true) - $t0Encrypt) / 1e6;
-                $t0Db = hrtime(true);
-
                 $payroll = Payroll::create([
                     'user_id' => $recordedBy,
                     'employee_id' => $employee->id,
@@ -473,13 +461,7 @@ class PayrollCalculationService
                 $this->createDeductionRows($payroll, $res['deductions'] ?? []);
 
                 DB::commit();
-                $this->logCreatePerformance(
-                    $payroll,
-                    $encryptMs,
-                    (hrtime(true) - $t0Db) / 1e6,
-                    (hrtime(true) - $t0Total) / 1e6,
-                    'auto_batch'
-                );
+                $this->logCreatePerformance($payroll, $encryptMs);
                 $success++;
                 $results[] = [
                     'employee_id' => $employee->id,
@@ -812,10 +794,7 @@ class PayrollCalculationService
 
     private function logCreatePerformance(
         Payroll $payroll,
-        float $encryptMs,
-        float $dbMs,
-        float $totalMs,
-        string $source
+        float $encryptMs
     ): void {
         try {
             $ciphertexts = [
@@ -838,13 +817,8 @@ class PayrollCalculationService
                 'alg' => $payroll->salary_alg ?? 'AES',
                 'payroll_id' => $payroll->id,
                 'encrypt_ms' => round($encryptMs, 3),
-                'db_ms' => round($dbMs, 3),
-                'total_ms' => round($totalMs, 3),
+                'decrypt_ms' => null,
                 'cipher_bytes' => $cipherBytes,
-                'meta' => [
-                    'source' => $source,
-                    'cipher_bytes_scope' => 'payroll,allowance,deduction ciphertexts and dek_enc',
-                ],
             ]);
         } catch (\Throwable) {
             // Kegagalan pencatatan metrik tidak boleh menggagalkan payroll.

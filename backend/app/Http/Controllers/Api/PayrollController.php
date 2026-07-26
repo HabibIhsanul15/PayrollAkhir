@@ -151,13 +151,9 @@ class PayrollController extends Controller
     {
         $this->authorize('view', $payroll);
 
-        $t0_total = hrtime(true);
-
         // Reset relation + load (bagian DB)
         $payroll->unsetRelation('employee');
         $payroll->unsetRelation('user');
-
-        $t0_db = hrtime(true);
 
         $payroll->load([
             'user:id,name',
@@ -166,8 +162,6 @@ class PayrollController extends Controller
             'allowances.allowanceType',
             'deductions',
         ]);
-
-        $db_ms = (hrtime(true) - $t0_db) / 1e6;
 
         $user = $request->user();
 
@@ -180,10 +174,11 @@ class PayrollController extends Controller
         }
 
         $canSeeNominal = $this->canSeeNominal($user, $payroll);
+        $canSeeBank = $this->canSeeBank($user, $payroll);
         $alg = strtoupper((string) ($payroll->salary_alg ?? 'AES'));
 
         if ($payroll->employee) {
-            if ($this->canSeeBank($user, $payroll)) {
+            if ($canSeeBank) {
                 $payroll->employee->bank_account_number_decrypted = $payroll->employee->bank_account_number;
             }
         }
@@ -235,22 +230,15 @@ class PayrollController extends Controller
 
                 $dec_ms = (hrtime(true) - $t0_dec) / 1e6;
             } catch (\Throwable $e) {
-                $total_ms_fail = (hrtime(true) - $t0_total) / 1e6;
-
+                $decrypt_ms_fail = (hrtime(true) - $t0_dec) / 1e6;
                 // log failure (optional)
                 try {
                     PerfLog::create([
                         'scenario' => 'READ_DETAIL',
                         'alg' => $alg,
                         'payroll_id' => $payroll->id,
-                        'decrypt_ms' => null,
-                        'db_ms' => $db_ms,
-                        'total_ms' => $total_ms_fail,
-                        'meta' => [
-                            'masked' => false,
-                            'decrypt_error' => 'DECRYPT_FAILED',
-                            'err' => substr($e->getMessage(), 0, 200),
-                        ],
+                        'encrypt_ms' => null,
+                        'decrypt_ms' => round($decrypt_ms_fail, 3),
                     ]);
                 } catch (\Throwable $e2) {
                     // ignore
@@ -261,8 +249,6 @@ class PayrollController extends Controller
                 ], 422);
             }
         }
-
-        $total_ms = (hrtime(true) - $t0_total) / 1e6;
 
         $activeProfile = null;
         if ($payroll->employee && $canSeeNominal) {
@@ -278,18 +264,14 @@ class PayrollController extends Controller
             }
         }
 
-        // simpan perf log (kalau masked, decrypt_ms null)
+        // Simpan benchmark kriptografi. decrypt_ms null bila tidak ada dekripsi payroll.
         try {
             PerfLog::create([
                 'scenario' => 'READ_DETAIL',
                 'alg' => $alg,
                 'payroll_id' => $payroll->id,
+                'encrypt_ms' => null,
                 'decrypt_ms' => $dec_ms,
-                'db_ms' => $db_ms,
-                'total_ms' => $total_ms,
-                'meta' => [
-                    'masked' => ! $canSeeNominal,
-                ],
             ]);
         } catch (\Throwable $e) {
             // ignore
@@ -303,7 +285,7 @@ class PayrollController extends Controller
             'position_name' => $payroll->employee->Position?->name,
         ] : null;
 
-        if ($employeePayload && $this->canSeeBank($user, $payroll)) {
+        if ($employeePayload && $canSeeBank) {
             $employeePayload += [
                 'bank_name' => $payroll->employee->bank_name,
                 'bank_account_name' => $payroll->employee->bank_account_name,
@@ -709,8 +691,6 @@ class PayrollController extends Controller
     {
         $this->authorize('create', Payroll::class);
 
-        $t0_total = hrtime(true);
-
         $data = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
             'periode' => ['required', 'date'],
@@ -797,9 +777,6 @@ class PayrollController extends Controller
 
         $enc_ms = (hrtime(true) - $t0_enc) / 1e6;
 
-        // ===== DB timer =====
-        $t0_db = hrtime(true);
-
         $payroll = Payroll::create([
             'user_id' => $request->user()->id,
             'employee_id' => $data['employee_id'],
@@ -830,10 +807,6 @@ class PayrollController extends Controller
             'salary_key_id' => $keyId,
         ]);
 
-        $db_ms = (hrtime(true) - $t0_db) / 1e6;
-
-        $total_ms = (hrtime(true) - $t0_total) / 1e6;
-
         // Ukuran payload terenkripsi yang disimpan untuk satu payroll baru.
         // Nilai ini sengaja hanya dicatat pada skenario CREATE.
         $cipherBytes = array_sum(array_map(
@@ -847,14 +820,8 @@ class PayrollController extends Controller
                 'alg' => $alg,
                 'payroll_id' => $payroll->id,
                 'encrypt_ms' => $enc_ms,
-                'db_ms' => $db_ms,
-                'total_ms' => $total_ms,
+                'decrypt_ms' => null,
                 'cipher_bytes' => $cipherBytes,
-                'meta' => [
-                    'read_mode' => env('PAYROLL_READ_MODE'),
-                    'storage_mode' => env('SALARY_STORAGE_MODE'),
-                    'cipher_bytes_scope' => 'gaji_pokok_enc,tunjangan_enc,potongan_enc,total_enc,dek_enc',
-                ],
             ]);
         } catch (\Throwable $e) {
             // ignore
