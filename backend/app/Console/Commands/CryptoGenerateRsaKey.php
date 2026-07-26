@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use App\Models\CryptoKey;
 use App\Services\Crypto\AppKeyProtector;
 
@@ -39,15 +41,26 @@ class CryptoGenerateRsaKey extends Command
             return self::FAILURE;
         }
 
-        CryptoKey::where('status','active')->update(['status' => 'rotated']);
+        try {
+            DB::transaction(function () use ($name, $publicPem, $privatePem): void {
+                // Kunci aktif yang ada dikunci lalu dirotasi sebelum key baru
+                // dibuat. Unique guard di database menjadi lapisan terakhir
+                // bila ada dua proses rotasi berjalan bersamaan.
+                CryptoKey::where('status', 'active')->lockForUpdate()->update(['status' => 'rotated']);
 
-        CryptoKey::create([
-            'name' => $name,
-            'alg' => 'RSA-2048',
-            'public_key_pem' => $publicPem,
-            'private_key_pem_enc' => AppKeyProtector::enc($privatePem),
-            'status' => 'active',
-        ]);
+                CryptoKey::create([
+                    'name' => $name,
+                    'alg' => 'RSA-2048',
+                    'public_key_pem' => $publicPem,
+                    'private_key_pem_enc' => AppKeyProtector::enc($privatePem),
+                    'status' => 'active',
+                ]);
+            });
+        } catch (QueryException) {
+            $this->error('Rotasi RSA gagal: database menolak lebih dari satu key aktif.');
+
+            return self::FAILURE;
+        }
 
         $this->info("OK: RSA key active = {$name}");
         return self::SUCCESS;

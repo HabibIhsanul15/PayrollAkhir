@@ -231,7 +231,7 @@ class CryptoService
 
     public static function rsaKeyId(): string
     {
-        $key = CryptoKey::where('status', 'active')->firstOrFail();
+        $key = self::activeRsaKey();
         return 'rsa2048:' . $key->id;
     }
 
@@ -244,7 +244,7 @@ class CryptoService
     // =====================================================
     public static function hybridKeyId(): string
     {
-        $key = CryptoKey::where('status', 'active')->firstOrFail();
+        $key = self::activeRsaKey();
         return 'hybrid:rsa2048:' . $key->id;
     }
 
@@ -392,7 +392,14 @@ class CryptoService
     {
         if (self::$activeRsaKeyCache) return self::$activeRsaKeyCache;
 
-        $key = CryptoKey::where('status', 'active')->firstOrFail();
+        $keys = CryptoKey::where('status', 'active')->orderBy('id')->limit(2)->get();
+        if ($keys->count() !== 1) {
+            throw new CryptoException(
+                "Konfigurasi RSA tidak valid: harus tepat satu key aktif, ditemukan {$keys->count()}."
+            );
+        }
+
+        $key = $keys->first();
         self::$activeRsaKeyCache = $key;
         return $key;
     }

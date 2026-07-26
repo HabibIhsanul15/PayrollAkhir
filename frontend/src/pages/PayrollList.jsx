@@ -46,9 +46,15 @@ const STATUS_CONFIG = {
     icon: AlertTriangle,
     className: "bg-rose-50 text-rose-700 border-rose-200",
   },
+  unavailable: {
+    label: "Slip Belum Tersedia",
+    icon: AlertTriangle,
+    className: "bg-amber-50 text-amber-800 border-amber-200",
+  },
 };
 
 function resolvePayrollStatus(row) {
+  if (row.status === "unavailable") return "unavailable";
   if (row.status === "failed") return "failed";
   return row.payroll_status || "ready";
 }
@@ -161,9 +167,10 @@ export default function PayrollList() {
         employee_name: row.employee_name || "-",
         bank_name: row.bank_name,
         bank_account_number: row.bank_account_number,
-        status: "generated",
+        status: row.data_unavailable ? "unavailable" : "generated",
         payroll_id: row.id,
         payroll_status: row.status,
+        message: row.message || null,
         total_mandays: row.total_mandays,
         gaji_pokok: Number(row.gaji_pokok || 0),
         total_allowances: Number(row.tunjangan || 0),
@@ -179,6 +186,7 @@ export default function PayrollList() {
         ? rawResults.filter((r) => r.payroll_id && ["submitted", "approved", "paid", "rejected"].includes(r.payroll_status))
         : rawResults;
   const summary = buildSummary(results);
+  const unavailableCount = results.filter((row) => row.status === "unavailable").length;
 
   const filtered = results.filter((r) =>
     String(r.employee_name || "").toLowerCase().includes(q.toLowerCase())
@@ -509,6 +517,7 @@ export default function PayrollList() {
                   ) : (
                     filtered.map((r, i) => {
                       const isFailed = r.status === 'failed';
+                      const isUnavailable = r.status === 'unavailable';
                       const statusKey = resolvePayrollStatus(r);
                       const statusMeta = STATUS_CONFIG[statusKey] || STATUS_CONFIG.ready;
                       const StatusIcon = statusMeta.icon;
@@ -538,7 +547,7 @@ export default function PayrollList() {
                             {r.total_deductions > 0 ? `-${formatRupiah(r.total_deductions)}` : "-"}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold text-blue-700 text-[13px]">
-                            {formatRupiah(r.total_nett)}
+                            {isUnavailable ? "-" : formatRupiah(r.total_nett)}
                           </td>
                           <td className="px-4 py-3 text-center">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusMeta.className}`}>
@@ -552,9 +561,20 @@ export default function PayrollList() {
                                 </span>
                               </div>
                             )}
+                            {isUnavailable && (
+                              <div className="flex flex-col items-center">
+                                <span className="text-[10px] text-amber-700 mt-1 max-w-[160px]" title={r.message}>
+                                  {r.message}
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                {isUnavailable ? (
+                                  <span className="text-[10px] text-slate-500">Hubungi administrator</span>
+                                ) : (
+                                  <>
                                 {canRequestApproval && (
                                   <button onClick={() => handleRequestApproval(r)} className="px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded">
                                     <Send size={12} />
@@ -649,6 +669,8 @@ export default function PayrollList() {
                                     Hapus
                                   </button>
                                 )}
+                                  </>
+                                )}
                               </div>
                           </td>
                         </tr>
@@ -662,6 +684,11 @@ export default function PayrollList() {
                     <tr>
                       <td colSpan={2} className="px-4 py-3 text-right text-[12px] font-bold text-slate-700">
                         Total Keseluruhan
+                        {unavailableCount > 0 && (
+                          <span className="block text-[10px] font-normal text-amber-700 mt-0.5">
+                            {unavailableCount} payroll tidak tersedia tidak dihitung
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-[14px] font-bold text-slate-900">
                         {formatRupiah(grossPaySummary(summary))}

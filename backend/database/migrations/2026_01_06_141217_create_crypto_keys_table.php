@@ -14,6 +14,11 @@ return new class extends Migration {
             $table->text('public_key_pem');
             $table->text('private_key_pem_enc'); // encrypted by APP_KEY
             $table->string('status')->default('active'); // active/rotated/revoked
+            // Nilai 1 hanya untuk key aktif; UNIQUE tetap mengizinkan banyak
+            // key rotated/revoked karena nilainya NULL.
+            $table->tinyInteger('active_key_guard')
+                ->storedAs("CASE WHEN `status` = 'active' THEN 1 ELSE NULL END")
+                ->unique('crypto_keys_one_active_unique');
             $table->timestamps();
         });
     }
@@ -23,4 +28,3 @@ return new class extends Migration {
         Schema::dropIfExists('crypto_keys');
     }
 };
-

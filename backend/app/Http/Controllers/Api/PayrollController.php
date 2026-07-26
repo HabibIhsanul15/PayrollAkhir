@@ -13,6 +13,7 @@ use App\Services\CryptoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class PayrollController extends Controller
@@ -66,6 +67,7 @@ class PayrollController extends Controller
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
 
             $gaji = $tunj = $pot = $total = null;
+            $dataUnavailable = false;
 
             if ($canSeeNominal) {
                 try {
@@ -99,8 +101,14 @@ class PayrollController extends Controller
                     $pot = $pot !== null ? (float) $pot : null;
                     $total = $total !== null ? (float) $total : null;
                 } catch (\Throwable $e) {
-                    // kalau decrypt gagal, jangan bikin endpoint crash
+                    // Gagal tertutup untuk payroll ini saja; daftar payroll
+                    // lain tetap dapat dibaca dan error teknis tidak dikirim.
                     $gaji = $tunj = $pot = $total = null;
+                    $dataUnavailable = true;
+                    Log::warning('Payroll tidak dapat diverifikasi saat daftar payroll.', [
+                        'payroll_id' => $p->id,
+                        'exception' => $e::class,
+                    ]);
                 }
             }
 
@@ -138,6 +146,10 @@ class PayrollController extends Controller
                     'total_mandays' => (float) $total_mandays,
 
                     'masked' => ! $canSeeNominal,
+                    'data_unavailable' => $dataUnavailable,
+                    'message' => $dataUnavailable
+                        ? 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.'
+                        : null,
                 ];
             });
 
@@ -245,7 +257,7 @@ class PayrollController extends Controller
                 }
 
                 return response()->json([
-                    'message' => 'Data payroll tidak dapat diproses. Hubungi admin.',
+                    'message' => 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.',
                 ], 422);
             }
         }

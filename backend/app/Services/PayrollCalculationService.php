@@ -15,6 +15,7 @@ use App\Services\AllowanceCalculationService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PayrollCalculationService
 {
@@ -517,60 +518,80 @@ class PayrollCalculationService
             $existing = $payrolls->get($employee->id);
 
             if ($existing) {
-                // Already generated
-                $alg = strtoupper($existing->salary_alg ?? 'AES');
-                if ($alg === 'HYBRID') {
-                    $dec = CryptoService::decryptHybridPayrollRow([
-                        'dek_enc' => $existing->dek_enc,
-                        'enc_meta' => $existing->enc_meta,
-                        'gaji_pokok_enc' => $existing->gaji_pokok_enc,
-                        'tunjangan_enc' => $existing->tunjangan_enc,
-                        'potongan_enc' => $existing->potongan_enc,
-                        'total_enc' => $existing->total_enc,
+                try {
+                    // Already generated
+                    $alg = strtoupper($existing->salary_alg ?? 'AES');
+                    if ($alg === 'HYBRID') {
+                        $dec = CryptoService::decryptHybridPayrollRow([
+                            'dek_enc' => $existing->dek_enc,
+                            'enc_meta' => $existing->enc_meta,
+                            'gaji_pokok_enc' => $existing->gaji_pokok_enc,
+                            'tunjangan_enc' => $existing->tunjangan_enc,
+                            'potongan_enc' => $existing->potongan_enc,
+                            'total_enc' => $existing->total_enc,
+                        ]);
+                        $gaji_pokok = $dec['gaji_pokok'] ?? 0;
+                        $tunjangan = $dec['tunjangan'] ?? 0;
+                        $potongan = $dec['potongan'] ?? 0;
+                        $nett = $dec['total'] ?? 0;
+                    } else {
+                        $gaji_pokok = CryptoService::readEncryptedOrPlainSafe($existing->gaji_pokok_enc, $existing->gaji_pokok, $alg);
+                        $tunjangan = CryptoService::readEncryptedOrPlainSafe($existing->tunjangan_enc, $existing->tunjangan, $alg);
+                        $potongan = CryptoService::readEncryptedOrPlainSafe($existing->potongan_enc, $existing->potongan, $alg);
+                        $nett = CryptoService::readEncryptedOrPlainSafe($existing->total_enc, $existing->total, $alg);
+                    }
+
+                    $gaji_pokok = (float) $gaji_pokok;
+                    $tunjangan = (float) $tunjangan;
+                    $potongan = (float) $potongan;
+                    $nett = (float) $nett;
+
+                    $total_gaji_pokok += $gaji_pokok;
+                    $total_allowances += $tunjangan;
+                    $total_deductions += $potongan;
+                    $total_nett += $nett;
+
+                    $generated++;
+
+                    $recap = DB::table('monthly_recaps')
+                        ->where('employee_id', $employee->id)
+                        ->where('period_month', $periodMonth)
+                        ->first();
+
+                    $results[] = [
+                        'employee_id' => $employee->id,
+                        'employee_name' => $employee->name,
+                        'bank_name' => $employee->bank_name,
+                        'bank_account_number' => $employee->bank_account_number,
+                        'status' => 'generated',
+                        'payroll_id' => $existing->id,
+                        'payroll_status' => $existing->status,
+                        'rejection_reason' => $existing->status === 'rejected' ? $existing->approval_note : null,
+                        'total_mandays' => $recap->total_mandays ?? 0,
+                        'gaji_pokok' => $gaji_pokok,
+                        'total_allowances' => $tunjangan,
+                        'total_deductions' => $potongan,
+                        'total_nett' => $nett,
+                    ];
+                } catch (\Throwable $e) {
+                    // Gagal tertutup untuk record ini saja. Pesan teknis tidak
+                    // boleh dikirim ke pengguna atau menghentikan payroll lain.
+                    Log::warning('Payroll tidak dapat diverifikasi saat batch preview.', [
+                        'payroll_id' => $existing->id,
+                        'employee_id' => $employee->id,
+                        'exception' => $e::class,
                     ]);
-                    $gaji_pokok = $dec['gaji_pokok'] ?? 0;
-                    $tunjangan = $dec['tunjangan'] ?? 0;
-                    $potongan = $dec['potongan'] ?? 0;
-                    $nett = $dec['total'] ?? 0;
-                } else {
-                    $gaji_pokok = CryptoService::readEncryptedOrPlainSafe($existing->gaji_pokok_enc, $existing->gaji_pokok, $alg);
-                    $tunjangan = CryptoService::readEncryptedOrPlainSafe($existing->tunjangan_enc, $existing->tunjangan, $alg);
-                    $potongan = CryptoService::readEncryptedOrPlainSafe($existing->potongan_enc, $existing->potongan, $alg);
-                    $nett = CryptoService::readEncryptedOrPlainSafe($existing->total_enc, $existing->total, $alg);
+
+                    $failed++;
+                    $results[] = [
+                        'employee_id' => $employee->id,
+                        'employee_name' => $employee->name,
+                        'status' => 'unavailable',
+                        'payroll_id' => $existing->id,
+                        'payroll_status' => $existing->status,
+                        'message' => 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.',
+                    ];
                 }
-
-                $gaji_pokok = (float) $gaji_pokok;
-                $tunjangan = (float) $tunjangan;
-                $potongan = (float) $potongan;
-                $nett = (float) $nett;
-
-                $total_gaji_pokok += $gaji_pokok;
-                $total_allowances += $tunjangan;
-                $total_deductions += $potongan;
-                $total_nett += $nett;
-
-                $generated++;
-                
-                $recap = \Illuminate\Support\Facades\DB::table('monthly_recaps')
-                    ->where('employee_id', $employee->id)
-                    ->where('period_month', $periodMonth)
-                    ->first();
-                
-                $results[] = [
-                    'employee_id' => $employee->id,
-                    'employee_name' => $employee->name,
-                    'bank_name' => $employee->bank_name,
-                    'bank_account_number' => $employee->bank_account_number,
-                    'status' => 'generated',
-                    'payroll_id' => $existing->id,
-                    'payroll_status' => $existing->status,
-                    'rejection_reason' => $existing->status === 'rejected' ? $existing->approval_note : null,
-                    'total_mandays' => $recap->total_mandays ?? 0,
-                    'gaji_pokok' => $gaji_pokok,
-                    'total_allowances' => $tunjangan,
-                    'total_deductions' => $potongan,
-                    'total_nett' => $nett,
-                ];
                 continue;
             }
 
