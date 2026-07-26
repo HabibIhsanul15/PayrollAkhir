@@ -49,8 +49,8 @@ class PayrollBenchmarkCsvCommand extends Command
         $this->info('Melakukan warm-up agar proses inisialisasi tidak masuk hasil pengukuran...');
 
         foreach (['AES', 'RSA', 'HYBRID'] as $algorithm) {
-            config(['crypto.payroll_write_alg' => $algorithm]);
-            $pack = $cipherService->encrypt($rows[0]);
+            $pack = $cipherService->encrypt($rows[0], $algorithm);
+            $this->assertPackMatchesAlgorithm($pack, $algorithm);
             $this->decryptPack($pack, $algorithm);
         }
 
@@ -131,13 +131,13 @@ class PayrollBenchmarkCsvCommand extends Command
         array $rows,
         int $iteration
     ): array {
-        config(['crypto.payroll_write_alg' => $algorithm]);
-
         $packs = [];
 
         $start = hrtime(true);
         foreach ($rows as $row) {
-            $packs[] = $cipherService->encrypt($row);
+            $pack = $cipherService->encrypt($row, $algorithm);
+            $this->assertPackMatchesAlgorithm($pack, $algorithm);
+            $packs[] = $pack;
         }
         $createMs = $this->elapsedMs($start);
 
@@ -204,6 +204,25 @@ class PayrollBenchmarkCsvCommand extends Command
         }
 
         return $result;
+    }
+
+    /** @param array<string, mixed> $pack */
+    private function assertPackMatchesAlgorithm(array $pack, string $algorithm): void
+    {
+        $actual = strtoupper((string) ($pack['alg'] ?? ''));
+        if ($actual !== $algorithm) {
+            throw new RuntimeException(
+                "Benchmark {$algorithm} menghasilkan paket {$actual}; hasil tidak boleh dicatat."
+            );
+        }
+
+        $hasDek = ! empty($pack['dek_enc']) && ! empty($pack['enc_meta']);
+        if ($algorithm === 'HYBRID' && ! $hasDek) {
+            throw new RuntimeException('Paket Hybrid tidak memiliki DEK terbungkus dan metadata.');
+        }
+        if ($algorithm !== 'HYBRID' && $hasDek) {
+            throw new RuntimeException("Paket {$algorithm} tidak boleh memiliki DEK Hybrid.");
+        }
     }
 
     private function readDataset(string $file): array

@@ -6,9 +6,18 @@ use App\Models\Payroll;
 
 class PayrollCipherService
 {
-    public function encrypt(array $plain): array
+    /**
+     * @param 'AES'|'RSA'|'HYBRID'|null $algorithmOverride
+     */
+    public function encrypt(array $plain, ?string $algorithmOverride = null): array
     {
-        $alg = strtoupper(CryptoService::writeAlg());
+        // Aplikasi selalu mengikuti kebijakan CryptoService (HYBRID). Override
+        // hanya dipakai oleh command benchmark agar tiga metode dapat diuji
+        // secara terpisah tanpa mengubah perilaku penyimpanan payroll aplikasi.
+        $alg = strtoupper($algorithmOverride ?? CryptoService::writeAlg());
+        if (! in_array($alg, ['AES', 'RSA', 'HYBRID'], true)) {
+            throw new \InvalidArgumentException("Algoritma payroll tidak didukung: {$alg}");
+        }
         $plain = array_merge([
             'gaji_pokok' => 0,
             'tunjangan' => 0,
