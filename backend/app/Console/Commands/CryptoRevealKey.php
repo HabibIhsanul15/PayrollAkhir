@@ -17,10 +17,11 @@ class CryptoRevealKey extends Command
                             {--public : Tampilkan PEM public key aktif}
                             {--public-base64 : Tampilkan public key lengkap tanpa header/footer PEM}
                             {--components : Tampilkan komponen public RSA n dan e dalam hex}
+                            {--test-aes : LOCAL saja: tampilkan AES_KEY_128 untuk demonstrasi TA}
                             {--test-private : LOCAL saja: tampilkan private key PEM untuk demonstrasi TA}
                             {--test-private-base64 : LOCAL saja: tampilkan private key lengkap tanpa PEM untuk demonstrasi TA}
                             {--test-private-components : LOCAL saja: tampilkan komponen private RSA untuk demonstrasi TA}
-                            {--force : Konfirmasi eksplisit untuk opsi test private key}';
+                            {--force : Konfirmasi eksplisit untuk opsi test AES atau private key}';
 
     /**
      * The console command description.
@@ -34,6 +35,27 @@ class CryptoRevealKey extends Command
      */
     public function handle(): int
     {
+        $outputOptions = [
+            'public' => $this->option('public'),
+            'public-base64' => $this->option('public-base64'),
+            'components' => $this->option('components'),
+            'test-aes' => $this->option('test-aes'),
+            'test-private' => $this->option('test-private'),
+            'test-private-base64' => $this->option('test-private-base64'),
+            'test-private-components' => $this->option('test-private-components'),
+        ];
+        $selectedOptions = array_keys(array_filter($outputOptions));
+
+        if (count($selectedOptions) > 1) {
+            $this->error('Gunakan tepat satu opsi output key.');
+
+            return self::FAILURE;
+        }
+
+        if ($this->option('test-aes')) {
+            return $this->showTestAesKey();
+        }
+
         $key = CryptoKey::where('status', 'active')->first();
 
         if (! $key) {
@@ -67,22 +89,6 @@ class CryptoRevealKey extends Command
             ['Fingerprint SHA-256 public key', $fingerprint],
             ['Private key tersimpan terenkripsi', $key->private_key_pem_enc !== '' ? 'ya' : 'tidak'],
         ]);
-
-        $outputOptions = [
-            'public' => $this->option('public'),
-            'public-base64' => $this->option('public-base64'),
-            'components' => $this->option('components'),
-            'test-private' => $this->option('test-private'),
-            'test-private-base64' => $this->option('test-private-base64'),
-            'test-private-components' => $this->option('test-private-components'),
-        ];
-        $selectedOptions = array_keys(array_filter($outputOptions));
-
-        if (count($selectedOptions) > 1) {
-            $this->error('Gunakan tepat satu opsi output key.');
-
-            return self::FAILURE;
-        }
 
         if ($this->option('public')) {
             $this->newLine();
@@ -156,10 +162,46 @@ class CryptoRevealKey extends Command
                 $this->showRsaComponents($privateDetails, ['n', 'e', 'd', 'p', 'q', 'dmp1', 'dmq1', 'iqmp']);
             }
         } else {
-            $this->comment('Gunakan --public, --public-base64, atau --components; opsi private tersedia khusus demo pada APP_ENV=local.');
+            $this->comment('Gunakan --public, --public-base64, atau --components; opsi AES/private tersedia khusus demo pada APP_ENV=local.');
         }
 
         $this->comment('DEK dan ciphertext tidak pernah ditampilkan oleh command ini.');
+
+        return self::SUCCESS;
+    }
+
+    private function showTestAesKey(): int
+    {
+        if (! $this->laravel->environment('local')) {
+            $this->error('AES key hanya boleh ditampilkan pada APP_ENV=local.');
+
+            return self::FAILURE;
+        }
+
+        if (! $this->option('force')) {
+            $this->error('Tambahkan --force untuk mengonfirmasi tampilan AES key pada lingkungan testing.');
+
+            return self::FAILURE;
+        }
+
+        $key = (string) env('AES_KEY_128', '');
+        if (strlen($key) !== 16) {
+            $this->error('AES_KEY_128 tidak valid: harus tepat 16 byte untuk AES-128.');
+
+            return self::FAILURE;
+        }
+
+        $printableKey = preg_match('/^[\x20-\x7E]+$/', $key) ? $key : '[binary/non-printable]';
+
+        $this->warn('MODE DEMO TA: jangan salin AES key ke laporan, Git, atau aplikasi lain.');
+        $this->table(['Properti', 'Nilai'], [
+            ['Sumber', 'AES_KEY_128 (.env)'],
+            ['Algoritma', 'AES-128-GCM (mode AES-only)'],
+            ['Panjang', strlen($key) . ' byte / ' . (strlen($key) * 8) . ' bit'],
+            ['Key teks', $printableKey],
+            ['Key hex', strtoupper(bin2hex($key))],
+            ['Key Base64', base64_encode($key)],
+        ]);
 
         return self::SUCCESS;
     }
