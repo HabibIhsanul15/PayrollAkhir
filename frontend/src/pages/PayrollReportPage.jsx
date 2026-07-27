@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
+import { apiBlob } from "@/lib/api";
 import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
@@ -19,8 +20,7 @@ function StatusBadgeText({ status }) {
   return <StatusBadge status={status} variant="text" />;
 }
 
-function downloadText(filename, text) {
-  const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -31,21 +31,16 @@ function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function toCsv(rows) {
+function toCsv(rows, summary, period) {
   const headers = [
     "No",
-    "EmployeeCode",
-    "EmployeeName",
-    "BankName",
-    "BankAccountNumber",
-    "Periode",
-    "Status",
-    "GajiPokok",
+    "Kode Pegawai",
+    "Nama Pegawai",
+    "Jabatan",
+    "Gaji Pokok",
     "Tunjangan",
     "Potongan",
-    "Total",
-    "Alg",
-    "CreatedAt",
+    "Total Dibayarkan",
   ];
 
   const esc = (v) => {
@@ -54,8 +49,14 @@ function toCsv(rows) {
     return s;
   };
 
-  const lines = [];
-  lines.push(headers.join(","));
+  const lines = [
+    "sep=,",
+    ["LAPORAN PEMBAYARAN PAYROLL"].map(esc).join(","),
+    [`Periode ${monthLabel(period)} | Status: Sudah Dibayarkan`].map(esc).join(","),
+    [`Jumlah payroll: ${Number(summary.count || 0)} | Total dibayarkan: ${fmtRp(summary.sum_total || 0)}`].map(esc).join(","),
+    "",
+    headers.map(esc).join(","),
+  ];
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -64,16 +65,11 @@ function toCsv(rows) {
         i + 1,
         r.employee_code,
         r.employee_name,
-        r.bank_name || "-",
-        r.bank_account_number || "-",
-        r.period_month || r.periode,
-        r.status,
+        r.position_name || "Belum ditentukan",
         r.gaji_pokok,
         r.tunjangan,
         r.potongan,
         r.total,
-        r.salary_alg,
-        r.created_at,
       ]
         .map(esc)
         .join(",")
@@ -109,9 +105,18 @@ export default function PayrollReportPage() {
   }, [role]);
 
   function exportCsv() {
-    const csv = toCsv(rows);
-    const file = `payroll-report-${month}${status ? `-${status}` : ""}.csv`;
-    downloadText(file, csv);
+    const csv = toCsv(rows, summary, month);
+    const file = `laporan-payroll-${month}-paid.csv`;
+    downloadBlob(file, new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" }));
+  }
+
+  async function exportPdf() {
+    try {
+      const pdf = await apiBlob(`/reports/payroll/pdf?${qs.toString()}`);
+      downloadBlob(`laporan-payroll-${month}-paid.pdf`, pdf);
+    } catch (downloadError) {
+      window.alert(downloadError?.message || "Laporan PDF tidak dapat diunduh.");
+    }
   }
 
   return (
@@ -125,8 +130,15 @@ export default function PayrollReportPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-
-          <button 
+          <button
+            onClick={exportPdf}
+            disabled={loading || rows.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 rounded text-xs font-medium text-white hover:bg-teal-800 transition-colors disabled:opacity-50"
+          >
+            <FileText size={11} />
+            Unduh PDF
+          </button>
+          <button
             onClick={exportCsv}
             disabled={loading || rows.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded text-xs font-medium text-white hover:bg-slate-900 transition-colors disabled:opacity-50"
