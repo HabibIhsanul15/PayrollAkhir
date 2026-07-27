@@ -218,7 +218,7 @@ export default function PayrollDetailPage() {
 
   const isPaid = useMemo(() => String(row?.status || "").toLowerCase() === "paid", [row?.status]);
   const canRecalculate = useMemo(
-    () => isFat && ["draft", "rejected"].includes(row?.status) && row?.calculation_mode === "auto",
+    () => isFat && ["draft", "rejected"].includes(row?.status),
     [isFat, row]
   );
 
@@ -458,9 +458,6 @@ export default function PayrollDetailPage() {
                   )}
                   {row.status === "rejected" && (
                     <Badge className="bg-rose-500 text-white border-none">DITOLAK</Badge>
-                  )}
-                  {row.calculation_mode === "auto" && (
-                    <Badge className="bg-sky-500/20 text-sky-200 border-sky-500/30 backdrop-blur-md">AUTO-CALC</Badge>
                   )}
                 </div>
                 <div className="text-blue-200 text-sm mb-1 uppercase tracking-wider font-semibold">Take Home Pay</div>

@@ -37,7 +37,6 @@ return new class extends Migration
         $table->longText('tunjangan_enc')->nullable();
         $table->longText('potongan_enc')->nullable();
         
-        $table->string('calculation_mode', 20)->default('manual');
         $table->date('period_from')->nullable();
         $table->date('period_to')->nullable();
 

@@ -98,7 +98,7 @@ class PayrollReportController extends Controller
                 'period_from', 'period_to',
 
                 // meta
-                'calculation_mode', 'calculated_at',
+                'calculated_at',
                 'salary_alg',
                 'created_at',
                 'paid_at',
@@ -196,7 +196,6 @@ class PayrollReportController extends Controller
                 'potongan' => $pot,
                 'total' => $total,
 
-                'calculation_mode' => $p->calculation_mode,
                 'calculated_at' => $p->calculated_at,
 
                 'allowances' => $p->allowances,

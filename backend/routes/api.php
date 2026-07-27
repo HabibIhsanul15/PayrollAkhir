@@ -48,14 +48,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payrolls/{payroll}/recalculate', [\App\Http\Controllers\Api\PayrollCalculationController::class, 'recalculate']);
 
     Route::get('/payrolls', [PayrollController::class, 'index']);
-    Route::post('/payrolls', [PayrollController::class, 'store']);
 
     Route::post('/payrolls/{payroll}/submit', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'submit']);
     Route::post('/payrolls/{payroll}/approve', [\App\Http\Controllers\Api\PayrollWorkflowController::class, 'approve']);
 
     Route::get('/payrolls/{payroll}', [PayrollController::class, 'show']);
-    Route::put('/payrolls/{payroll}', [PayrollController::class, 'update']);
-    Route::patch('/payrolls/{payroll}', [PayrollController::class, 'update']);
     Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
 
     Route::apiResource('/special-deductions', \App\Http\Controllers\Api\SpecialDeductionController::class)

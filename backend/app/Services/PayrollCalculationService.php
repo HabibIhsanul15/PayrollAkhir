@@ -288,7 +288,6 @@ class PayrollCalculationService
             'total_nett' => $total_nett,
             'total_mandays' => $prereq['total_mandays'],
             'recaps' => $recapsSummary,
-            'calculation_mode' => 'auto',
             'message' => 'PPh 21 dan BPJS belum dihitung.',
         ];
     }
@@ -327,7 +326,6 @@ class PayrollCalculationService
                 'period_from' => $res['period_from'],
                 'period_to' => $res['period_to'],
                 'status' => 'draft',
-                'calculation_mode' => 'auto',
                 'calculated_at' => now(),
                 ...$encryptedPayroll,
             ]);
@@ -381,7 +379,6 @@ class PayrollCalculationService
                     'period_from' => $res['period_from'],
                     'period_to' => $res['period_to'],
                     'status' => 'draft',
-                    'calculation_mode' => 'auto',
                     'calculated_at' => now(),
                     ...$encryptedPayroll,
                 ]);
@@ -594,10 +591,6 @@ class PayrollCalculationService
         if (! in_array($payroll->status, ['draft', 'rejected'], true)) {
             throw new \Exception('Hanya payroll draft atau yang ditolak yang bisa direcalculate.');
         }
-        if ($payroll->calculation_mode !== 'auto') {
-            throw new \Exception('Hanya auto payroll yang bisa direcalculate.');
-        }
-
         $employee = $payroll->employee;
         $pm = Carbon::parse($payroll->period_from)->format('Y-m');
 

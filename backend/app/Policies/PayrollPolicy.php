@@ -24,14 +24,6 @@ class PayrollPolicy
         return (int)($payroll->employee?->user_id) === (int)$user->id;
     }
 
-    public function create(User $user): bool
-    {
-        return $user->role === 'fat';
-    }
-    public function update(User $user, Payroll $payroll): bool
-    {
-        return $user->role === 'fat';
-    }
     public function delete(User $user, Payroll $payroll): bool
     {
         return $user->role === 'fat';

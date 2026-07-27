@@ -21,7 +21,7 @@ class Payroll extends Model
         'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc',
         
         // metadata perhitungan
-        'calculation_mode', 'calculated_at',
+        'calculated_at',
         'period_from', 'period_to',
 
         // ✅ HYBRID fields
