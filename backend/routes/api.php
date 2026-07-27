@@ -31,7 +31,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
     Route::get('/dashboard/hcga', [DashboardController::class, 'hcga']); // ✅ HCGA dashboard (HR/Admin focus)
     Route::get('/reports/payroll', [PayrollReportController::class, 'index']);
-    Route::get('/reports/payroll/pdf', [PayrollReportController::class, 'pdf']);
 
     /*
     |--------------------------------------------------------------------------

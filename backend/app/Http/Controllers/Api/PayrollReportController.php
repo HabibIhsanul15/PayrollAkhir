@@ -8,7 +8,6 @@ use App\Models\PerfLog;
 use App\Models\Position;
 use App\Services\CryptoService;
 use App\Support\PayrollPeriodResolver;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -256,33 +255,4 @@ class PayrollReportController extends Controller
         ]);
     }
 
-    /**
-     * Unduh laporan pembayaran payroll dalam PDF.
-     * Angka dan filter selalu mengikuti endpoint laporan utama.
-     */
-    public function pdf(Request $request)
-    {
-        if (! in_array($this->roleOf($request->user()), ['fat', 'director'], true)) {
-            return $this->forbid();
-        }
-
-        // Memakai aturan filter, status paid, dan perhitungan yang sama dengan
-        // laporan utama agar isi layar dan dokumen tidak dapat berbeda.
-        $report = $this->index($request)->getData(true);
-        $month = (string) ($report['filters']['month'] ?? now()->format('Y-m'));
-
-        $pdf = Pdf::loadView('pdf.payroll-report', [
-            'companyName' => config('app.name', 'Payroll'),
-            'filters' => $report['filters'] ?? [],
-            'summary' => $report['summary'] ?? [],
-            'rows' => $report['rows'] ?? [],
-            'generatedAt' => now(),
-        ])->setPaper('A4', 'landscape');
-
-        $filename = 'laporan-payroll-'.$month.'-paid.pdf';
-
-        return response($pdf->output(), 200)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
-    }
 }

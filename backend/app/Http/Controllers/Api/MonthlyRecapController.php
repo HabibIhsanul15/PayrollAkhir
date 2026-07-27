@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MonthlyRecap;
 use App\Models\SalaryProfile;
+use App\Services\MutationRecapService;
 use App\Support\PayrollPeriodResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class MonthlyRecapController extends Controller
 {
+    public function __construct(private MutationRecapService $mutationRecaps) {}
+
     /**
      * Display a listing of the resource.
      */
@@ -58,6 +61,8 @@ class MonthlyRecapController extends Controller
 
         $employeeId = $validated['employee_id'];
         $periodMonth = $validated['period_month'];
+
+        $this->ensureNoPendingMutation($employeeId, $periodMonth);
 
         $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
@@ -188,6 +193,8 @@ class MonthlyRecapController extends Controller
             abort(422, 'Rekap tanpa kehadiran tidak dapat dikirim ke Finance.');
         }
 
+        $this->ensureNoPendingMutation($recap->employee_id, $recap->period_month);
+
         $recap->update([
             'is_finalized' => true,
             'finalized_by' => $request->user()->id,
@@ -207,6 +214,8 @@ class MonthlyRecapController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'period_month' => 'required|date_format:Y-m',
         ]);
+
+        $this->ensureNoPendingMutation($validated['employee_id'], $validated['period_month']);
 
         $recaps = MonthlyRecap::query()
             ->where('employee_id', $validated['employee_id'])
@@ -268,5 +277,13 @@ class MonthlyRecapController extends Controller
         $recap->delete();
 
         return response()->json(['message' => 'Deleted']);
+    }
+
+    private function ensureNoPendingMutation(int $employeeId, string $periodMonth): void
+    {
+        $mutation = $this->mutationRecaps->pendingForPeriod($employeeId, $periodMonth);
+        if ($mutation) {
+            abort(409, 'Rekap absensi periode ini dikunci karena pengajuan promosi/demosi masih menunggu persetujuan Direktur.');
+        }
     }
 }

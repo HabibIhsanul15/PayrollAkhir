@@ -6,11 +6,13 @@ use App\Models\AllowanceType;
 use App\Models\CryptoKey;
 use App\Models\Employee;
 use App\Models\MonthlyRecap;
+use App\Models\Payroll;
 use App\Models\Position;
 use App\Models\PositionAllowanceRate;
 use App\Models\SalaryProfile;
 use App\Models\User;
 use App\Services\SensitiveFieldCipherService;
+use App\Services\PayrollCalculationService;
 use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -21,10 +23,16 @@ class PayrollDemoSeeder extends Seeder
 {
     private const PASSWORD = 'Password123!';
 
+    private int $repairedPositionCiphers = 0;
+
     public function run(): void
     {
         $now = now();
-        $periodMonth = PayrollPeriodResolver::currentMonth();
+        $currentPeriodMonth = PayrollPeriodResolver::currentMonth();
+        $completedPeriodMonth = Carbon::createFromFormat('!Y-m', $currentPeriodMonth)
+            ->subMonth()
+            ->format('Y-m');
+        $completedAt = Carbon::parse(PayrollPeriodResolver::forMonth($completedPeriodMonth)->end_date)->endOfDay();
         $this->seedActiveRsaKey();
 
         $positions = $this->seedPositions();
@@ -33,7 +41,7 @@ class PayrollDemoSeeder extends Seeder
 
         $fat = $this->seedUser('Finance Admin', 'fat@payroll.test', 'fat');
         $this->seedUser('Admin HCGA', 'hcga@payroll.test', 'hcga');
-        $this->seedUser('Direktur', 'director@payroll.test', 'director');
+        $director = $this->seedUser('Direktur', 'director@payroll.test', 'director');
 
         $employees = [
             [
@@ -88,11 +96,14 @@ class PayrollDemoSeeder extends Seeder
 
         foreach ($employees as $data) {
             $user = $this->seedUser($data['name'], $data['email'], 'staff');
-            $this->seedEmployee($data, $user, $fat, $periodMonth, $now);
+            $this->seedEmployee($data, $user, $fat, $director, $completedPeriodMonth, $completedAt, $now);
         }
 
-        $this->command?->info('Data demo payroll berhasil dibuat.');
-        $this->command?->info('Password semua akun: '.self::PASSWORD);
+        $this->command?->info("Data demo payroll periode {$completedPeriodMonth} yang belum ada berhasil dibuat tanpa menimpa data yang sudah ada.");
+        if ($this->repairedPositionCiphers > 0) {
+            $this->command?->warn("{$this->repairedPositionCiphers} data enkripsi jabatan yang tidak konsisten telah dipulihkan dengan nilai potongan keterlambatan Rp0.");
+        }
+        $this->command?->info('Password demo untuk akun yang baru dibuat: '.self::PASSWORD);
     }
 
     /** @return array<string, Position> */
@@ -105,6 +116,7 @@ class PayrollDemoSeeder extends Seeder
                 'level' => 4,
                 'description' => 'Jabatan pimpinan proyek.',
                 'default_base_salary_amount' => 250000,
+                'default_late_penalty_amount' => 0,
             ],
             'manager' => [
                 'code' => 'manager',
@@ -112,6 +124,7 @@ class PayrollDemoSeeder extends Seeder
                 'level' => 5,
                 'description' => 'Jabatan manajerial.',
                 'default_base_salary_amount' => 450000,
+                'default_late_penalty_amount' => 0,
             ],
             'supervisor' => [
                 'code' => 'supervisor',
@@ -119,6 +132,7 @@ class PayrollDemoSeeder extends Seeder
                 'level' => 7,
                 'description' => 'Jabatan pengawas operasional.',
                 'default_base_salary_amount' => 350000,
+                'default_late_penalty_amount' => 0,
             ],
             'pegawai' => [
                 'code' => 'staff',
@@ -126,19 +140,33 @@ class PayrollDemoSeeder extends Seeder
                 'level' => 8,
                 'description' => 'Jabatan pegawai operasional.',
                 'default_base_salary_amount' => 250000,
+                'default_late_penalty_amount' => 0,
             ],
         ];
 
         foreach ($rows as $key => $row) {
             $baseSalary = $row['default_base_salary_amount'];
+            $latePenalty = $row['default_late_penalty_amount'];
             unset($row['default_base_salary_amount']);
-            $rows[$key] = Position::updateOrCreate(['code' => $row['code']], [
+            unset($row['default_late_penalty_amount']);
+
+            $position = Position::firstOrCreate(['code' => $row['code']], [
                 ...$row,
                 'is_active' => true,
                 ...app(SensitiveFieldCipherService::class)->encryptAttributes([
                     'default_base_salary_amount' => $baseSalary,
+                    'default_late_penalty_amount' => $latePenalty,
                 ]),
             ]);
+
+            // Seeder lama mengenkripsi ulang gaji pokok tanpa menyertakan nilai
+            // potongan keterlambatan. Akibatnya, cipher lama memakai DEK berbeda.
+            // Perbaikan ini hanya menyentuh field yang sudah tidak dapat didekripsi.
+            if (! $position->wasRecentlyCreated) {
+                $this->repairUnreadableLatePenaltyCipher($position, $latePenalty);
+            }
+
+            $rows[$key] = $position;
         }
 
         return $rows;
@@ -183,7 +211,7 @@ class PayrollDemoSeeder extends Seeder
         ];
 
         foreach ($rows as $key => $row) {
-            $rows[$key] = AllowanceType::updateOrCreate(['code' => $row['code']], $row + ['is_active' => true]);
+            $rows[$key] = AllowanceType::firstOrCreate(['code' => $row['code']], $row + ['is_active' => true]);
         }
 
         return $rows;
@@ -201,7 +229,7 @@ class PayrollDemoSeeder extends Seeder
 
         foreach ($rates as $positionKey => $allowanceRates) {
             foreach ($allowanceRates as $allowanceKey => $amount) {
-                PositionAllowanceRate::updateOrCreate([
+                PositionAllowanceRate::firstOrCreate([
                     'position_id' => $positions[$positionKey]->id,
                     'allowance_type_id' => $allowances[$allowanceKey]->id,
                 ], [
@@ -216,7 +244,7 @@ class PayrollDemoSeeder extends Seeder
 
     private function seedUser(string $name, string $email, string $role): User
     {
-        return User::updateOrCreate(['email' => $email], [
+        return User::firstOrCreate(['email' => $email], [
             'name' => $name,
             'password' => Hash::make(self::PASSWORD),
             'role' => $role,
@@ -286,14 +314,22 @@ class PayrollDemoSeeder extends Seeder
     }
 
     /** @param array<string, mixed> $data */
-    private function seedEmployee(array $data, User $user, User $fat, string $periodMonth, Carbon $now): void
+    private function seedEmployee(
+        array $data,
+        User $user,
+        User $fat,
+        User $director,
+        string $completedPeriodMonth,
+        Carbon $completedAt,
+        Carbon $now,
+    ): void
     {
         /** @var Position $position */
         $position = $data['position'];
         $effectiveFrom = $now->copy()->subYear()->startOfMonth()->toDateString();
         $cipher = app(SensitiveFieldCipherService::class);
 
-        $employee = Employee::updateOrCreate(['employee_code' => $data['code']], [
+        $employee = Employee::firstOrCreate(['employee_code' => $data['code']], [
             'user_id' => $user->id,
             'name' => $data['name'],
             'join_date' => $effectiveFrom,
@@ -311,7 +347,7 @@ class PayrollDemoSeeder extends Seeder
             ], 'pii_alg', 'pii_key_id'),
         ]);
 
-        $profile = SalaryProfile::updateOrCreate([
+        $profile = SalaryProfile::firstOrCreate([
             'employee_id' => $employee->id,
             'effective_from' => $effectiveFrom,
         ], [
@@ -326,16 +362,16 @@ class PayrollDemoSeeder extends Seeder
             ]),
         ]);
 
-        $employee->jobHistories()->updateOrCreate(['start_date' => $effectiveFrom], [
+        $employee->jobHistories()->firstOrCreate(['start_date' => $effectiveFrom], [
             'position_id' => $position->id,
             'status' => 'active',
             'notes' => 'Data demo awal.',
         ]);
 
-        MonthlyRecap::updateOrCreate([
+        $recap = MonthlyRecap::firstOrCreate([
             'employee_id' => $employee->id,
             'salary_profile_id' => $profile->id,
-            'period_month' => $periodMonth,
+            'period_month' => $completedPeriodMonth,
         ], [
             'wfo_days' => $data['wfo_days'],
             'wfh_days' => 0,
@@ -346,8 +382,77 @@ class PayrollDemoSeeder extends Seeder
             'late_count' => 0,
             'total_mandays' => $data['wfo_days'],
             'is_finalized' => true,
-            'finalized_at' => $now,
+            'finalized_at' => $completedAt,
             'finalized_by' => $fat->id,
         ]);
+
+        if ($recap->wasRecentlyCreated) {
+            $this->seedCompletedPayroll($employee, $fat, $director, $completedPeriodMonth, $completedAt);
+        }
+    }
+
+    private function seedCompletedPayroll(
+        Employee $employee,
+        User $fat,
+        User $director,
+        string $periodMonth,
+        Carbon $completedAt,
+    ): void {
+        $period = PayrollPeriodResolver::forMonth($periodMonth);
+        $payroll = Payroll::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('periode', $period->start_date)
+            ->first();
+
+        if ($payroll) {
+            return;
+        }
+
+        $payroll = app(PayrollCalculationService::class)->calculateAndSave(
+            $employee->id,
+            $periodMonth,
+            $fat->id,
+        );
+
+        $payroll->update([
+            'status' => 'paid',
+            'requested_by' => $fat->id,
+            'requested_at' => $completedAt->copy()->subDays(3),
+            'approved_by' => $director->id,
+            'approved_at' => $completedAt->copy()->subDays(2),
+            'paid_by' => $fat->id,
+            'paid_at' => $completedAt,
+            'paid_ref' => 'SEED-'.str_replace('-', '', $periodMonth).'-'.str_pad((string) $employee->id, 4, '0', STR_PAD_LEFT),
+            'paid_note' => 'Data demo pembayaran payroll periode '.$periodMonth.'.',
+        ]);
+    }
+
+    private function repairUnreadableLatePenaltyCipher(Position $position, float|int $fallbackLatePenalty): void
+    {
+        $cipher = app(SensitiveFieldCipherService::class);
+
+        try {
+            $baseSalary = $cipher->decryptField($position, 'default_base_salary_amount');
+        } catch (\Throwable $e) {
+            $this->command?->warn("Jabatan {$position->code} tidak diperbaiki karena gaji pokoknya juga tidak dapat didekripsi.");
+
+            return;
+        }
+
+        try {
+            $cipher->decryptField($position, 'default_late_penalty_amount');
+
+            return;
+        } catch (\Throwable $e) {
+            // Nilai cipher lama sudah tidak bisa dipulihkan. Gunakan nilai default
+            // demo (Rp0), lalu enkripsi ulang bersama gaji pokok yang masih utuh.
+        }
+
+        $position->update($cipher->encryptAttributes([
+            'default_base_salary_amount' => $baseSalary,
+            'default_late_penalty_amount' => $fallbackLatePenalty,
+        ]));
+
+        $this->repairedPositionCiphers++;
     }
 }

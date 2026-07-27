@@ -61,6 +61,7 @@ export default function MonthlyRecapPage() {
 
   const { data: rawRecaps, mutate: mutateRecaps } = useSWR(`/monthly-recaps?period_month=${period}`);
   const { data: rawEmployees } = useSWR("/employees");
+  const { data: rawMutationRequests } = useSWR(isHCGA ? "/mutation-requests" : null);
 
   const recaps = useMemo(() => (Array.isArray(rawRecaps) ? rawRecaps : []), [rawRecaps]);
   const groupedRecaps = useMemo(() => {
@@ -127,13 +128,29 @@ export default function MonthlyRecapPage() {
     () => (Array.isArray(rawEmployees) ? rawEmployees : (rawEmployees?.data || [])),
     [rawEmployees]
   );
+  const pendingMutationEmployeeIds = useMemo(() => {
+    const requests = Array.isArray(rawMutationRequests)
+      ? rawMutationRequests
+      : (rawMutationRequests?.data || []);
+
+    return new Set(requests
+      .filter((request) => {
+        if (request.status !== "pending") return false;
+        const datePart = String(request.effective_date || "").slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+        return currentPayrollMonth(new Date(`${datePart}T00:00:00`)) === period;
+      })
+      .map((request) => String(request.employee_id)));
+  }, [rawMutationRequests, period]);
+  const hasPendingMutation = (employeeId) => pendingMutationEmployeeIds.has(String(employeeId));
   const employeesAvailableForCreate = useMemo(
     () => employees.filter((employee) => !groupedRecaps.some(
       (group) => String(group.employee_id) === String(employee.id)
-    )),
-    [employees, groupedRecaps]
+    ) && !pendingMutationEmployeeIds.has(String(employee.id))),
+    [employees, groupedRecaps, pendingMutationEmployeeIds]
   );
   const selectedEmployee = employees.find((employee) => String(employee.id) === String(selectedEmployeeId));
+  const selectedEmployeeHasPendingMutation = hasPendingMutation(selectedEmployeeId);
   const maxDays = useMemo(() => {
     if (!period) return 0;
     const [yearStr, monthStr] = period.split("-");
@@ -278,6 +295,15 @@ export default function MonthlyRecapPage() {
 
   const openEditModal = async (recap) => {
     const employeeId = recap.employee_id || recap.employee?.id;
+    if (hasPendingMutation(employeeId)) {
+      setNotice({
+        type: "error",
+        title: "Rekap Dikunci",
+        message: "Rekap periode ini tidak dapat diubah karena pengajuan promosi/demosi masih menunggu persetujuan Direktur.",
+      });
+      return;
+    }
+
     const employeeRecaps = recaps.filter((item) =>
       String(item.employee_id || item.employee?.id) === String(employeeId)
     ).filter((item) => !item.is_finalized);
@@ -292,6 +318,15 @@ export default function MonthlyRecapPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (selectedEmployeeHasPendingMutation) {
+      setNotice({
+        type: "error",
+        title: "Rekap Dikunci",
+        message: "Rekap periode ini tidak dapat disimpan karena pengajuan promosi/demosi masih menunggu persetujuan Direktur.",
+      });
+      return;
+    }
 
     if (totalPaidDays < 1) {
       setNotice({
@@ -346,6 +381,15 @@ export default function MonthlyRecapPage() {
   };
 
   const handleSubmitToFinance = async (group) => {
+    if (hasPendingMutation(group.employee_id)) {
+      setNotice({
+        type: "error",
+        title: "Rekap Dikunci",
+        message: "Rekap tidak dapat dikirim ke Finance selama pengajuan promosi/demosi periode ini masih pending.",
+      });
+      return;
+    }
+
     if (Number(group.total_attendance || 0) < 1) {
       setNotice({
         type: "error",
@@ -569,6 +613,12 @@ export default function MonthlyRecapPage() {
                 </div>
               )}
 
+              {selectedEmployeeHasPendingMutation && (
+                <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                  Rekap dikunci sementara karena pengajuan promosi/demosi untuk periode ini masih menunggu persetujuan Direktur.
+                </div>
+              )}
+
               {selectedEmployeeId && formRecaps.map((recap, index) => (
                 <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4 relative">
                   {(() => {
@@ -687,7 +737,7 @@ export default function MonthlyRecapPage() {
                 <Button type="button" variant="outline" className="mr-2" onClick={() => setShowModal(false)}>
                   Batal
                 </Button>
-                <Button type="submit" disabled={totalPaidDays < 1 || totalPaidDays > maxDays || hasAnyWarning}>Simpan Rekap</Button>
+                <Button type="submit" disabled={selectedEmployeeHasPendingMutation || totalPaidDays < 1 || totalPaidDays > maxDays || hasAnyWarning}>Simpan Rekap</Button>
               </div>
             </form>
           </div>

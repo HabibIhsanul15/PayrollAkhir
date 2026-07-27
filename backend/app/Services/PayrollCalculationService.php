@@ -127,6 +127,7 @@ class PayrollCalculationService
         $profilesData = $prereq['profilesData'];
         // Use the last profile as the "primary" profile for single-value references
         // (like base position allowance rate for display, though we use prorata for math)
+        $primaryProfileIndex = array_key_last($profilesData);
         $primaryProfileData = end($profilesData);
         $profile = $primaryProfileData['profile'];
         $positionNames = collect($profilesData)
@@ -157,20 +158,23 @@ class PayrollCalculationService
             array $detail,
             ?string $positionName = null
         ) use (&$accumulatedAllowances, $profilesData) {
+            $isProrated = count($profilesData) > 1
+                && ($detail['calculation_type'] ?? null) !== 'per_toddler';
+
             if (! isset($accumulatedAllowances[$typeCode])) {
                 $accumulatedAllowances[$typeCode] = [
                     'allowance_type_id' => $typeId,
                     'allowance_type' => $typeCode,
                     'allowance_label' => $typeName,
                     'amount' => 0,
-                    'rate_amount' => count($profilesData) > 1 ? null : $rate, // if prorated, rate is blended
+                    'rate_amount' => $isProrated ? null : $rate,
                     'mandays' => 0,
                     'calculation_detail' => [
                         ...$detail,
-                        ...(count($profilesData) === 1 && $rate !== null ? ['rate_amount' => $rate] : []),
+                        ...(! $isProrated && $rate !== null ? ['rate_amount' => $rate] : []),
                     ],
                 ];
-                if (count($profilesData) > 1) {
+                if ($isProrated) {
                     $accumulatedAllowances[$typeCode]['calculation_detail']['is_prorated'] = true;
                     $accumulatedAllowances[$typeCode]['calculation_detail']['segments'] = [];
                 }
@@ -189,7 +193,7 @@ class PayrollCalculationService
             if ($mandays !== null) {
                 $accumulatedAllowances[$typeCode]['mandays'] += $mandays;
             }
-            if (count($profilesData) > 1 && $amount > 0) {
+            if ($isProrated && $amount > 0) {
                 $accumulatedAllowances[$typeCode]['calculation_detail']['segments'][] = [
                     'grade' => $positionName,
                     'mandays' => $mandays,
@@ -199,7 +203,7 @@ class PayrollCalculationService
             }
         };
 
-        foreach ($profilesData as $pd) {
+        foreach ($profilesData as $profileIndex => $pd) {
             $r = $pd['recap'];
             $p = $pd['profile'];
             $segPositionId = $p['position_id'];
@@ -239,13 +243,15 @@ class PayrollCalculationService
                 $segPositionId,
                 $rateDate,
                 (float) $p['base_salary_amount'],
-                $ratio
+                $ratio,
+                $profileIndex === $primaryProfileIndex,
             );
 
             foreach ($calculatedAllowances as $calculated) {
                 $type = $calculated['type'];
                 $rate = $calculated['rate'];
-                $mandays = in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days'], true)
+                $mandays = $type->calculation_type !== 'per_toddler'
+                    && in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days'], true)
                     ? $calculated['units']
                     : null;
 

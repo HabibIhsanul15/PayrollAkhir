@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { getUser } from "@/lib/auth";
-import { apiBlob } from "@/lib/api";
 import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 import StatusBadge from "@/components/StatusBadge";
@@ -110,15 +109,6 @@ export default function PayrollReportPage() {
     downloadBlob(file, new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" }));
   }
 
-  async function exportPdf() {
-    try {
-      const pdf = await apiBlob(`/reports/payroll/pdf?${qs.toString()}`);
-      downloadBlob(`laporan-payroll-${month}-paid.pdf`, pdf);
-    } catch (downloadError) {
-      window.alert(downloadError?.message || "Laporan PDF tidak dapat diunduh.");
-    }
-  }
-
   return (
     <div>
       {/* Title + actions */}
@@ -130,14 +120,6 @@ export default function PayrollReportPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={exportPdf}
-            disabled={loading || rows.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 rounded text-xs font-medium text-white hover:bg-teal-800 transition-colors disabled:opacity-50"
-          >
-            <FileText size={11} />
-            Unduh PDF
-          </button>
           <button
             onClick={exportCsv}
             disabled={loading || rows.length === 0}
@@ -326,11 +308,15 @@ export default function PayrollReportPage() {
 function detailFormula(item) {
   const detail = item?.calculation_detail || {};
   const units = detail.units ?? item?.mandays;
-  const rate = Number(item?.rate_amount || 0);
+  const rate = Number(item?.rate_amount ?? detail.rate_amount ?? 0);
 
   if (!units || !rate) return "";
 
-  const unitLabel = detail.calculation_type === "per_trip" ? "perjalanan" : "hari";
+  const unitLabel = detail.calculation_type === "per_trip"
+    ? "perjalanan"
+    : detail.calculation_type === "per_toddler"
+      ? "anak"
+      : "hari";
   return `${Number(units).toLocaleString("id-ID")} ${unitLabel} × ${fmtRp(rate)}`;
 }
 

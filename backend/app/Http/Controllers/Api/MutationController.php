@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\JobHistory;
+use App\Models\MutationRequest;
 use App\Models\Position;
 use App\Services\AllowanceRateResolver;
+use App\Services\MutationRecapService;
 use App\Services\SensitiveFieldCipherService;
 use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
@@ -20,6 +22,7 @@ class MutationController extends Controller
     public function __construct(
         private AllowanceRateResolver $rateResolver,
         private SensitiveFieldCipherService $sensitiveCipher,
+        private MutationRecapService $mutationRecaps,
     ) {}
 
     private function resolveBaseSalaryPayload(Position $Position, array $data): array
@@ -47,6 +50,40 @@ class MutationController extends Controller
 
         $employee = Employee::findOrFail($id);
 
+        // Jalur mutasi langsung ini adalah jalur lama. Terapkan aturan yang
+        // sama dengan MutationRequestController agar pengajuan pending atau
+        // mutasi yang sudah disetujui tetapi belum efektif tidak dapat
+        // dilangkahi melalui endpoint ini.
+        $currentProfile = $employee->currentSalaryProfile();
+        $currentPositionId = $currentProfile?->position_id ?? $employee->position_id;
+
+        $activeMutation = MutationRequest::query()
+            ->where('employee_id', $employee->id)
+            ->where(function ($query) use ($currentPositionId) {
+                $query->where('status', 'pending')
+                    ->orWhere(function ($approved) use ($currentPositionId) {
+                        $approved->where('status', 'approved');
+
+                        if ($currentPositionId === null) {
+                            $approved->whereNotNull('target_position_id');
+
+                            return;
+                        }
+
+                        $approved->where('target_position_id', '<>', $currentPositionId);
+                    });
+            })
+            ->latest()
+            ->first();
+
+        if ($activeMutation) {
+            $message = $activeMutation->status === 'pending'
+                ? 'Karyawan masih memiliki pengajuan promosi/demosi yang menunggu persetujuan.'
+                : 'Karyawan masih memiliki promosi/demosi yang disetujui tetapi belum diterapkan ke jabatan target.';
+
+            return response()->json(['message' => $message], 409);
+        }
+
         $data = $request->validate([
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
@@ -59,6 +96,11 @@ class MutationController extends Controller
         $effectiveDateInput = Carbon::parse($data['effective_from'])->startOfDay();
 
         $effectiveDate = PayrollPeriodResolver::forDate($effectiveDateInput)->start_date->startOfDay();
+        if ($employee->join_date && $effectiveDate->lt(Carbon::parse($employee->join_date)->startOfDay())) {
+            throw ValidationException::withMessages([
+                'effective_from' => 'Periode promosi/demosi tidak boleh dimulai sebelum tanggal masuk karyawan.',
+            ]);
+        }
 
         $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
@@ -108,7 +150,7 @@ class MutationController extends Controller
                 ? (float) ($currentProfile->deduction_fixed ?? 0)
                 : 0;
 
-            $employee->salaryProfiles()->updateOrCreate(
+            $profile = $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
@@ -146,6 +188,9 @@ class MutationController extends Controller
             if (! $effectiveDate->isFuture()) {
                 $employee->update(['position_id' => $targetPosition->id]);
             }
+
+            $periodMonth = PayrollPeriodResolver::forDate($effectiveDate)->period_month;
+            $this->mutationRecaps->syncDraftRecapsToProfile($employee, $periodMonth, $profile);
         });
 
         return response()->json([

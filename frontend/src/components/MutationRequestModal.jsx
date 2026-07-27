@@ -120,6 +120,28 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       || (editData && Number(editData.employee_id) === Number(form.employee_id) ? editData.employee : null);
   }, [form.employee_id, employees, editData]);
 
+  const eligiblePeriods = useMemo(() => {
+    const joinDate = parseLocalDate(selectedEmployee?.join_date);
+    if (!joinDate) return periods;
+
+    return periods.filter((period) => {
+      const periodStart = parseLocalDate(period.start_date);
+      return periodStart && periodStart >= joinDate;
+    });
+  }, [periods, selectedEmployee]);
+
+  useEffect(() => {
+    if (editData || !selectedEmployee) return;
+
+    const selectedIsEligible = eligiblePeriods.some((period) => period.period_month === form.period_month);
+    if (!selectedIsEligible) {
+      setForm((current) => ({
+        ...current,
+        period_month: eligiblePeriods[0]?.period_month || "",
+      }));
+    }
+  }, [editData, selectedEmployee, eligiblePeriods, form.period_month]);
+
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
@@ -202,9 +224,9 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       if (Number(item.employee_id) !== Number(form.employee_id)) return false;
       if (editData && Number(item.id) === Number(editData.id)) return false;
       if (item.status === "pending") return true;
-      return item.status === "approved" && parseLocalDate(item.effective_date) > new Date();
+      return item.status === "approved" && Number(item.target_position_id) !== currentPositionId;
     }) || null;
-  }, [mutationRequests, form.employee_id, editData]);
+  }, [mutationRequests, form.employee_id, editData, currentPositionId]);
 
   const selectedPeriod = useMemo(
     () => periods.find((period) => period.period_month === form.period_month) || null,
@@ -281,7 +303,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
                     {activeMutation.status === "pending"
                       ? "Pengajuan promosi/demosi masih aktif."
-                      : `Promosi/demosi aktif sampai ${formatDate(activeMutation.effective_date)}.`}
+                      : `Promosi/demosi yang disetujui belum diterapkan ke jabatan target ${formatDate(activeMutation.effective_date)}.`}
                   </div>
                 )}
 
@@ -306,7 +328,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
                     >
                       <option value="">-- Pilih Bulan Payroll --</option>
-                      {periods.map((period) => (
+                      {eligiblePeriods.map((period) => (
                         <option key={period.period_month} value={period.period_month}>
                           {period.period_month}
                         </option>

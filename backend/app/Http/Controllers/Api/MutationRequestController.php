@@ -10,6 +10,7 @@ use App\Models\MutationRequest;
 use App\Models\Payroll;
 use App\Models\Position;
 use App\Services\AllowanceRateResolver;
+use App\Services\MutationRecapService;
 use App\Services\SensitiveFieldCipherService;
 use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
@@ -23,6 +24,7 @@ class MutationRequestController extends Controller
     public function __construct(
         private AllowanceRateResolver $rateResolver,
         private SensitiveFieldCipherService $sensitiveCipher,
+        private MutationRecapService $mutationRecaps,
     ) {}
 
     public function index(Request $request)
@@ -56,6 +58,9 @@ class MutationRequestController extends Controller
         ]);
 
         $employee = Employee::findOrFail($data['employee_id']);
+        $period = PayrollPeriodResolver::forMonth($data['period_month']);
+        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
+        $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
 
         $currentProfile = $employee->currentSalaryProfile();
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
@@ -90,12 +95,9 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $period = PayrollPeriodResolver::forMonth($data['period_month']);
-        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
-
         $mutationRequest = DB::transaction(function () use ($employee, $targetPosition, $data, $path, $effectiveDate, $user) {
             $lockedEmployee = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
-            $activeMutation = $this->activeMutationQuery($lockedEmployee->id)->first();
+            $activeMutation = $this->activeMutationQuery($lockedEmployee)->first();
             if ($activeMutation) {
                 abort(409, $this->activeMutationMessage($activeMutation));
             }
@@ -139,12 +141,13 @@ class MutationRequestController extends Controller
             $employee = $mutationRequest->employee;
             $targetPosition = $mutationRequest->targetPosition;
             $employee = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
-            $activeMutation = $this->activeMutationQuery($employee->id, $mutationRequest->id)->first();
+            $activeMutation = $this->activeMutationQuery($employee, $mutationRequest->id)->first();
             if ($activeMutation) {
                 abort(409, $this->activeMutationMessage($activeMutation));
             }
 
             $effectiveDate = Carbon::parse($mutationRequest->effective_date)->startOfDay();
+            $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
             $payrollLockMessage = $this->payrollLockMessage($employee, $effectiveDate);
             if ($payrollLockMessage) {
                 abort(409, $payrollLockMessage);
@@ -164,7 +167,7 @@ class MutationRequestController extends Controller
             $allowanceFixed = $currentProfile ? (float) ($currentProfile->allowance_fixed ?? 0) : 0;
             $deductionFixed = $currentProfile ? (float) ($currentProfile->deduction_fixed ?? 0) : 0;
 
-            $employee->salaryProfiles()->updateOrCreate(
+            $profile = $employee->salaryProfiles()->updateOrCreate(
                 ['effective_from' => $effectiveDate->toDateString()],
                 [
                     'position_id' => $targetPosition->id,
@@ -202,6 +205,9 @@ class MutationRequestController extends Controller
             if (! $effectiveDate->isFuture()) {
                 $employee->update(['position_id' => $targetPosition->id]);
             }
+
+            $periodMonth = PayrollPeriodResolver::forDate($effectiveDate)->period_month;
+            $this->mutationRecaps->syncDraftRecapsToProfile($employee, $periodMonth, $profile);
 
             $mutationRequest->update([
                 'status' => 'approved',
@@ -292,6 +298,9 @@ class MutationRequestController extends Controller
         ]);
 
         $employee = $mutationRequest->employee;
+        $period = PayrollPeriodResolver::forMonth($data['period_month']);
+        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
+        $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
         $currentProfile = $employee->currentSalaryProfile();
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
@@ -325,10 +334,7 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $period = PayrollPeriodResolver::forMonth($data['period_month']);
-        $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
-
-        $activeMutation = $this->activeMutationQuery($employee->id, $mutationRequest->id)->first();
+        $activeMutation = $this->activeMutationQuery($employee, $mutationRequest->id)->first();
         if ($activeMutation) {
             return response()->json(['message' => $this->activeMutationMessage($activeMutation)], 409);
         }
@@ -352,19 +358,44 @@ class MutationRequestController extends Controller
         ]);
     }
 
-    private function activeMutationQuery(int $employeeId, ?int $excludeId = null)
+    private function activeMutationQuery(Employee $employee, ?int $excludeId = null)
     {
+        $currentProfile = $employee->currentSalaryProfile();
+        $currentPositionId = $currentProfile?->position_id ?? $employee->position_id;
+
         return MutationRequest::query()
-            ->where('employee_id', $employeeId)
+            ->where('employee_id', $employee->id)
             ->when($excludeId, fn (mixed $query) => $query->where('id', '<>', $excludeId))
-            ->where(function (mixed $query) {
+            ->where(function (mixed $query) use ($currentPositionId) {
                 $query->where('status', 'pending')
-                    ->orWhere(function (mixed $approved) {
-                        $approved->where('status', 'approved')
-                            ->whereDate('effective_date', '>', Carbon::today()->toDateString());
+                    ->orWhere(function (mixed $approved) use ($currentPositionId) {
+                        $approved->where('status', 'approved');
+
+                        if ($currentPositionId === null) {
+                            $approved->whereNotNull('target_position_id');
+
+                            return;
+                        }
+
+                        $approved->where('target_position_id', '<>', $currentPositionId);
                     });
             })
             ->orderByDesc('created_at');
+    }
+
+    private function ensureEffectiveDateIsOnOrAfterJoinDate(Employee $employee, Carbon $effectiveDate): void
+    {
+        if (! $employee->join_date) {
+            return;
+        }
+
+        $joinDate = Carbon::parse($employee->join_date)->startOfDay();
+        if ($effectiveDate->lt($joinDate)) {
+            throw ValidationException::withMessages([
+                'period_month' => 'Periode promosi/demosi tidak boleh dimulai sebelum tanggal masuk karyawan ('
+                    .$joinDate->translatedFormat('d F Y').').',
+            ]);
+        }
     }
 
     private function activeMutationMessage(MutationRequest $mutation): string
@@ -373,9 +404,14 @@ class MutationRequestController extends Controller
             return 'Karyawan masih memiliki pengajuan promosi/demosi aktif.';
         }
 
-        return 'Pengajuan baru dapat dibuat setelah tanggal efektif '
-            .Carbon::parse($mutation->effective_date)->translatedFormat('d F Y')
-            .'.';
+        $effectiveDate = Carbon::parse($mutation->effective_date)->startOfDay();
+        if ($effectiveDate->isFuture()) {
+            return 'Pengajuan baru dapat dibuat setelah promosi/demosi berlaku pada '
+                .$effectiveDate->translatedFormat('d F Y').'.';
+        }
+
+        return 'Pengajuan promosi/demosi yang sudah disetujui belum diterapkan ke jabatan target. '
+            .'Periksa profil gaji dan riwayat jabatan karyawan terlebih dahulu.';
     }
 
     private function payrollLockMessage(Employee $employee, Carbon $effectiveDate): ?string

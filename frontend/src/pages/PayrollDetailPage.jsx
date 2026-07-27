@@ -45,6 +45,8 @@ function formatDetail(detail, mandays, rate_amount, allowanceName = "") {
   const nameLower = String(allowanceName || "").toLowerCase();
   if (nameLower.includes("trip") || nameLower.includes("perjalanan dinas")) {
     defaultTypeLabel = " (Per Perjalanan Dinas)";
+  } else if (nameLower.includes("anak")) {
+    defaultTypeLabel = " (Per Anak)";
   } else if (nameLower.includes("harian") || nameLower.includes("makan")) {
     defaultTypeLabel = " (Harian)";
   }
@@ -78,12 +80,14 @@ function formatDetail(detail, mandays, rate_amount, allowanceName = "") {
   let typeLabel = defaultTypeLabel;
   if (detail.num_trips != null) {
       typeLabel = " (Per Perjalanan Dinas)";
+  } else if (detail.num_toddlers != null) {
+      typeLabel = " (Per Anak)";
   } else if (mandays > 0 || detail.total_mandays != null || wfo != null || wfh != null || detail.mandays_outside_city != null || detail.out_of_town_days != null) {
       typeLabel = " (Harian)";
   }
 
-  if (rate_amount > 0 && (detail.num_trips != null || mandays > 0)) {
-      const multiplier = mandays > 0 ? mandays : (detail.num_trips || 1);
+  if (rate_amount > 0 && (detail.num_trips != null || detail.num_toddlers != null || mandays > 0)) {
+      const multiplier = detail.num_toddlers ?? (mandays > 0 ? mandays : (detail.num_trips || 1));
       desc += (desc ? " • " : "") + new Intl.NumberFormat("id-ID").format(rate_amount) + " x " + formatPlainNumber(multiplier);
       if (detail.multiplier != null) {
           desc += " x " + formatPlainNumber(detail.multiplier);
@@ -607,7 +611,12 @@ export default function PayrollDetailPage() {
                                 <div className="flex flex-col">
                                   <span className="font-semibold text-slate-800">{al.allowance_type?.name || al.allowance_type || 'Tunjangan'}</span>
                                   <span className="text-xs text-slate-500 mt-1">
-                                    {formatDetail(al.calculation_detail, al.mandays, (al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0, al.allowance_type?.name || al.allowance_type)}
+                                    {formatDetail(
+                                      al.calculation_detail,
+                                      al.mandays,
+                                      Number(al.calculation_detail?.rate_amount || 0) || ((al.mandays > 0 && !al.calculation_detail?.is_prorated) ? al.amount / al.mandays : 0),
+                                      al.allowance_type?.name || al.allowance_type,
+                                    )}
                                   </span>
                                 </div>
                                 <div className="flex flex-col items-end">

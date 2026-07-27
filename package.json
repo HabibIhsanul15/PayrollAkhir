@@ -9,7 +9,8 @@
   "scripts": {
     "backend": "cd backend && php artisan serve",
     "frontend": "cd frontend && npm run dev",
-    "dev": "concurrently -n backend,frontend \"npm run backend\" \"npm run frontend\"",
+    "scheduler": "cd backend && php artisan schedule:work",
+    "dev": "concurrently -n backend,frontend,scheduler \"npm run backend\" \"npm run frontend\" \"npm run scheduler\"",
     "migrate": "cd backend && php artisan migrate"
   },
   "repository": {

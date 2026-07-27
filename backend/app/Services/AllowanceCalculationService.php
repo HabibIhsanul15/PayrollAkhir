@@ -18,7 +18,8 @@ class AllowanceCalculationService
         int $positionId,
         CarbonInterface|string $date,
         float $baseSalaryAmount,
-        float $segmentRatio
+        float $segmentRatio,
+        bool $includePerToddler = true,
     ): array {
         $results = [];
 
@@ -29,6 +30,12 @@ class AllowanceCalculationService
             ->get();
 
         foreach ($types as $type) {
+            // Tunjangan anak bersifat bulanan: hanya dihitung sekali pada
+            // profil jabatan utama di periode payroll, bukan pada setiap segmen.
+            if ($type->calculation_type === 'per_toddler' && ! $includePerToddler) {
+                continue;
+            }
+
             $rate = $this->rateResolver->resolve($positionId, $type->id);
             if (! $rate) {
                 continue;
@@ -49,6 +56,7 @@ class AllowanceCalculationService
                 'detail' => [
                     'calculation_type' => $type->calculation_type,
                     'units' => $units,
+                    ...($type->calculation_type === 'per_toddler' ? ['num_toddlers' => $units] : []),
                 ],
             ];
         }
@@ -69,7 +77,7 @@ class AllowanceCalculationService
         $baseAmount = match ($type->calculation_type) {
             'flat' => $rateAmount * $segmentRatio,
             'per_mandays', 'per_trip' => $rateAmount * $units,
-            'per_toddler' => $rateAmount * (float) ($employee->num_toddlers ?? 0) * $segmentRatio,
+            'per_toddler' => $rateAmount * $units,
             default => 0.0,
         };
 
@@ -78,6 +86,10 @@ class AllowanceCalculationService
 
     private function units(Employee $employee, MonthlyRecap $recap, AllowanceType $type): float
     {
+        if ($type->calculation_type === 'per_toddler') {
+            return (float) ($employee->num_toddlers ?? 0);
+        }
+
         $source = $type->input_source ?: (
             $type->code === 'training'
                 ? 'training_days'

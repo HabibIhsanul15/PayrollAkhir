@@ -6,7 +6,6 @@ import { formatRupiah } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import AlertMessage from "@/components/AlertMessage";
-import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ConfirmProvider";
 import {
   Table,
@@ -16,6 +15,57 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
+
+const INPUT_SOURCE_LABELS = {
+  total_mandays: "Total hari dibayar",
+  training_days: "Hari training",
+  out_of_town_days: "Hari luar kota",
+  wfo_days: "Hari WFO",
+  wfh_days: "Hari WFH",
+  business_trips: "Jumlah perjalanan dinas",
+};
+
+function calculationMeta(allowance) {
+  const calculationType = allowance?.calculation_type || "per_mandays";
+  const inputSource = allowance?.input_source || (
+    calculationType === "per_trip" ? "business_trips" : "total_mandays"
+  );
+  const inputLabel = INPUT_SOURCE_LABELS[inputSource] || inputSource;
+
+  if (calculationType === "flat") {
+    return {
+      shortLabel: "Tetap bulanan",
+      inputLabel: "Nominal tetap bulanan (Rp)",
+      formula: "Tarif bulanan × proporsi periode jabatan",
+      helper: "Nominal berlaku per bulan dan akan diprorata bila dalam satu periode terdapat perubahan jabatan.",
+    };
+  }
+
+  if (calculationType === "per_toddler") {
+    return {
+      shortLabel: "Per balita",
+      inputLabel: "Tarif per balita (Rp)",
+      formula: "Tarif × jumlah balita",
+      helper: "Nominal tunjangan anak dihitung sekali untuk periode payroll, berdasarkan jumlah balita pada data karyawan.",
+    };
+  }
+
+  if (calculationType === "per_trip") {
+    return {
+      shortLabel: "Per perjalanan dinas",
+      inputLabel: "Tarif per perjalanan dinas (Rp)",
+      formula: "Tarif × jumlah perjalanan dinas",
+      helper: "Jumlah perjalanan diambil dari kolom perjalanan dinas pada rekap bulanan.",
+    };
+  }
+
+  return {
+    shortLabel: `Per ${inputLabel}`,
+    inputLabel: `Tarif per ${inputLabel} (Rp)`,
+    formula: `Tarif × ${inputLabel.toLowerCase()}`,
+    helper: `${inputLabel} diambil dari rekap absensi bulanan.`,
+  };
+}
 
 export default function PositionRatePage() {
   const user = getUser();
@@ -42,11 +92,6 @@ export default function PositionRatePage() {
 
   const rates = localRates;
 
-  function loadAll() {
-    setErr("");
-    mutate();
-  }
-
   // Modal / Form state
   const [modalOpen, setModalOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -56,6 +101,9 @@ export default function PositionRatePage() {
     allowance_type_id: "",
     rate_amount: "",
   });
+  const selectedPosition = positions.find((position) => String(position.id) === String(form.position_id));
+  const selectedAllowance = allowances.find((allowance) => String(allowance.id) === String(form.allowance_type_id));
+  const selectedCalculation = calculationMeta(selectedAllowance);
 
   // Create lookup map: garMap[position_id][allowance_type_id] = RateObject
   const garMap = useMemo(() => {
@@ -169,16 +217,6 @@ export default function PositionRatePage() {
             </p>
           </div>
 
-          <div>
-            <Button
-              variant="outline"
-              onClick={loadAll}
-              disabled={loading}
-              className="bg-white border border-border rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {loading ? "Refreshing..." : "Refresh Tarif"}
-            </Button>
-          </div>
         </div>
 
         <AlertMessage type="error" message={err} />
@@ -205,6 +243,9 @@ export default function PositionRatePage() {
                     {allowances.map((allowance) => (
                       <TableHead key={allowance.id} className="text-slate-700 text-center font-bold px-2 py-3 text-xs w-[140px]">
                         <div>{allowance.name}</div>
+                        <div className="mt-1 text-[10px] font-normal leading-tight text-slate-500">
+                          {calculationMeta(allowance).shortLabel}
+                        </div>
                       </TableHead>
                     ))}
                   </TableRow>
@@ -264,6 +305,9 @@ export default function PositionRatePage() {
                                       {formatRupiah(rateObj.rate_amount)}
                                     </div>
                                   )}
+                                  <div className="text-[10px] font-normal leading-tight text-slate-500">
+                                    {calculationMeta(allowance).shortLabel}
+                                  </div>
                                 </div>
                               ) : (
                                 <span className="text-slate-300 font-light">-</span>
@@ -289,18 +333,23 @@ export default function PositionRatePage() {
 
               <div className="mb-4 p-3 bg-slate-50 rounded border border-slate-100 text-xs text-slate-700 space-y-1">
                 <div>
-                  <strong>position:</strong> {positions.find((g) => g.id === form.position_id)?.name} ({positions.find((g) => g.id === form.position_id)?.code.toUpperCase()})
+                  <strong>Jabatan:</strong> {selectedPosition?.name} ({selectedPosition?.code?.toUpperCase()})
                 </div>
                 <div>
-                  <strong>Allowance:</strong> {allowances.find((a) => a.id === form.allowance_type_id)?.name}
+                  <strong>Tunjangan:</strong> {selectedAllowance?.name}
                 </div>
+                <div><strong>Cara hitung:</strong> {selectedCalculation.shortLabel}</div>
+                <div><strong>Rumus payroll:</strong> {selectedCalculation.formula}</div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Rate Amount (Rp)
+                    {selectedCalculation.inputLabel}
                   </label>
+                  <div className="mb-2 rounded border border-sky-100 bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-800">
+                    {selectedCalculation.helper}
+                  </div>
                   <CurrencyInput
                     value={form.rate_amount}
                     onChange={(value) => setForm({ ...form, rate_amount: value })}
