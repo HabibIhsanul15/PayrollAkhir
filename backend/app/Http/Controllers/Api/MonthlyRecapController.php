@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\MonthlyRecap;
-use App\Models\SalaryProfile;
 use App\Services\MutationRecapService;
 use App\Support\PayrollPeriodResolver;
 use Illuminate\Http\Request;
@@ -48,8 +48,9 @@ class MonthlyRecapController extends Controller
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'period_month' => 'required|date_format:Y-m',
-            'recaps' => 'required|array|min:1',
-            'recaps.*.salary_profile_id' => 'nullable|exists:salary_profiles,id',
+            // Satu payroll period selalu memakai satu profile gaji. Profile
+            // ditentukan server dari tanggal awal periode, bukan dari input client.
+            'recaps' => 'required|array|size:1',
             'recaps.*.wfo_days' => 'integer|min:0',
             'recaps.*.wfh_days' => 'integer|min:0',
             'recaps.*.out_of_town_days' => 'integer|min:0',
@@ -66,29 +67,17 @@ class MonthlyRecapController extends Controller
 
         $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
+        $employee = Employee::findOrFail($employeeId);
+        $salaryProfile = $employee->currentSalaryProfile($payrollPeriod->start_date->toDateString());
 
-        $totalSubmittedMandays = 0;
-        $requestedProfileKeys = [];
-
-        foreach ($validated['recaps'] as $index => $recapData) {
-            $totalSubmittedMandays += $this->recapMandays($recapData);
-
-            $salaryProfileId = $recapData['salary_profile_id'] ?? null;
-            if ($salaryProfileId && ! SalaryProfile::where('id', $salaryProfileId)->where('employee_id', $employeeId)->exists()) {
-                throw ValidationException::withMessages([
-                    "recaps.{$index}.salary_profile_id" => 'Profil gaji tidak sesuai dengan karyawan yang dipilih.',
-                ]);
-            }
-
-            $profileKey = $salaryProfileId === null ? 'without-profile' : (string) $salaryProfileId;
-            if (in_array($profileKey, $requestedProfileKeys, true)) {
-                throw ValidationException::withMessages([
-                    "recaps.{$index}.salary_profile_id" => 'Satu profil gaji hanya boleh memiliki satu segmen rekap dalam periode yang sama.',
-                ]);
-            }
-
-            $requestedProfileKeys[] = $profileKey;
+        if (! $salaryProfile) {
+            throw ValidationException::withMessages([
+                'employee_id' => 'Profil gaji yang berlaku pada awal periode payroll tidak ditemukan.',
+            ]);
         }
+
+        $recapData = $validated['recaps'][0];
+        $totalSubmittedMandays = $this->recapMandays($recapData);
 
         if ($totalSubmittedMandays < 1) {
             throw ValidationException::withMessages([
@@ -113,59 +102,34 @@ class MonthlyRecapController extends Controller
             ]);
         }
 
-        if ($existingRecaps->isNotEmpty()) {
-            $existingProfileKeys = $existingRecaps
-                ->map(fn (MonthlyRecap $recap) => $recap->salary_profile_id === null ? 'without-profile' : (string) $recap->salary_profile_id)
-                ->sort()
-                ->values()
-                ->all();
-            $submittedProfileKeys = collect($requestedProfileKeys)->sort()->values()->all();
-
-            if ($existingProfileKeys !== $submittedProfileKeys) {
-                throw ValidationException::withMessages([
-                    'recaps' => 'Rekap untuk karyawan dan periode ini sudah ada. Gunakan Edit untuk memperbarui rekap yang sama.',
-                ]);
-            }
+        if ($existingRecaps->count() > 1) {
+            throw ValidationException::withMessages([
+                'recaps' => 'Data rekap periode ini tidak valid karena memiliki lebih dari satu profile gaji. Hubungi administrator untuk konsolidasi data.',
+            ]);
         }
 
-        $createdRecaps = [];
+        $data = [
+            'employee_id' => $employeeId,
+            'period_month' => $periodMonth,
+            'salary_profile_id' => $salaryProfile->id,
+            'wfo_days' => $recapData['wfo_days'] ?? 0,
+            'wfh_days' => $recapData['wfh_days'] ?? 0,
+            'out_of_town_days' => $recapData['out_of_town_days'] ?? 0,
+            'business_trips' => $recapData['business_trips'] ?? 0,
+            'training_days' => $recapData['training_days'] ?? 0,
+            'overtime_hours' => $recapData['overtime_hours'] ?? 0,
+            'late_count' => $recapData['late_count'] ?? 0,
+            'total_mandays' => $totalSubmittedMandays,
+        ];
 
-        foreach ($validated['recaps'] as $recapData) {
-            $totalMandays = $this->recapMandays($recapData);
-            $lookup = [
-                'employee_id' => $employeeId,
-                'period_month' => $periodMonth,
-                'salary_profile_id' => $recapData['salary_profile_id'] ?? null,
-            ];
-            $existingRecap = MonthlyRecap::where($lookup)->first();
-
-            if ($existingRecap?->is_finalized) {
-                throw ValidationException::withMessages([
-                    'recaps' => 'Rekap yang sudah dikirim ke Finance tidak dapat diedit.',
-                ]);
-            }
-
-            $data = [
-                'employee_id' => $employeeId,
-                'period_month' => $periodMonth,
-                'salary_profile_id' => $recapData['salary_profile_id'] ?? null,
-                'wfo_days' => $recapData['wfo_days'] ?? 0,
-                'wfh_days' => $recapData['wfh_days'] ?? 0,
-                'out_of_town_days' => $recapData['out_of_town_days'] ?? 0,
-                'business_trips' => $recapData['business_trips'] ?? 0,
-                'training_days' => $recapData['training_days'] ?? 0,
-                'overtime_hours' => $recapData['overtime_hours'] ?? 0,
-                'late_count' => $recapData['late_count'] ?? 0,
-                'total_mandays' => $totalMandays,
-            ];
-
-            $createdRecaps[] = MonthlyRecap::updateOrCreate(
-                $lookup,
-                $data
-            );
+        $recap = $existingRecaps->first();
+        if ($recap) {
+            $recap->update($data);
+        } else {
+            $recap = MonthlyRecap::create($data);
         }
 
-        return response()->json($createdRecaps, 201);
+        return response()->json([$recap], 201);
     }
 
     private function recapMandays(array $recapData): float

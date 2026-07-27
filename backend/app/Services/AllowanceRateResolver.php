@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\AllowanceType;
 use App\Models\PositionAllowanceRate;
-use Carbon\CarbonInterface;
 
 class AllowanceRateResolver
 {

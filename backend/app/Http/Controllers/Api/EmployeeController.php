@@ -791,22 +791,23 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        // delete employee: hanya HCGA
+        // Nonaktifkan employee: hanya HCGA.
         if (! $this->inRoles($user, ['hcga'])) {
             return $this->forbid();
         }
 
-        if ($employee->payrolls()->exists()) {
+        if ($employee->status === 'inactive') {
             return response()->json([
-                'message' => 'Employee tidak bisa dihapus karena sudah memiliki payroll.',
+                'message' => 'Employee sudah berstatus tidak aktif.',
             ], 422);
         }
 
-        $employee->salaryProfiles()->delete();
-        $employee->jobHistories()->delete();
-        $employee->delete();
+        // Riwayat payroll, profil gaji, dan jabatan harus tetap tersimpan untuk
+        // kebutuhan laporan/audit. Akun staff yang terhubung juga tidak dapat
+        // login lagi karena status employee bukan active.
+        $employee->update(['status' => 'inactive']);
 
-        return response()->json(['message' => 'Employee deleted']);
+        return response()->json(['message' => 'Employee berhasil dinonaktifkan.']);
     }
 
     public function jobHistories(Request $request, Employee $employee)

@@ -4,9 +4,8 @@ namespace App\Services;
 
 use App\Models\AllowanceType;
 use App\Models\Employee;
-use App\Models\PositionAllowanceRate;
 use App\Models\MonthlyRecap;
-use Carbon\CarbonInterface;
+use App\Models\PositionAllowanceRate;
 
 class AllowanceCalculationService
 {
@@ -16,10 +15,6 @@ class AllowanceCalculationService
         Employee $employee,
         MonthlyRecap $recap,
         int $positionId,
-        CarbonInterface|string $date,
-        float $baseSalaryAmount,
-        float $segmentRatio,
-        bool $includePerToddler = true,
     ): array {
         $results = [];
 
@@ -30,19 +25,13 @@ class AllowanceCalculationService
             ->get();
 
         foreach ($types as $type) {
-            // Tunjangan anak bersifat bulanan: hanya dihitung sekali pada
-            // profil jabatan utama di periode payroll, bukan pada setiap segmen.
-            if ($type->calculation_type === 'per_toddler' && ! $includePerToddler) {
-                continue;
-            }
-
             $rate = $this->rateResolver->resolve($positionId, $type->id);
             if (! $rate) {
                 continue;
             }
 
             $units = $this->units($employee, $recap, $type);
-            $amount = $this->amount($employee, $type, $rate, $units, $baseSalaryAmount, $segmentRatio);
+            $amount = $this->amount($type, $rate, $units);
 
             if ($amount <= 0) {
                 continue;
@@ -65,17 +54,14 @@ class AllowanceCalculationService
     }
 
     private function amount(
-        Employee $employee,
         AllowanceType $type,
         PositionAllowanceRate $rate,
         float $units,
-        float $baseSalaryAmount,
-        float $segmentRatio
     ): float {
         $rateAmount = (float) ($rate->rate_amount ?? 0);
 
         $baseAmount = match ($type->calculation_type) {
-            'flat' => $rateAmount * $segmentRatio,
+            'flat' => $rateAmount,
             'per_mandays', 'per_trip' => $rateAmount * $units,
             'per_toddler' => $rateAmount * $units,
             default => 0.0,

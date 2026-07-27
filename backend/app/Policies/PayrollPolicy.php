@@ -41,9 +41,14 @@ class PayrollPolicy
     {
         return $user->role === 'fat';
     }
-    public function batch(User $user): bool
+    public function batchPreview(User $user): bool
     {
         return in_array($user->role, ['fat', 'director'], true);
+    }
+
+    public function batchGenerate(User $user): bool
+    {
+        return $user->role === 'fat';
     }
     public function recalculate(User $user, Payroll $payroll): bool
     {

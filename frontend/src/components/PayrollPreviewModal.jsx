@@ -220,53 +220,17 @@ export default function PayrollPreviewModal({
               <div>
                 <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b">Rincian Pendapatan</h4>
                 <div className="space-y-2 text-sm">
-                  {data.base_salary_segments && data.base_salary_segments.length > 0 ? (
-                    <div className="mb-2">
-                      <div className="text-slate-600 font-medium">Gaji Pokok</div>
-                      <div className="pl-4 space-y-1 mt-1 text-xs">
-                        {data.base_salary_segments.map((seg, i) => (
-                          <div key={i} className="flex min-w-0 justify-between gap-4 text-slate-500">
-                            <span className="min-w-0 break-words">- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
-                            <span className="shrink-0">{formatRupiah(seg.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-sm font-medium border-t border-slate-100 mt-1 pt-1">
-                        <span className="text-slate-600">Total Gaji Pokok</span>
-                        <span>{formatRupiah(data.gaji_pokok)}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex justify-between mb-2">
-                      <span className="text-slate-600">Gaji Pokok</span>
-                      <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between mb-2">
+                    <span className="text-slate-600">Gaji Pokok</span>
+                    <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
+                  </div>
 
                   {data.allowances?.map((al, i) => (
                     <div key={i} className="mb-2">
-                      {al.calculation_detail?.is_prorated && al.calculation_detail?.segments?.length > 0 ? (
-                        <>
-                          <div className="text-slate-600 font-medium">{al.allowance_label || al.allowance_type}</div>
-                          <div className="pl-4 space-y-1 mt-1 text-xs">
-                            {al.calculation_detail.segments.map((seg, idx) => (
-                              <div key={idx} className="flex min-w-0 justify-between gap-4 text-slate-500">
-                                <span className="min-w-0 break-words">- {seg.position} {seg.mandays ? `(${seg.mandays} Hari)` : ''}</span>
-                                <span className="shrink-0">{formatRupiah(seg.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex justify-between text-sm font-medium border-t border-slate-100 mt-1 pt-1">
-                            <span className="text-slate-600">Total {al.allowance_label || al.allowance_type}</span>
-                            <span>{formatRupiah(al.amount)}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex min-w-0 justify-between gap-4">
-                          <span className="min-w-0 break-words text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
-                          <span className="shrink-0 font-medium">{formatRupiah(al.amount)}</span>
-                        </div>
-                      )}
+                      <div className="flex min-w-0 justify-between gap-4">
+                        <span className="min-w-0 break-words text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
+                        <span className="shrink-0 font-medium">{formatRupiah(al.amount)}</span>
+                      </div>
                     </div>
                   ))}
                   <div className="flex justify-between pt-2 border-t mt-2">

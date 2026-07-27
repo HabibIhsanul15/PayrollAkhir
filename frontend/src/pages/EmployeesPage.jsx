@@ -10,7 +10,7 @@ import AvatarInitial from "@/components/AvatarInitial";
 import AlertMessage from "@/components/AlertMessage";
 import Pagination from "@/components/Pagination";
 
-import { Search, ChevronDown, Plus, Trash2, Eye, FileText } from "lucide-react";
+import { Search, ChevronDown, Plus, UserX, Eye, FileText } from "lucide-react";
 
 export default function EmployeesPage() {
   const nav = useNavigate();
@@ -36,17 +36,17 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
-  const onDelete = async (id) => {
+  const onDeactivate = async (id) => {
     if (!isHCGA) return;
 
-    const ok = await confirm("Yakin mau hapus employee ini?");
+    const ok = await confirm("Nonaktifkan employee ini? Riwayat payroll dan data pegawai tetap disimpan.");
     if (!ok) return;
 
     try {
       await api(`/employees/${id}`, { method: "DELETE" });
       mutate(undefined, { revalidate: true }); // tell SWR to update in bg
     } catch (e) {
-      alert(e?.message || "Gagal menghapus employee.");
+      alert(e?.message || "Gagal menonaktifkan employee.");
     }
   };
 
@@ -253,14 +253,14 @@ export default function EmployeesPage() {
                         <Eye size={10} /> Detail
                       </button>
                       
-                      {isHCGA && (
+                      {isHCGA && row.status === "active" && (
                         <>
                           <button
-                            onClick={() => onDelete(row.id)}
+                            onClick={() => onDeactivate(row.id)}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
                           >
-                            <Trash2 size={9} />
-                            Hapus
+                            <UserX size={9} />
+                            Nonaktifkan
                           </button>
                         </>
                       )}

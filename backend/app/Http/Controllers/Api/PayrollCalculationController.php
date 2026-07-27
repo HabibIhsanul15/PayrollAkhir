@@ -37,7 +37,7 @@ class PayrollCalculationController extends Controller
 
     public function batchPreview(Request $request)
     {
-        if ($request->user()->cannot('batch', Payroll::class)) {
+        if ($request->user()->cannot('batchPreview', Payroll::class)) {
             abort(403);
         }
         $request->validate(['period_month' => 'required|date_format:Y-m']);
@@ -48,7 +48,7 @@ class PayrollCalculationController extends Controller
 
     public function batchGenerate(Request $request)
     {
-        if ($request->user()->cannot('batch', Payroll::class)) {
+        if ($request->user()->cannot('batchGenerate', Payroll::class)) {
             abort(403);
         }
         $request->validate(['period_month' => 'required|date_format:Y-m']);

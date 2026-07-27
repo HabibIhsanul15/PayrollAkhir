@@ -85,9 +85,11 @@ export default function EmployeeDetailPage() {
       npwp: isMasked ? maskValue(emp?.npwp) : emp?.npwp || "-",
       phone: isMasked ? maskValue(emp?.phone) : emp?.phone || "-",
       address: isMasked ? "**************" : emp?.address || "-",
-      bank: isMasked
-        ? `***** (${emp?.bank_name || "-"})`
-        : `${emp?.bank_account_number || "-"} a.n ${emp?.bank_account_name || "-"} (${emp?.bank_name || "-"})`,
+      bank_name: emp?.bank_name || "-",
+      bank_account_name: isMasked ? "**************" : emp?.bank_account_name || "-",
+      bank_account_number: isMasked
+        ? maskValue(emp?.bank_account_number)
+        : emp?.bank_account_number || "-",
     };
   }, [emp, masked, reveal]);
 

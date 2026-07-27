@@ -707,6 +707,12 @@ class PayrollController extends Controller
     {
         $this->authorize('update', $payroll);
 
+        if ($payroll->status !== 'draft') {
+            return response()->json([
+                'message' => 'Payroll hanya dapat diubah saat masih berstatus draft.',
+            ], 422);
+        }
+
         $data = $request->validate([
             'periode' => ['sometimes', 'date'],
             'gaji_pokok' => ['sometimes', 'numeric', 'min:0'],
@@ -846,6 +852,12 @@ class PayrollController extends Controller
     public function destroy(Payroll $payroll)
     {
         $this->authorize('delete', $payroll);
+
+        if ($payroll->status !== 'draft') {
+            return response()->json([
+                'message' => 'Payroll hanya dapat dihapus saat masih berstatus draft.',
+            ], 422);
+        }
 
         $payroll->delete();
 

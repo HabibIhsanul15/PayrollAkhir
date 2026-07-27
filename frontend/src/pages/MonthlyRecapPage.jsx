@@ -8,9 +8,8 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { currentPayrollMonth, monthLabel } from "@/lib/utils";
 import PeriodDisplay from "@/components/PeriodDisplay";
 
-function emptyRecap(salaryProfileId = "") {
+function emptyRecap() {
   return {
-    salary_profile_id: salaryProfileId,
     wfo_days: 0,
     wfh_days: 0,
     out_of_town_days: 0,
@@ -54,7 +53,6 @@ export default function MonthlyRecapPage() {
   const [showModal, setShowModal] = useState(false);
   const [notice, setNotice] = useState(null);
   const [formRecaps, setFormRecaps] = useState([emptyRecap()]);
-  const [employeeProfiles, setEmployeeProfiles] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [isEditingRecap, setIsEditingRecap] = useState(false);
   const [detailGroup, setDetailGroup] = useState(null);
@@ -223,71 +221,30 @@ export default function MonthlyRecapPage() {
 
   const fetchRecaps = () => mutateRecaps();
 
-  const fillRecapForm = (profiles, existingRecaps = null) => {
+  const fillRecapForm = (existingRecaps = null) => {
     if (existingRecaps?.length) {
-      setFormRecaps(existingRecaps.map((recap) => ({
-        salary_profile_id: recap.salary_profile_id || "",
+      const recap = existingRecaps[0];
+      setFormRecaps([{
         wfo_days: wholeInputValue(recap.wfo_days),
         wfh_days: wholeInputValue(recap.wfh_days),
         out_of_town_days: wholeInputValue(recap.out_of_town_days),
         business_trips: wholeInputValue(recap.business_trips),
         training_days: wholeInputValue(recap.training_days),
         late_count: wholeInputValue(recap.late_count),
-      })));
+      }]);
       return;
     }
 
-    const relevantProfiles = [];
-    for (const prof of profiles) {
-      const endOfMonth = `${period}-31`;
-      const startOfMonth = `${period}-01`;
-
-      if (prof.effective_from <= endOfMonth) {
-        relevantProfiles.push(prof);
-        if (prof.effective_from < startOfMonth) {
-          break;
-        }
-      }
-    }
-
-    relevantProfiles.reverse();
-
-    if (relevantProfiles.length > 0) {
-      setFormRecaps(relevantProfiles.map((prof) => emptyRecap(prof.id)));
-    } else {
-      setFormRecaps([emptyRecap()]);
-    }
+    setFormRecaps([emptyRecap()]);
   };
 
-  const loadEmployeeProfiles = async (empId, existingRecaps = null) => {
-    if (!empId) {
-      setEmployeeProfiles([]);
-      setFormRecaps([emptyRecap()]);
-      return;
-    }
-
-    try {
-      const res = await api(`/employees/${empId}/salary-profiles`);
-      const profiles = Array.isArray(res) ? res : [];
-      setEmployeeProfiles(profiles);
-      fillRecapForm(profiles, existingRecaps);
-    } catch (err) {
-      setNotice({
-        type: "error",
-        title: "Gagal Memuat Profil",
-        message: err?.message || "Profil gaji karyawan tidak dapat dimuat.",
-      });
-    }
-  };
-
-  const handleEmployeeChange = async (empId) => {
+  const handleEmployeeChange = (empId) => {
     setSelectedEmployeeId(empId);
-    await loadEmployeeProfiles(empId);
+    fillRecapForm();
   };
 
   const openCreateModal = () => {
     setSelectedEmployeeId("");
-    setEmployeeProfiles([]);
     setFormRecaps([emptyRecap()]);
     setIsEditingRecap(false);
     setShowModal(true);
@@ -311,7 +268,7 @@ export default function MonthlyRecapPage() {
     if (employeeRecaps.length === 0) return;
 
     setSelectedEmployeeId(String(employeeId));
-    await loadEmployeeProfiles(employeeId, employeeRecaps);
+    fillRecapForm(employeeRecaps);
     setIsEditingRecap(true);
     setShowModal(true);
   };
@@ -460,12 +417,6 @@ export default function MonthlyRecapPage() {
     setFormRecaps(newRecaps);
   };
   
-  const removeRecapRow = (index) => {
-    const newRecaps = [...formRecaps];
-    newRecaps.splice(index, 1);
-    setFormRecaps(newRecaps);
-  };
-
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -608,7 +559,7 @@ export default function MonthlyRecapPage() {
                     Total hari dibayar yang sedang diinput: <strong>{totalPaidDays} hari</strong>.
                   </div>
                   <div className="mt-1 text-blue-800">
-                    Rekap ini menjadi dasar perhitungan payroll untuk gaji pokok, tunjangan berbasis rekap, lembur, dan potongan keterlambatan.
+                    Rekap ini menjadi dasar perhitungan payroll untuk gaji pokok, tunjangan berbasis rekap, lembur, dan potongan keterlambatan. Profil gaji ditentukan otomatis oleh server berdasarkan awal periode payroll.
                   </div>
                 </div>
               )}
@@ -621,36 +572,6 @@ export default function MonthlyRecapPage() {
 
               {selectedEmployeeId && formRecaps.map((recap, index) => (
                 <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4 relative">
-                  {(() => {
-                    const prof = employeeProfiles.find(p => String(p.id) === String(recap.salary_profile_id));
-                    if (!prof) return null;
-                    return (
-                      <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                        <div className="font-semibold text-slate-900">{prof.position_name || "Jabatan"}</div>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                          <span>Mulai: {prof.effective_from}</span>
-                          <span>Segmen jabatan untuk rekap payroll</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {formRecaps.length > 1 && (
-                    <button type="button" onClick={() => removeRecapRow(index)} className="absolute top-4 right-4 text-rose-500 text-sm font-semibold hover:text-rose-700">
-                      Hapus
-                    </button>
-                  )}
-                  {formRecaps.length > 1 && (
-                    <div className="mb-2">
-                      <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
-                        Segmen Promosi/Demosi: {(() => {
-                          const prof = employeeProfiles.find(p => String(p.id) === String(recap.salary_profile_id));
-                          return prof ? `Mulai ${prof.effective_from} (Jabatan: ${prof.position_name})` : "Profil Tidak Ditemukan";
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                  
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-medium mb-1">Hari WFO</label>
@@ -715,7 +636,7 @@ export default function MonthlyRecapPage() {
                   )}
 
                   <div className="rounded bg-white px-3 py-2 text-xs text-slate-600">
-                    Total hari dibayar segmen ini: <strong>{recapPaidDays(recap)} hari</strong>
+                    Total hari dibayar: <strong>{recapPaidDays(recap)} hari</strong>
                   </div>
                 </div>
               ))}

@@ -31,64 +31,56 @@ class PayrollCalculationService
         if ($employee->status !== 'active') {
             return ['status' => false, 'error' => 'Employee tidak aktif.'];
         }
-        if (! $employee->position_id) {
-            return ['status' => false, 'error' => 'Position ID kosong.'];
-        }
-
         $recaps = MonthlyRecap::where('employee_id', $employee->id)->where('period_month', $periodMonth)->get();
         if ($recaps->isEmpty()) {
             return ['status' => false, 'error' => 'Rekap Bulanan (Monthly Recap) belum diinput.'];
         }
 
-        foreach ($recaps as $recap) {
-            if (! $recap->is_finalized) {
-                return ['status' => false, 'error' => 'Ada Rekap Bulanan yang belum difinalisasi oleh HCGA.'];
-            }
+        // Aturan bisnis: satu pegawai hanya boleh memiliki satu recap dan satu
+        // salary profile untuk satu periode payroll. Jangan pernah membagi
+        // perhitungan berdasarkan jabatan lama dan baru di tengah periode.
+        if ($recaps->count() !== 1) {
+            return ['status' => false, 'error' => 'Payroll tidak dapat dihitung karena terdapat lebih dari satu Rekap Bulanan pada periode ini.'];
+        }
+
+        $recap = $recaps->first();
+        if (! $recap->is_finalized) {
+            return ['status' => false, 'error' => 'Rekap Bulanan belum difinalisasi oleh HCGA.'];
         }
 
         $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $start = Carbon::parse($payrollPeriod->start_date);
         $end = Carbon::parse($payrollPeriod->end_date);
 
-        // Resolve profiles for each recap
-        $profilesData = [];
-        $fallbackProfile = $employee->currentSalaryProfile($start->toDateString());
+        // Periode payroll berjalan dari tanggal 28 bulan sebelumnya sampai
+        // tanggal 27 bulan berjalan. Profile ini adalah satu-satunya sumber
+        // jabatan dan tarif payroll untuk seluruh periode tersebut.
+        $periodProfile = $employee->currentSalaryProfile($start->toDateString());
 
-        if (! $fallbackProfile && $recaps->contains(fn (mixed $r) => ! $r->salary_profile_id)) {
-            return ['status' => false, 'error' => 'Salary profile aktif tidak ditemukan untuk sebagian rekap.'];
+        if (! $periodProfile) {
+            return ['status' => false, 'error' => 'Salary profile yang berlaku pada awal periode payroll tidak ditemukan.'];
         }
 
-        $totalRecapsMandays = 0;
+        if (! $periodProfile->position_id) {
+            return ['status' => false, 'error' => 'Jabatan pada salary profile periode payroll tidak ditemukan.'];
+        }
 
-        foreach ($recaps as $recap) {
-            $totalRecapsMandays += $recap->total_mandays;
-            $profile = $recap->salary_profile_id ? \App\Models\SalaryProfile::find($recap->salary_profile_id) : $fallbackProfile;
+        $periodPosition = Position::find($periodProfile->position_id);
+        if (! $periodPosition) {
+            return ['status' => false, 'error' => 'Data jabatan pada salary profile periode payroll tidak ditemukan.'];
+        }
 
-            if (! $profile) {
-                return ['status' => false, 'error' => 'Salary profile tidak ditemukan untuk rekap tertentu.'];
-            }
+        $recapProfileId = $recap->salary_profile_id;
+        if ($recapProfileId && (int) $recapProfileId !== (int) $periodProfile->id) {
+            return ['status' => false, 'error' => 'Salary profile pada Rekap Bulanan tidak sesuai dengan profile yang berlaku pada awal periode payroll.'];
+        }
 
-            $activePositionId = $profile->position_id ?? $employee->position_id;
-            $Position = $activePositionId ? \App\Models\Position::find($activePositionId) : null;
+        // Profile dan jabatan pada awal periode berlaku untuk seluruh payroll.
+        $positionAllowance = $this->resolvePositionAllowance($periodProfile, $periodPosition);
+        $baseSalary = $this->resolveBaseSalary($periodProfile, $periodPosition);
 
-            // Profile decrypt and fallback
-            $positionAllowanceDecrypted = $this->resolvePositionAllowance($profile, $Position, $start->toDateString());
-            $baseSalary = $this->resolveBaseSalary($profile, $Position, $employee);
-
-            if ($baseSalary['amount'] === null || $baseSalary['amount'] === '') {
-                return ['status' => false, 'error' => 'Gaji pokok default kosong pada salah satu profile.'];
-            }
-
-            $profilesData[] = [
-                'recap' => $recap,
-                'profile' => [
-                    'position_allowance' => $positionAllowanceDecrypted,
-                    'base_salary_amount' => $baseSalary['amount'],
-                    'position_id' => $activePositionId,
-                    'position_name' => $Position?->name,
-                    'effective_from' => $profile->effective_from->toDateString(),
-                ],
-            ];
+        if ($baseSalary['amount'] === null || $baseSalary['amount'] === '') {
+            return ['status' => false, 'error' => 'Gaji pokok default kosong pada salary profile periode payroll.'];
         }
 
         $periodeDate = $start->toDateString();
@@ -103,9 +95,14 @@ class PayrollCalculationService
 
         return [
             'status' => true,
-            'profilesData' => $profilesData,
-            'recaps' => $recaps,
-            'total_mandays' => $totalRecapsMandays, // combined total
+            'recap' => $recap,
+            'profile' => [
+                'position_allowance' => $positionAllowance,
+                'base_salary_amount' => $baseSalary['amount'],
+                'position_id' => $periodProfile->position_id,
+                'position_name' => $periodPosition->name,
+            ],
+            'total_mandays' => $recap->total_mandays,
             'periodFrom' => $start->toDateString(),
             'periodTo' => $end->toDateString(),
             'periode' => $periodeDate,
@@ -124,28 +121,14 @@ class PayrollCalculationService
             ];
         }
 
-        $profilesData = $prereq['profilesData'];
-        // Use the last profile as the "primary" profile for single-value references
-        // (like base position allowance rate for display, though we use prorata for math)
-        $primaryProfileIndex = array_key_last($profilesData);
-        $primaryProfileData = end($profilesData);
-        $profile = $primaryProfileData['profile'];
-        $positionNames = collect($profilesData)
-            ->pluck('profile.position_name')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-        $positionName = implode(' / ', $positionNames);
+        $recap = $prereq['recap'];
+        $profile = $prereq['profile'];
+        $positionName = $profile['position_name'];
 
         $blocking_warnings = [];
         $non_blocking_warnings = [];
 
-        $gaji_pokok = 0;
-        $totalPositionAllowance = 0;
-
-        $gaji_pokok = 0;
-        $base_salary_segments = [];
+        $gaji_pokok = (float) $profile['base_salary_amount'] * (float) $recap->total_mandays;
         $accumulatedAllowances = [];
 
         $addAllowance = function (
@@ -156,28 +139,20 @@ class PayrollCalculationService
             ?float $mandays,
             ?float $rate,
             array $detail,
-            ?string $positionName = null
-        ) use (&$accumulatedAllowances, $profilesData) {
-            $isProrated = count($profilesData) > 1
-                && ($detail['calculation_type'] ?? null) !== 'per_toddler';
-
+        ) use (&$accumulatedAllowances) {
             if (! isset($accumulatedAllowances[$typeCode])) {
                 $accumulatedAllowances[$typeCode] = [
                     'allowance_type_id' => $typeId,
                     'allowance_type' => $typeCode,
                     'allowance_label' => $typeName,
                     'amount' => 0,
-                    'rate_amount' => $isProrated ? null : $rate,
+                    'rate_amount' => $rate,
                     'mandays' => 0,
                     'calculation_detail' => [
                         ...$detail,
-                        ...(! $isProrated && $rate !== null ? ['rate_amount' => $rate] : []),
+                        ...($rate !== null ? ['rate_amount' => $rate] : []),
                     ],
                 ];
-                if ($isProrated) {
-                    $accumulatedAllowances[$typeCode]['calculation_detail']['is_prorated'] = true;
-                    $accumulatedAllowances[$typeCode]['calculation_detail']['segments'] = [];
-                }
             } else {
                 // accumulate numeric details
                 foreach ($detail as $k => $v) {
@@ -193,79 +168,46 @@ class PayrollCalculationService
             if ($mandays !== null) {
                 $accumulatedAllowances[$typeCode]['mandays'] += $mandays;
             }
-            if ($isProrated && $amount > 0) {
-                $accumulatedAllowances[$typeCode]['calculation_detail']['segments'][] = [
-                    'grade' => $positionName,
-                    'mandays' => $mandays,
-                    'rate' => $rate,
-                    'amount' => $amount,
-                ];
-            }
         };
 
-        foreach ($profilesData as $profileIndex => $pd) {
-            $r = $pd['recap'];
-            $p = $pd['profile'];
-            $segPositionId = $p['position_id'];
-
-            $segPositionName = 'Jabatan';
-            if (isset($p['position_id'])) {
-                $gr = \App\Models\Position::find($p['position_id']);
-                if ($gr) {
-                    $segPositionName = $gr->name;
-                }
-            }
-
-            // 1. Basic Salary
-            $ratio = $prereq['total_mandays'] > 0 ? ((float) $r->total_mandays / (float) $prereq['total_mandays']) : 0;
-            $segBaseSalary = (float) $p['base_salary_amount'] * (float) $r->total_mandays;
-            $gaji_pokok += $segBaseSalary;
-
-            if (count($profilesData) > 1 && $segBaseSalary > 0) {
-                $base_salary_segments[] = [
-                    'Position' => $segPositionName,
-                    'amount' => $segBaseSalary,
-                    'mandays' => $r->total_mandays,
-                ];
-            }
-
-            // 2. Position Allowance
-            $segPosAllow = (float) $p['position_allowance'] * $ratio;
-            $trPos = AllowanceType::where('code', 'position')->first();
-            if ($trPos && $segPosAllow > 0) {
-                $addAllowance($trPos->code, $trPos->id, $trPos->name, $segPosAllow, null, $p['position_allowance'], [], $segPositionName);
-            }
-
-            $rateDate = max($prereq['periodFrom'], $p['effective_from']);
-            $calculatedAllowances = $this->allowanceCalculator->calculate(
-                $employee,
-                $r,
-                $segPositionId,
-                $rateDate,
-                (float) $p['base_salary_amount'],
-                $ratio,
-                $profileIndex === $primaryProfileIndex,
+        // Tunjangan jabatan adalah nominal bulanan pada salary profile periode ini.
+        $positionAllowance = (float) $profile['position_allowance'];
+        $positionAllowanceType = AllowanceType::where('code', 'position')->first();
+        if ($positionAllowanceType && $positionAllowance > 0) {
+            $addAllowance(
+                $positionAllowanceType->code,
+                $positionAllowanceType->id,
+                $positionAllowanceType->name,
+                $positionAllowance,
+                null,
+                $positionAllowance,
+                [],
             );
+        }
 
-            foreach ($calculatedAllowances as $calculated) {
-                $type = $calculated['type'];
-                $rate = $calculated['rate'];
-                $mandays = $type->calculation_type !== 'per_toddler'
-                    && in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days'], true)
-                    ? $calculated['units']
-                    : null;
+        $calculatedAllowances = $this->allowanceCalculator->calculate(
+            $employee,
+            $recap,
+            $profile['position_id'],
+        );
 
-                $addAllowance(
-                    $type->code,
-                    $type->id,
-                    $type->name,
-                    $calculated['amount'],
-                    $mandays,
-                    $rate->rate_amount !== null ? (float) $rate->rate_amount : null,
-                    $calculated['detail'],
-                    $segPositionName
-                );
-            }
+        foreach ($calculatedAllowances as $calculated) {
+            $type = $calculated['type'];
+            $rate = $calculated['rate'];
+            $mandays = $type->calculation_type !== 'per_toddler'
+                && in_array($type->input_source, ['total_mandays', 'training_days', 'out_of_town_days', 'wfo_days', 'wfh_days'], true)
+                ? $calculated['units']
+                : null;
+
+            $addAllowance(
+                $type->code,
+                $type->id,
+                $type->name,
+                $calculated['amount'],
+                $mandays,
+                $rate->rate_amount !== null ? (float) $rate->rate_amount : null,
+                $calculated['detail'],
+            );
         }
 
         $allowances = array_values($accumulatedAllowances);
@@ -296,27 +238,11 @@ class PayrollCalculationService
             ];
         }
 
-        // Auto Late Penalty Deduction (per position)
-        $totalLateCount = 0;
-        $totalLatePenalty = 0;
-        foreach ($profilesData as $pd) {
-            $r = $pd['recap'];
-            $p = $pd['profile'];
-            $lateCount = (int) ($r->late_count ?? 0);
-            if ($lateCount <= 0) {
-                continue;
-            }
-
-            $totalLateCount += $lateCount;
-            $positionId = $p['position_id'] ?? null;
-            $position = $positionId ? \App\Models\Position::find($positionId) : null;
-            $penaltyPerCount = (float) ($position->default_late_penalty_amount ?? 0);
-
-            if ($penaltyPerCount > 0) {
-                $penaltyAmount = $lateCount * $penaltyPerCount;
-                $totalLatePenalty += $penaltyAmount;
-            }
-        }
+        // Auto Late Penalty Deduction memakai jabatan yang aktif pada awal periode.
+        $totalLateCount = (int) ($recap->late_count ?? 0);
+        $position = Position::find($profile['position_id']);
+        $penaltyPerCount = (float) ($position?->default_late_penalty_amount ?? 0);
+        $totalLatePenalty = $totalLateCount * $penaltyPerCount;
 
         if ($totalLatePenalty > 0) {
             $total_deductions += $totalLatePenalty;
@@ -332,19 +258,15 @@ class PayrollCalculationService
 
         $total_nett = $gaji_pokok + $total_allowances - $total_deductions;
 
-        // Build simplified recaps for frontend display
-        $recapsSummary = [];
-        foreach ($prereq['recaps'] as $rc) {
-            $recapsSummary[] = [
-                'wfo_days' => $rc->wfo_days ?? 0,
-                'wfh_days' => $rc->wfh_days ?? 0,
-                'out_of_town_days' => $rc->out_of_town_days ?? 0,
-                'training_days' => $rc->training_days ?? 0,
-                'total_mandays' => $rc->total_mandays ?? 0,
-                'late_count' => $rc->late_count ?? 0,
-                'business_trip_count' => $rc->business_trip_count ?? 0,
-            ];
-        }
+        $recapsSummary = [[
+            'wfo_days' => $recap->wfo_days ?? 0,
+            'wfh_days' => $recap->wfh_days ?? 0,
+            'out_of_town_days' => $recap->out_of_town_days ?? 0,
+            'training_days' => $recap->training_days ?? 0,
+            'total_mandays' => $recap->total_mandays ?? 0,
+            'late_count' => $recap->late_count ?? 0,
+            'business_trip_count' => $recap->business_trip_count ?? 0,
+        ]];
 
         return [
             'is_calculable' => count($blocking_warnings) === 0,
@@ -359,7 +281,6 @@ class PayrollCalculationService
             'period_to' => $prereq['periodTo'],
             'periode' => $prereq['periode'],
             'gaji_pokok' => $gaji_pokok,
-            'base_salary_segments' => $base_salary_segments,
             'allowances' => $allowances,
             'deductions' => $deductions_list,
             'total_allowances' => $total_allowances,
@@ -695,6 +616,7 @@ class PayrollCalculationService
             ]);
 
             $this->createAllowanceRows($payroll, $res['allowances']);
+            $this->createDeductionRows($payroll, $res['deductions'] ?? []);
 
             DB::commit();
 
@@ -705,18 +627,13 @@ class PayrollCalculationService
         }
     }
 
-    private function resolvePositionAllowance(SalaryProfile $profile, ?Position $Position, string $periodStart): string
+    private function resolvePositionAllowance(SalaryProfile $profile, ?Position $Position): string
     {
         $positionAllowanceDecrypted = $profile->position_allowance;
 
         // Nilai 0 pada profil lama berarti belum ada nominal khusus. Dalam kondisi
         // tersebut, gunakan tarif tunjangan jabatan dari master jabatan.
         if ($positionAllowanceDecrypted === null || $positionAllowanceDecrypted === '' || (float) $positionAllowanceDecrypted <= 0) {
-            if ($profile->position_allowance > 0) {
-                return (string) $profile->position_allowance;
-            }
-
-            $rateDate = max($periodStart, $profile->effective_from->toDateString());
             $posRate = $Position
                 ? $this->rateResolver->resolveByCode($Position->id, 'position')
                 : null;
@@ -727,7 +644,7 @@ class PayrollCalculationService
         return (string) $positionAllowanceDecrypted;
     }
 
-    private function resolveBaseSalary(SalaryProfile $profile, ?Position $Position, Employee $employee): array
+    private function resolveBaseSalary(SalaryProfile $profile, ?Position $Position): array
     {
         $amount = $profile->base_salary_amount;
 

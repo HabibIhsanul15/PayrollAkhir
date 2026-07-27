@@ -97,7 +97,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/employees/{employee}/salary-profiles', [EmployeeController::class, 'salaryProfilesList']);
     Route::post('/employees/{employee}/salary-profiles', [EmployeeController::class, 'storeSalaryProfile']);
     Route::get('/employees/{employee}/job-histories', [EmployeeController::class, 'jobHistories']);
-    Route::post('/employees/{employee}/mutate', [\App\Http\Controllers\Api\MutationController::class, 'store']);
 
     // Mutation Requests (Approvals)
     Route::get('/mutation-requests', [\App\Http\Controllers\Api\MutationRequestController::class, 'index']);
@@ -147,6 +146,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/monthly-recaps/{recap}/finalize', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'finalize']);
     Route::delete('/monthly-recaps/{recap}', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'destroy']);
 });
-
-// Hidden route for benchmark
-Route::get('/benchmark', [\App\Http\Controllers\Api\BenchmarkController::class, 'index']);
