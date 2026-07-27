@@ -11,7 +11,7 @@ use App\Models\PayrollDeduction;
 use App\Models\PerfLog;
 use App\Models\Position;
 use App\Models\SalaryProfile;
-use App\Services\AllowanceCalculationService;
+use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +19,6 @@ use Illuminate\Support\Facades\Log;
 
 class PayrollCalculationService
 {
-
     public function __construct(
         private AllowanceCalculationService $allowanceCalculator,
         private AllowanceRateResolver $rateResolver,
@@ -47,7 +46,7 @@ class PayrollCalculationService
             }
         }
 
-        $payrollPeriod = \App\Models\PayrollPeriod::forMonth($periodMonth);
+        $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $start = Carbon::parse($payrollPeriod->start_date);
         $end = Carbon::parse($payrollPeriod->end_date);
 
@@ -298,7 +297,9 @@ class PayrollCalculationService
             $r = $pd['recap'];
             $p = $pd['profile'];
             $lateCount = (int) ($r->late_count ?? 0);
-            if ($lateCount <= 0) continue;
+            if ($lateCount <= 0) {
+                continue;
+            }
 
             $totalLateCount += $lateCount;
             $positionId = $p['position_id'] ?? null;
@@ -423,7 +424,7 @@ class PayrollCalculationService
         $employees = Employee::where('status', 'active')
             ->whereHas('monthlyRecaps', function (Builder $q) use ($periodMonth) {
                 $q->where('period_month', $periodMonth)
-                  ->where('is_finalized', true);
+                    ->where('is_finalized', true);
             })
             ->get();
         $results = [];
@@ -496,10 +497,10 @@ class PayrollCalculationService
         $employees = Employee::where('status', 'active')
             ->whereHas('monthlyRecaps', function (Builder $q) use ($periodMonth) {
                 $q->where('period_month', $periodMonth)
-                  ->where('is_finalized', true);
+                    ->where('is_finalized', true);
             })
             ->get();
-        $payrollPeriod = \App\Models\PayrollPeriod::forMonth($periodMonth);
+        $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $periodeDate = Carbon::parse($payrollPeriod->start_date)->toDateString();
         $payrolls = Payroll::whereDate('periode', $periodeDate)->get()->keyBy('employee_id');
 
@@ -592,6 +593,7 @@ class PayrollCalculationService
                         'message' => 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.',
                     ];
                 }
+
                 continue;
             }
 
@@ -606,10 +608,10 @@ class PayrollCalculationService
                     throw new \Exception(implode(', ', $res['blocking_warnings']));
                 }
 
-                $gaji_pokok = (float)($res['gaji_pokok'] ?? 0);
-                $tunjangan = (float)($res['total_allowances'] ?? 0);
-                $potongan = (float)($res['total_deductions'] ?? 0);
-                $nett = (float)($res['total_nett'] ?? 0);
+                $gaji_pokok = (float) ($res['gaji_pokok'] ?? 0);
+                $tunjangan = (float) ($res['total_allowances'] ?? 0);
+                $potongan = (float) ($res['total_deductions'] ?? 0);
+                $nett = (float) ($res['total_nett'] ?? 0);
 
                 $total_gaji_pokok += $gaji_pokok;
                 $total_allowances += $tunjangan;

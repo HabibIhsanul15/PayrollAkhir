@@ -59,7 +59,7 @@
     
     $periodMonth = isset($payrollPeriod)
         ? $payrollPeriod->period_month
-        : \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
+        : \App\Support\PayrollPeriodResolver::forDate($payroll->periode)->period_month;
     $periodStr = \Carbon\Carbon::createFromFormat('Y-m', $periodMonth)->format('F Y');
     if ($payroll->period_from && $payroll->period_to) {
         $from = \Carbon\Carbon::parse($payroll->period_from);

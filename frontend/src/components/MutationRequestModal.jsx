@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { currentPayrollMonth, payrollPeriodOptions } from "@/lib/utils";
 import { X } from "lucide-react";
 
 const parseLocalDate = (value) => {
@@ -34,9 +35,7 @@ const getEditPeriodMonth = (editData) => {
   if (editData.period_month) return editData.period_month;
 
   const effectiveDate = parseLocalDate(editData.effective_date);
-  return effectiveDate
-    ? `${effectiveDate.getFullYear()}-${String(effectiveDate.getMonth() + 1).padStart(2, "0")}`
-    : "";
+  return effectiveDate ? currentPayrollMonth(effectiveDate) : "";
 };
 
 const formFromEdit = (editData) => ({
@@ -69,49 +68,33 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
         setLoading(true);
         try {
           if (editData) {
-            // Saat edit, data karyawan dan pengajuan sudah tersedia dari detail.
-            // Cukup ambil master jabatan dan periode yang diperlukan oleh form.
-            const [positionsRes, periodsRes] = await Promise.all([
-              api("/master/positions?active_only=1"),
-              api("/payroll-periods"),
-            ]);
+            // Periode dihitung dari aturan cut-off tetap, bukan dari master database.
+            const positionsRes = await api("/master/positions?active_only=1");
+            const periodList = payrollPeriodOptions(12, getEditPeriodMonth(editData));
 
             if (!active) return;
 
             setPositions(Array.isArray(positionsRes) ? positionsRes : []);
-            const periodList = Array.isArray(periodsRes) ? periodsRes : (periodsRes?.data || []);
             setPeriods(periodList);
             return;
           }
 
-          const [employeesRes, positionsRes, periodsRes, mutationRequestsRes] = await Promise.all([
+          const [employeesRes, positionsRes, mutationRequestsRes] = await Promise.all([
             api("/employees?status=active"),
             api("/master/positions?active_only=1"),
-            api("/payroll-periods"),
             api("/mutation-requests"),
           ]);
 
           if (active) {
             setEmployees(employeesRes?.data || (Array.isArray(employeesRes) ? employeesRes : []));
             setPositions(Array.isArray(positionsRes) ? positionsRes : []);
-            const periodList = Array.isArray(periodsRes) ? periodsRes : (periodsRes?.data || []);
+            const periodList = payrollPeriodOptions();
             setPeriods(periodList);
             setMutationRequests(Array.isArray(mutationRequestsRes) ? mutationRequestsRes : (mutationRequestsRes?.data || []));
 
-            const today = new Date();
-            const currentPeriod = periodList.find((period) => {
-              const start = parseLocalDate(period.start_date);
-              const end = parseLocalDate(period.end_date);
-              return start && end && today >= start && today <= end;
-            });
-            const firstAvailablePeriod = currentPeriod || periodList.find((period) => {
-              const end = parseLocalDate(period.end_date);
-              return end && end >= today;
-            });
-
             setForm({
               ...emptyForm(),
-              period_month: firstAvailablePeriod?.period_month || "",
+              period_month: periodList[0]?.period_month || "",
             });
           }
         } catch {
@@ -324,7 +307,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                     >
                       <option value="">-- Pilih Bulan Payroll --</option>
                       {periods.map((period) => (
-                        <option key={period.id} value={period.period_month}>
+                        <option key={period.period_month} value={period.period_month}>
                           {period.period_month}
                         </option>
                       ))}

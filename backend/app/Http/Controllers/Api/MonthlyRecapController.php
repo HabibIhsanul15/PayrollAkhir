@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MonthlyRecap;
 use App\Models\SalaryProfile;
-use App\Models\PayrollPeriod;
+use App\Support\PayrollPeriodResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,13 +19,12 @@ class MonthlyRecapController extends Controller
     {
         if ($request->user()->cannot('viewAny', MonthlyRecap::class)) {
             // Rekap hanya dipakai HCGA untuk input dan FAT untuk meninjau hasilnya.
-            if (!in_array(strtolower($request->user()->role), ['hcga', 'fat'], true)) {
+            if (! in_array(strtolower($request->user()->role), ['hcga', 'fat'], true)) {
                 abort(403);
             }
         }
 
-        $periodMonth = $request->query('period_month', PayrollPeriod::currentMonth());
-        PayrollPeriod::forMonth($periodMonth);
+        $periodMonth = $request->query('period_month', PayrollPeriodResolver::currentMonth());
 
         $recaps = MonthlyRecap::with('employee')
             ->where('period_month', $periodMonth)
@@ -59,8 +58,8 @@ class MonthlyRecapController extends Controller
 
         $employeeId = $validated['employee_id'];
         $periodMonth = $validated['period_month'];
-        
-        $payrollPeriod = PayrollPeriod::forMonth($periodMonth);
+
+        $payrollPeriod = PayrollPeriodResolver::forMonth($periodMonth);
         $maxDays = $payrollPeriod->start_date->diffInDays($payrollPeriod->end_date) + 1;
 
         $totalSubmittedMandays = 0;
@@ -267,7 +266,7 @@ class MonthlyRecapController extends Controller
         }
 
         $recap->delete();
+
         return response()->json(['message' => 'Deleted']);
     }
-
 }

@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\MutationRequest;
 use App\Models\Payroll;
-use App\Models\PayrollPeriod;
 use App\Services\CryptoService;
+use App\Support\PayrollPeriodResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -30,7 +30,8 @@ class DashboardController extends Controller
         if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
             return $month;
         }
-        return PayrollPeriod::currentMonth();
+
+        return PayrollPeriodResolver::currentMonth();
     }
 
     private function decryptPayrollTotal(Payroll $payroll): float
@@ -75,7 +76,7 @@ class DashboardController extends Controller
             return $this->forbid();
         }
 
-        $activeCount   = Employee::where('status', 'active')->count();
+        $activeCount = Employee::where('status', 'active')->count();
         $inactiveCount = Employee::where('status', 'inactive')->count();
 
         // employee belum punya akun (user_id null)
@@ -148,7 +149,7 @@ class DashboardController extends Controller
         $role = $this->roleOf($user);
 
         // yang boleh akses summary
-        if (!in_array($role, ['hcga', 'fat', 'director', 'staff'], true)) {
+        if (! in_array($role, ['hcga', 'fat', 'director', 'staff'], true)) {
             return $this->forbid();
         }
 
@@ -161,13 +162,13 @@ class DashboardController extends Controller
         try {
             [$start, $end] = $this->monthRange($month);
         } catch (\Throwable $e) {
-            $month = PayrollPeriod::currentMonth();
+            $month = PayrollPeriodResolver::currentMonth();
             [$start, $end] = $this->monthRange($month);
         }
 
         // ===== KPI: Employees =====
         // Ini harusnya selalu benar (kamu sudah buktiin di tinker ada 7)
-        $employeeActive   = Employee::where('status', 'active')->count();
+        $employeeActive = Employee::where('status', 'active')->count();
         $employeeInactive = Employee::where('status', 'inactive')->count();
 
         // ===== Payroll query (filtered by month) =====
@@ -176,7 +177,7 @@ class DashboardController extends Controller
 
         // Payroll dibuat oleh Finance, sehingga staff harus dibatasi melalui relasi
         // employee.user_id, bukan payrolls.user_id (pembuat payroll).
-        if (!$isPrivileged && $role === 'staff') {
+        if (! $isPrivileged && $role === 'staff') {
             $payrollQuery->whereHas('employee', fn (mixed $query) => $query->where('user_id', $user->id));
         }
 
@@ -311,7 +312,9 @@ class DashboardController extends Controller
 
         // ===== Recent payrolls =====
         $select = ['id', 'employee_id', 'periode', 'period_to', 'created_at'];
-        if (Schema::hasColumn('payrolls', 'status')) $select[] = 'status';
+        if (Schema::hasColumn('payrolls', 'status')) {
+            $select[] = 'status';
+        }
 
         $recentRows = (clone $payrollQuery)
             ->with(['employee:id,name,employee_code,position_id', 'employee.position:id,name'])
@@ -360,9 +363,10 @@ class DashboardController extends Controller
 
     private function monthRange(string $yyyyMm): array
     {
-        $period = PayrollPeriod::forMonth($yyyyMm);
+        $period = PayrollPeriodResolver::forMonth($yyyyMm);
         $start = Carbon::parse($period->start_date);
         $end = Carbon::parse($period->end_date);
+
         return [$start, $end];
     }
 
@@ -370,11 +374,13 @@ class DashboardController extends Controller
     {
         if (Schema::hasColumn('payrolls', 'periode')) {
             $query->whereBetween('periode', [$start->toDateString(), $end->toDateString()]);
+
             return;
         }
 
         if (Schema::hasColumn('payrolls', 'period_month')) {
             $query->where('period_month', $month);
+
             return;
         }
     }

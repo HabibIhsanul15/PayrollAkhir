@@ -4,15 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Position;
 use App\Models\JobHistory;
+use App\Models\MonthlyRecap;
 use App\Models\MutationRequest;
 use App\Models\Payroll;
-use App\Models\PayrollPeriod;
-use App\Models\MonthlyRecap;
+use App\Models\Position;
 use App\Services\AllowanceRateResolver;
-use App\Services\CryptoService;
 use App\Services\SensitiveFieldCipherService;
+use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +28,7 @@ class MutationRequestController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['hcga', 'director'], true)) {
+        if (! in_array($user->role, ['hcga', 'director'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -62,7 +61,7 @@ class MutationRequestController extends Controller
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
 
-        if (!$currentPosition || !$currentPosition->level) {
+        if (! $currentPosition || ! $currentPosition->level) {
             throw ValidationException::withMessages([
                 'position_id' => 'Jabatan saat ini belum memiliki level yang valid.',
             ]);
@@ -91,7 +90,7 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $period = PayrollPeriod::forMonth($data['period_month']);
+        $period = PayrollPeriodResolver::forMonth($data['period_month']);
         $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
 
         $mutationRequest = DB::transaction(function () use ($employee, $targetPosition, $data, $path, $effectiveDate, $user) {
@@ -158,7 +157,7 @@ class MutationRequestController extends Controller
             if ($amount <= 0) {
                 abort(422, 'Gaji pokok jabatan tujuan belum diatur. Lengkapi master gaji jabatan sebelum menyetujui pengajuan.');
             }
-            
+
             $positionRate = $this->rateResolver->resolveByCode($targetPosition->id, 'position');
             $baseAllowance = (float) ($positionRate?->rate_amount ?? 0);
 
@@ -216,15 +215,15 @@ class MutationRequestController extends Controller
     public function show(Request $request, int|string $id)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['hcga', 'director'], true)) {
+        if (! in_array($user->role, ['hcga', 'director'], true)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $mutationRequest = MutationRequest::with(['employee.position', 'targetPosition', 'requester', 'approver'])->findOrFail($id);
-        $period = PayrollPeriod::forDate($mutationRequest->effective_date);
+        $period = PayrollPeriodResolver::forDate($mutationRequest->effective_date);
 
         return response()->json(array_merge($mutationRequest->toArray(), [
-            'payroll_period' => $period?->only(['period_month', 'start_date', 'end_date', 'status']),
+            'payroll_period' => $period->toArray(),
         ]));
     }
 
@@ -241,7 +240,7 @@ class MutationRequestController extends Controller
         }
 
         $request->validate([
-            'rejection_reason' => 'required|string|max:1000'
+            'rejection_reason' => 'required|string|max:1000',
         ]);
 
         $mutationRequest->update([
@@ -297,7 +296,7 @@ class MutationRequestController extends Controller
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
 
-        if (!$currentPosition || !$currentPosition->level) {
+        if (! $currentPosition || ! $currentPosition->level) {
             throw ValidationException::withMessages([
                 'position_id' => 'Jabatan saat ini belum memiliki level yang valid.',
             ]);
@@ -326,7 +325,7 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $period = PayrollPeriod::forMonth($data['period_month']);
+        $period = PayrollPeriodResolver::forMonth($data['period_month']);
         $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
 
         $activeMutation = $this->activeMutationQuery($employee->id, $mutationRequest->id)->first();
@@ -381,7 +380,7 @@ class MutationRequestController extends Controller
 
     private function payrollLockMessage(Employee $employee, Carbon $effectiveDate): ?string
     {
-        $period = PayrollPeriod::forDate($effectiveDate);
+        $period = PayrollPeriodResolver::forDate($effectiveDate);
 
         if ($period && MonthlyRecap::query()
             ->where('employee_id', $employee->id)
@@ -414,6 +413,7 @@ class MutationRequestController extends Controller
         $status = $labels[$payroll->status] ?? $payroll->status;
 
         $periodMonth = $period?->period_month ?? $effectiveDate->format('Y-m');
+
         return "Payroll periode {$periodMonth} sudah diproses ({$status}).";
     }
 }

@@ -1,18 +1,15 @@
 <?php
 
-
 use App\Http\Controllers\Api\AllowanceTypeController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeductionTypeController;
 use App\Http\Controllers\Api\EmployeeController;
-
-use App\Http\Controllers\Api\PositionAllowanceRateController;
-use App\Http\Controllers\Api\PositionController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\PayrollReportController;
-
+use App\Http\Controllers\Api\PositionAllowanceRateController;
+use App\Http\Controllers\Api\PositionController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -111,7 +108,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/mutation-requests/{id}/approve', [\App\Http\Controllers\Api\MutationRequestController::class, 'approve']);
     Route::post('/mutation-requests/{id}/reject', [\App\Http\Controllers\Api\MutationRequestController::class, 'reject']);
 
-
     /*
     |--------------------------------------------------------------------------
     | ME (Profil user login)
@@ -150,8 +146,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/monthly-recaps/submit-to-finance', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'submitToFinance']);
     Route::post('/monthly-recaps/{recap}/finalize', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'finalize']);
     Route::delete('/monthly-recaps/{recap}', [\App\Http\Controllers\Api\MonthlyRecapController::class, 'destroy']);
-    Route::get('/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
-
 });
 
 // Hidden route for benchmark

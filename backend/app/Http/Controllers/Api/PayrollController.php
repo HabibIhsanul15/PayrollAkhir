@@ -6,10 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\MonthlyRecap;
 use App\Models\Payroll;
-use App\Models\PayrollPeriod;
 use App\Models\PerfLog;
 use App\Models\SalaryProfile;
 use App\Services\CryptoService;
+use App\Support\PayrollPeriodRange;
+use App\Support\PayrollPeriodResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,7 +56,7 @@ class PayrollController extends Controller
         }
 
         if ($request->filled('period_month')) {
-            $payrollPeriod = \App\Models\PayrollPeriod::forMonth($request->period_month);
+            $payrollPeriod = PayrollPeriodResolver::forMonth($request->period_month);
             $query->whereDate('periode', \Carbon\Carbon::parse($payrollPeriod->start_date)->toDateString());
         } elseif ($request->filled('periode')) {
             $query->whereDate('periode', $request->periode);
@@ -112,46 +113,46 @@ class PayrollController extends Controller
                 }
             }
 
-                $periodMonth = \App\Models\PayrollPeriod::forDate($p->periode)->period_month;
-                
-                $total_mandays = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
-                    ->where('period_month', $periodMonth)->sum('total_mandays');
+            $periodMonth = PayrollPeriodResolver::forDate($p->periode)->period_month;
 
-                return [
-                    'id' => $p->id,
-                    'user_id' => $p->user_id,
-                    'employee_id' => $p->employee_id,
-                    'employee_code' => $p->employee?->employee_code,
-                    'employee_name' => $p->employee?->name,
-                    'employee_status' => $p->employee?->status,
-                    ...($canSeeBank ? [
-                        'bank_name' => $p->employee?->bank_name,
-                        'bank_account_number' => $p->employee?->bank_account_number,
-                    ] : []),
+            $total_mandays = \App\Models\MonthlyRecap::where('employee_id', $p->employee_id)
+                ->where('period_month', $periodMonth)->sum('total_mandays');
 
-                    'created_by' => $p->user?->name,
-                    'periode' => optional($p->periode)->toDateString(),
-                    'period_month' => $periodMonth,
+            return [
+                'id' => $p->id,
+                'user_id' => $p->user_id,
+                'employee_id' => $p->employee_id,
+                'employee_code' => $p->employee?->employee_code,
+                'employee_name' => $p->employee?->name,
+                'employee_status' => $p->employee?->status,
+                ...($canSeeBank ? [
+                    'bank_name' => $p->employee?->bank_name,
+                    'bank_account_number' => $p->employee?->bank_account_number,
+                ] : []),
 
-                    'status' => $p->status ?? null,
-                    'salary_alg' => $p->salary_alg ?? null,
+                'created_by' => $p->user?->name,
+                'periode' => optional($p->periode)->toDateString(),
+                'period_month' => $periodMonth,
 
-                    'created_at' => optional($p->created_at)->toISOString(),
-                    'updated_at' => optional($p->updated_at)->toISOString(),
+                'status' => $p->status ?? null,
+                'salary_alg' => $p->salary_alg ?? null,
 
-                    'gaji_pokok' => $gaji,
-                    'tunjangan' => $tunj,
-                    'potongan' => $pot,
-                    'total' => $total,
-                    'total_mandays' => (float) $total_mandays,
+                'created_at' => optional($p->created_at)->toISOString(),
+                'updated_at' => optional($p->updated_at)->toISOString(),
 
-                    'masked' => ! $canSeeNominal,
-                    'data_unavailable' => $dataUnavailable,
-                    'message' => $dataUnavailable
-                        ? 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.'
-                        : null,
-                ];
-            });
+                'gaji_pokok' => $gaji,
+                'tunjangan' => $tunj,
+                'potongan' => $pot,
+                'total' => $total,
+                'total_mandays' => (float) $total_mandays,
+
+                'masked' => ! $canSeeNominal,
+                'data_unavailable' => $dataUnavailable,
+                'message' => $dataUnavailable
+                    ? 'Slip gaji sementara tidak dapat ditampilkan. Silakan hubungi administrator.'
+                    : null,
+            ];
+        });
 
         return response()->json($rows);
     }
@@ -181,7 +182,7 @@ class PayrollController extends Controller
         if (($user->role ?? 'staff') === 'staff' && $payroll->status !== 'paid') {
             return response()->json([
                 'locked' => true,
-                'message' => 'Slip Gaji Terkunci: Gaji Anda sedang dalam proses persetujuan dan belum ditransfer.'
+                'message' => 'Slip Gaji Terkunci: Gaji Anda sedang dalam proses persetujuan dan belum ditransfer.',
             ], 403);
         }
 
@@ -289,7 +290,7 @@ class PayrollController extends Controller
             // ignore
         }
 
-        $periodMonth = \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
+        $periodMonth = PayrollPeriodResolver::forDate($payroll->periode)->period_month;
 
         $employeePayload = $payroll->employee ? [
             'join_date' => optional($payroll->employee->join_date)->toDateString(),
@@ -462,7 +463,7 @@ class PayrollController extends Controller
             ? (float) $payroll->total
             : ($payroll->gaji_pokok + $payroll->tunjangan - $payroll->potongan);
 
-        $payrollPeriod = PayrollPeriod::forDate($payroll->periode);
+        $payrollPeriod = PayrollPeriodResolver::forDate($payroll->periode);
         $baseSalaryRows = $this->baseSalaryRows($payroll, $payrollPeriod);
         $payrollPosition = $baseSalaryRows !== []
             ? $baseSalaryRows[array_key_last($baseSalaryRows)]['position']
@@ -491,7 +492,7 @@ class PayrollController extends Controller
      *
      * @return array<int, array{position: ?\App\Models\Position, mandays: float, rate: float, amount: float}>
      */
-    private function baseSalaryRows(Payroll $payroll, PayrollPeriod $period): array
+    private function baseSalaryRows(Payroll $payroll, PayrollPeriodRange $period): array
     {
         if (! $payroll->employee_id) {
             return [];
@@ -554,7 +555,7 @@ class PayrollController extends Controller
             'auto_request' => ['nullable', 'boolean'],
         ]);
 
-        $payrollPeriod = \App\Models\PayrollPeriod::forDate($data['periode']);
+        $payrollPeriod = PayrollPeriodResolver::forDate($data['periode']);
         $periode = $payrollPeriod->start_date->startOfDay();
         $data['periode'] = $periode->toDateString();
         $autoRequest = (bool) ($request->input('auto_request', false));
@@ -754,7 +755,7 @@ class PayrollController extends Controller
         // 4) Handle periode
         $periode = null;
         if (array_key_exists('periode', $data)) {
-            $payrollPeriod = \App\Models\PayrollPeriod::forDate($data['periode']);
+            $payrollPeriod = PayrollPeriodResolver::forDate($data['periode']);
             $periode = $payrollPeriod->start_date->startOfDay();
             $data['periode'] = $periode->toDateString();
             $data['period_from'] = $payrollPeriod->start_date->toDateString();
@@ -961,7 +962,7 @@ class PayrollController extends Controller
 
     private function makePaidReference(Payroll $payroll): string
     {
-        $periodKey = \App\Models\PayrollPeriod::forDate($payroll->periode)->period_month;
+        $periodKey = PayrollPeriodResolver::forDate($payroll->periode)->period_month;
         $periodKey = str_replace('-', '', $periodKey);
         $payrollId = str_pad((string) $payroll->id, 5, '0', STR_PAD_LEFT);
 

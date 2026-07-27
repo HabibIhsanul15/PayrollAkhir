@@ -6,17 +6,16 @@ use App\Models\AllowanceType;
 use App\Models\CryptoKey;
 use App\Models\Employee;
 use App\Models\MonthlyRecap;
-use App\Models\PayrollPeriod;
 use App\Models\Position;
 use App\Models\PositionAllowanceRate;
 use App\Models\SalaryProfile;
 use App\Models\User;
-use App\Services\CryptoService;
 use App\Services\SensitiveFieldCipherService;
+use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Hash;
 
 class PayrollDemoSeeder extends Seeder
 {
@@ -25,8 +24,7 @@ class PayrollDemoSeeder extends Seeder
     public function run(): void
     {
         $now = now();
-        $periodMonth = PayrollPeriod::currentMonth();
-        PayrollPeriod::forMonth($periodMonth);
+        $periodMonth = PayrollPeriodResolver::currentMonth();
         $this->seedActiveRsaKey();
 
         $positions = $this->seedPositions();
@@ -230,6 +228,7 @@ class PayrollDemoSeeder extends Seeder
         $activeKey = CryptoKey::where('status', 'active')->latest('id')->first();
         if ($activeKey) {
             $this->assertRsaKeyIsUsable($activeKey);
+
             return;
         }
 

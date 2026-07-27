@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
-use App\Models\Position;
 use App\Models\JobHistory;
+use App\Models\Position;
 use App\Services\AllowanceRateResolver;
-use App\Services\CryptoService;
 use App\Services\SensitiveFieldCipherService;
+use App\Support\PayrollPeriodResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -57,8 +57,8 @@ class MutationController extends Controller
         ]);
 
         $effectiveDateInput = Carbon::parse($data['effective_from'])->startOfDay();
-        
-        $effectiveDate = \App\Models\PayrollPeriod::forDate($effectiveDateInput)->start_date->startOfDay();
+
+        $effectiveDate = PayrollPeriodResolver::forDate($effectiveDateInput)->start_date->startOfDay();
 
         $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);

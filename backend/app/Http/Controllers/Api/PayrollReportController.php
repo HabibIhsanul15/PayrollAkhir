@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Payroll;
-use App\Models\PayrollPeriod;
 use App\Models\PerfLog;
 use App\Models\Position;
+use App\Services\CryptoService;
+use App\Support\PayrollPeriodResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use App\Services\CryptoService;
 
 class PayrollReportController extends Controller
 {
@@ -40,22 +40,22 @@ class PayrollReportController extends Controller
         $user = $request->user();
         $role = $this->roleOf($user);
 
-        if (!in_array($role, ['fat', 'director'], true)) {
+        if (! in_array($role, ['fat', 'director'], true)) {
             return $this->forbid();
         }
 
         // ---- filter tanggal
         $month = $request->query('month'); // YYYY-MM (utama)
-        $from  = $request->query('from');  // YYYY-MM-DD (opsional)
-        $to    = $request->query('to');    // YYYY-MM-DD (opsional)
+        $from = $request->query('from');  // YYYY-MM-DD (opsional)
+        $to = $request->query('to');    // YYYY-MM-DD (opsional)
 
         if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
-            $payrollPeriod = PayrollPeriod::forMonth($month);
+            $payrollPeriod = PayrollPeriodResolver::forMonth($month);
             $start = Carbon::parse($payrollPeriod->start_date)->startOfDay();
-            $end   = Carbon::parse($payrollPeriod->end_date)->endOfDay();
+            $end = Carbon::parse($payrollPeriod->end_date)->endOfDay();
         } else {
             $start = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-            $end   = $to   ? Carbon::parse($to)->endOfDay()     : now()->endOfMonth();
+            $end = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
             $month = $start->format('Y-m');
         }
 
@@ -86,19 +86,19 @@ class PayrollReportController extends Controller
             ->orderBy('periode')
             ->orderBy('employee_id')
             ->get([
-                'id','employee_id','periode','status',
+                'id', 'employee_id', 'periode', 'status',
 
                 // ciphertext
-                'gaji_pokok_enc','tunjangan_enc','potongan_enc','total_enc',
+                'gaji_pokok_enc', 'tunjangan_enc', 'potongan_enc', 'total_enc',
 
                 // HYBRID meta
-                'dek_enc','enc_meta',
+                'dek_enc', 'enc_meta',
 
                 // plain optional
-                'period_from','period_to',
+                'period_from', 'period_to',
 
                 // meta
-                'calculation_mode','calculated_at',
+                'calculation_mode', 'calculated_at',
                 'salary_alg',
                 'created_at',
                 'paid_at',
@@ -111,7 +111,7 @@ class PayrollReportController extends Controller
             $alg = strtoupper((string) ($p->salary_alg ?? 'AES'));
             $periodMonth = $p->period_to
                 ? Carbon::parse($p->period_to)->format('Y-m')
-                : PayrollPeriod::forDate($p->periode)->period_month;
+                : PayrollPeriodResolver::forDate($p->periode)->period_month;
 
             $periodEnd = $p->period_to ?: $p->periode;
             $profile = $p->employee?->salaryProfiles
@@ -139,28 +139,28 @@ class PayrollReportController extends Controller
             try {
                 if ($alg === 'HYBRID') {
                     $dec = CryptoService::decryptHybridPayrollRow([
-                        'dek_enc'        => $p->dek_enc,
-                        'enc_meta'       => $p->enc_meta,
+                        'dek_enc' => $p->dek_enc,
+                        'enc_meta' => $p->enc_meta,
 
                         'gaji_pokok_enc' => $p->gaji_pokok_enc,
-                        'tunjangan_enc'  => $p->tunjangan_enc,
-                        'potongan_enc'   => $p->potongan_enc,
-                        'total_enc'      => $p->total_enc,
+                        'tunjangan_enc' => $p->tunjangan_enc,
+                        'potongan_enc' => $p->potongan_enc,
+                        'total_enc' => $p->total_enc,
                     ]);
 
-                    $gaji  = $dec['gaji_pokok'] ?? null;
-                    $tunj  = $dec['tunjangan']  ?? null;
-                    $pot   = $dec['potongan']   ?? null;
-                    $total = $dec['total']      ?? null;
+                    $gaji = $dec['gaji_pokok'] ?? null;
+                    $tunj = $dec['tunjangan'] ?? null;
+                    $pot = $dec['potongan'] ?? null;
+                    $total = $dec['total'] ?? null;
                 } else {
                     // AES / RSA
-                    $gaji  = CryptoService::readEncryptedOrPlainSafe($p->gaji_pokok_enc, $p->gaji_pokok, $alg);
-                    $tunj  = CryptoService::readEncryptedOrPlainSafe($p->tunjangan_enc,  $p->tunjangan,  $alg);
-                    $pot   = CryptoService::readEncryptedOrPlainSafe($p->potongan_enc,   $p->potongan,   $alg);
-                    $total = CryptoService::readEncryptedOrPlainSafe($p->total_enc,      $p->total,      $alg);
+                    $gaji = CryptoService::readEncryptedOrPlainSafe($p->gaji_pokok_enc, $p->gaji_pokok, $alg);
+                    $tunj = CryptoService::readEncryptedOrPlainSafe($p->tunjangan_enc, $p->tunjangan, $alg);
+                    $pot = CryptoService::readEncryptedOrPlainSafe($p->potongan_enc, $p->potongan, $alg);
+                    $total = CryptoService::readEncryptedOrPlainSafe($p->total_enc, $p->total, $alg);
                 }
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Report Decrypt Error pada row ' . $p->id . ': ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error('Report Decrypt Error pada row '.$p->id.': '.$e->getMessage());
                 // biarkan null -> jadi 0
             }
 
@@ -168,7 +168,7 @@ class PayrollReportController extends Controller
 
             $gaji = $gaji !== null ? (float) $gaji : 0.0;
             $tunj = $tunj !== null ? (float) $tunj : 0.0;
-            $pot  = $pot  !== null ? (float) $pot  : 0.0;
+            $pot = $pot !== null ? (float) $pot : 0.0;
             $total = $total !== null ? (float) $total : ($gaji + $tunj - $pot);
 
             foreach ($p->allowances as $al) {
@@ -192,12 +192,12 @@ class PayrollReportController extends Controller
                 'status' => $p->status,
 
                 'gaji_pokok' => $gaji,
-                'tunjangan'  => $tunj,
-                'potongan'   => $pot,
-                'total'      => $total,
+                'tunjangan' => $tunj,
+                'potongan' => $pot,
+                'total' => $total,
 
                 'calculation_mode' => $p->calculation_mode,
-                'calculated_at'    => $p->calculated_at,
+                'calculated_at' => $p->calculated_at,
 
                 'allowances' => $p->allowances,
                 'deductions' => $p->deductions,
@@ -213,9 +213,9 @@ class PayrollReportController extends Controller
         $summary = [
             'count' => (int) $rows->count(),
             'sum_gaji_pokok' => (float) $rows->sum('gaji_pokok'),
-            'sum_tunjangan'  => (float) $rows->sum('tunjangan'),
-            'sum_potongan'   => (float) $rows->sum('potongan'),
-            'sum_total'      => (float) $rows->sum('total'),
+            'sum_tunjangan' => (float) $rows->sum('tunjangan'),
+            'sum_potongan' => (float) $rows->sum('potongan'),
+            'sum_total' => (float) $rows->sum('total'),
         ];
 
         // ========== TENTUKAN ALG UNTUK REPORT ==========
@@ -226,8 +226,8 @@ class PayrollReportController extends Controller
         // ========== INSERT PERF LOG ==========
         try {
             PerfLog::create([
-                'scenario'   => 'REPORT',
-                'alg'        => $reportAlg,
+                'scenario' => 'REPORT',
+                'alg' => $reportAlg,
 
                 // report tidak spesifik payroll_id
                 'payroll_id' => null,
