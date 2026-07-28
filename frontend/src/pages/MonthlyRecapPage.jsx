@@ -184,13 +184,12 @@ export default function MonthlyRecapPage() {
       const wfh = Number(recap.wfh_days || 0);
       const lk = Number(recap.out_of_town_days || 0);
       const training = Number(recap.training_days || 0);
-      const attendanceDays = wfo + wfh + lk; // hari yang "hadir" fisik/remote
       const lateCount = Number(recap.late_count || 0);
       const businessTrips = Number(recap.business_trips || 0);
 
-      // 1. Terlambat tidak boleh melebihi hari hadir (WFO + WFH + Luar Kota)
-      if (lateCount > attendanceDays) {
-        warnings.push(`Jumlah terlambat (${lateCount}) melebihi total hari hadir (${attendanceDays}). Karyawan hanya bisa terlambat pada hari dimana dia hadir.`);
+      // 1. Keterlambatan hanya dapat terjadi saat bekerja dari kantor.
+      if (lateCount > wfo) {
+        warnings.push(`Jumlah terlambat (${lateCount}) melebihi Hari WFO (${wfo}). Keterlambatan hanya dihitung pada hari WFO.`);
       }
 
       // 2. Perjalanan dinas tidak boleh melebihi hari luar kota
@@ -615,13 +614,12 @@ export default function MonthlyRecapPage() {
                       <label className="block text-xs font-medium mb-1">Jumlah Terlambat</label>
                       <input
                         type="text" inputMode="numeric" required
-                        className={`w-full border p-2 rounded text-sm ${Number(recap.late_count || 0) > (Number(recap.wfo_days || 0) + Number(recap.wfh_days || 0) + Number(recap.out_of_town_days || 0)) ? 'border-rose-400 bg-rose-50' : ''}`}
+                        className={`w-full border p-2 rounded text-sm ${Number(recap.late_count || 0) > Number(recap.wfo_days || 0) ? 'border-rose-400 bg-rose-50' : ''}`}
                         value={recap.late_count}
                         onChange={(e) => handleRecapChange(index, "late_count", e.target.value)}
                       />
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Maks: {Number(recap.wfo_days || 0) + Number(recap.wfh_days || 0) + Number(recap.out_of_town_days || 0)} (= hari hadir WFO+WFH+LK).
-                        Dipakai Finance sebagai acuan potongan keterlambatan.
+                        Maks: {Number(recap.wfo_days || 0)} (= Hari WFO). Dipakai Finance sebagai acuan potongan keterlambatan.
                       </p>
                     </div>
                   </div>

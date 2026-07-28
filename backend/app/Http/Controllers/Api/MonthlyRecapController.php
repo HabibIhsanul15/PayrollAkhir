@@ -91,6 +91,15 @@ class MonthlyRecapController extends Controller
             ]);
         }
 
+        $lateCount = (int) ($recapData['late_count'] ?? 0);
+        $wfoDays = (int) ($recapData['wfo_days'] ?? 0);
+
+        if ($lateCount > $wfoDays) {
+            throw ValidationException::withMessages([
+                'recaps.0.late_count' => "Jumlah terlambat ({$lateCount}) tidak boleh melebihi Hari WFO ({$wfoDays}).",
+            ]);
+        }
+
         $existingRecaps = MonthlyRecap::query()
             ->where('employee_id', $employeeId)
             ->where('period_month', $periodMonth)
