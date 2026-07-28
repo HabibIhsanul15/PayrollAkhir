@@ -312,11 +312,17 @@ function detailFormula(item) {
 
   if (!units || !rate) return "";
 
-  const unitLabel = detail.calculation_type === "per_trip"
-    ? "perjalanan"
-    : detail.calculation_type === "per_toddler"
-      ? "anak"
-      : "hari";
+  const unitLabel = detail.calculation_type === "per_toddler"
+    ? "anak"
+    : detail.input_source === "out_of_town_days"
+      ? "hari luar kota"
+      : detail.input_source === "training_days"
+        ? "hari training"
+        : detail.input_source === "wfo_days"
+          ? "hari WFO"
+          : detail.input_source === "wfh_days"
+            ? "hari WFH"
+            : "hari dibayar";
   return `${Number(units).toLocaleString("id-ID")} ${unitLabel} × ${fmtRp(rate)}`;
 }
 
