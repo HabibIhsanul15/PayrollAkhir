@@ -15,7 +15,6 @@ class MonthlyRecap extends Model
         'wfo_days' => 'integer',
         'wfh_days' => 'integer',
         'out_of_town_days' => 'integer',
-        'business_trips' => 'integer',
         'training_days' => 'integer',
         'overtime_hours' => 'integer',
         'late_count' => 'integer',

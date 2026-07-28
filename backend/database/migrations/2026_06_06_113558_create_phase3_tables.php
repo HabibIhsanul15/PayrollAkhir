@@ -19,7 +19,6 @@ return new class extends Migration
             $table->unsignedInteger('wfo_days')->default(0);
             $table->unsignedInteger('wfh_days')->default(0);
             $table->unsignedInteger('out_of_town_days')->default(0);
-            $table->integer('business_trips')->default(0);
             $table->unsignedInteger('training_days')->default(0);
             $table->unsignedInteger('overtime_hours')->default(0);
             $table->unsignedInteger('total_mandays')->default(0);

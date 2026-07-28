@@ -44,6 +44,7 @@ class AllowanceCalculationService
                 'units' => $units,
                 'detail' => [
                     'calculation_type' => $type->calculation_type,
+                    'input_source' => $this->inputSource($type),
                     'units' => $units,
                     ...($type->calculation_type === 'per_toddler' ? ['num_toddlers' => $units] : []),
                 ],
@@ -62,7 +63,7 @@ class AllowanceCalculationService
 
         $baseAmount = match ($type->calculation_type) {
             'flat' => $rateAmount,
-            'per_mandays', 'per_trip' => $rateAmount * $units,
+            'per_mandays' => $rateAmount * $units,
             'per_toddler' => $rateAmount * $units,
             default => 0.0,
         };
@@ -76,24 +77,27 @@ class AllowanceCalculationService
             return (float) ($employee->num_toddlers ?? 0);
         }
 
-        $source = $type->input_source ?: (
-            $type->code === 'training'
-                ? 'training_days'
-                : match ($type->calculation_type) {
-                    'per_trip' => 'business_trips',
-                    'per_mandays' => 'total_mandays',
-                    default => null,
-                }
-        );
+        $source = $this->inputSource($type);
 
         return match ($source) {
             'training_days' => (float) ($recap->training_days ?? 0),
             'out_of_town_days' => (float) ($recap->out_of_town_days ?? 0),
             'wfo_days' => (float) ($recap->wfo_days ?? 0),
             'wfh_days' => (float) ($recap->wfh_days ?? 0),
-            'business_trips' => (float) ($recap->business_trips ?? 0),
             'total_mandays' => (float) ($recap->total_mandays ?? 0),
             default => 1.0,
         };
+    }
+
+    private function inputSource(AllowanceType $type): ?string
+    {
+        return $type->input_source ?: (
+            $type->code === 'training'
+                ? 'training_days'
+                : match ($type->calculation_type) {
+                    'per_mandays' => 'total_mandays',
+                    default => null,
+                }
+        );
     }
 }

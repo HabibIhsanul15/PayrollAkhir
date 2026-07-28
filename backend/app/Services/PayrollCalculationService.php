@@ -129,6 +129,12 @@ class PayrollCalculationService
         $non_blocking_warnings = [];
 
         $gaji_pokok = (float) $profile['base_salary_amount'] * (float) $recap->total_mandays;
+        $gajiPokokDetail = [
+            'rate_amount' => (float) $profile['base_salary_amount'],
+            'units' => (float) $recap->total_mandays,
+            'calculation_type' => 'per_mandays',
+            'input_source' => 'total_mandays',
+        ];
         $accumulatedAllowances = [];
 
         $addAllowance = function (
@@ -181,7 +187,7 @@ class PayrollCalculationService
                 $positionAllowance,
                 null,
                 $positionAllowance,
-                [],
+                ['calculation_type' => 'flat'],
             );
         }
 
@@ -265,7 +271,6 @@ class PayrollCalculationService
             'training_days' => $recap->training_days ?? 0,
             'total_mandays' => $recap->total_mandays ?? 0,
             'late_count' => $recap->late_count ?? 0,
-            'business_trip_count' => $recap->business_trip_count ?? 0,
         ]];
 
         return [
@@ -281,6 +286,7 @@ class PayrollCalculationService
             'period_to' => $prereq['periodTo'],
             'periode' => $prereq['periode'],
             'gaji_pokok' => $gaji_pokok,
+            'gaji_pokok_detail' => $gajiPokokDetail,
             'allowances' => $allowances,
             'deductions' => $deductions_list,
             'total_allowances' => $total_allowances,

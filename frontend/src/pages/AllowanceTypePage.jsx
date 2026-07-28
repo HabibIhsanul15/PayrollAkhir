@@ -17,7 +17,6 @@ import {
 
 const CALC_OPTIONS = {
   per_mandays: "Per Kehadiran (Mandays)",
-  per_trip: "Per Perjalanan (Trip)",
   flat: "Tetap Bulanan",
   per_toddler: "Per Balita (Toddler)",
 };
@@ -28,7 +27,6 @@ const inputSourceLabels = {
   out_of_town_days: "Hari luar kota",
   wfo_days: "Hari WFO",
   wfh_days: "Hari WFH",
-  business_trips: "Jumlah perjalanan dinas",
 };
 
 const inputSourceOptions = {
@@ -39,7 +37,6 @@ const inputSourceOptions = {
     ["wfo_days", "Hari WFO"],
     ["wfh_days", "Hari WFH"],
   ],
-  per_trip: [["business_trips", "Jumlah perjalanan dinas"]],
 };
 
 function sortByDisplayOrder(rows) {
@@ -61,10 +58,6 @@ function calculationText(row) {
     return "Rekap Kehadiran";
   }
 
-  if (row.calculation_type === "per_trip") {
-    return "Per perjalanan dinas";
-  }
-
   if (row.calculation_type === "flat") {
     return "Tetap bulanan";
   }
@@ -73,7 +66,6 @@ function calculationText(row) {
 }
 
 function defaultInputSource(calculationType) {
-  if (calculationType === "per_trip") return "business_trips";
   if (calculationType === "per_mandays") return "total_mandays";
   return "";
 }
@@ -392,7 +384,7 @@ export default function AllowanceTypePage() {
                   </select>
                 </div>
 
-                {!["flat", "per_toddler"].includes(form.calculation_type) && (
+                {form.calculation_type === "per_mandays" && (
                   <div>
                     <label className="block text-xs font-semibold text-slate-800 mb-1">
                       Sumber Pemicu

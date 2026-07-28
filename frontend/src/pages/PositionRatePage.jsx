@@ -22,14 +22,11 @@ const INPUT_SOURCE_LABELS = {
   out_of_town_days: "Hari luar kota",
   wfo_days: "Hari WFO",
   wfh_days: "Hari WFH",
-  business_trips: "Jumlah perjalanan dinas",
 };
 
 function calculationMeta(allowance) {
   const calculationType = allowance?.calculation_type || "per_mandays";
-  const inputSource = allowance?.input_source || (
-    calculationType === "per_trip" ? "business_trips" : "total_mandays"
-  );
+  const inputSource = allowance?.input_source || "total_mandays";
   const inputLabel = INPUT_SOURCE_LABELS[inputSource] || inputSource;
 
   if (calculationType === "flat") {
@@ -47,15 +44,6 @@ function calculationMeta(allowance) {
       inputLabel: "Tarif per balita (Rp)",
       formula: "Tarif × jumlah balita",
       helper: "Nominal tunjangan anak dihitung sekali untuk periode payroll, berdasarkan jumlah balita pada data karyawan.",
-    };
-  }
-
-  if (calculationType === "per_trip") {
-    return {
-      shortLabel: "Per perjalanan dinas",
-      inputLabel: "Tarif per perjalanan dinas (Rp)",
-      formula: "Tarif × jumlah perjalanan dinas",
-      helper: "Jumlah perjalanan diambil dari kolom perjalanan dinas pada rekap bulanan.",
     };
   }
 

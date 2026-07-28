@@ -50,7 +50,6 @@ function rateUnitLabel(rate) {
   return {
     flat: "Tetap bulanan",
     per_mandays: "Per total hari dibayar",
-    per_trip: "Per perjalanan dinas",
     per_toddler: "Per balita",
   }[rate?.calculation_type] || "Tarif sesuai aturan tunjangan";
 }
@@ -378,7 +377,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                 )}
               </div>
               <p className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
-                Tunjangan Makan, Transport, atau Anak baru menghasilkan nominal akhir saat payroll dihitung sesuai hari kerja, perjalanan dinas, atau jumlah balita pegawai.
+                Tunjangan Makan, Transport, atau Anak baru menghasilkan nominal akhir saat payroll dihitung sesuai hari kerja, hari luar kota, atau jumlah balita pegawai.
               </p>
             </div>
           )}

@@ -53,7 +53,6 @@ class PayrollDemoSeeder extends Seeder
                 'bank' => 'BCA',
                 'account' => '1234567801',
                 'wfo_days' => 20,
-                'business_trips' => 1,
                 'num_toddlers' => 0,
             ],
             [
@@ -65,7 +64,6 @@ class PayrollDemoSeeder extends Seeder
                 'bank' => 'Mandiri',
                 'account' => '1234567802',
                 'wfo_days' => 21,
-                'business_trips' => 0,
                 'num_toddlers' => 0,
             ],
             [
@@ -77,7 +75,6 @@ class PayrollDemoSeeder extends Seeder
                 'bank' => 'BNI',
                 'account' => '1234567803',
                 'wfo_days' => 19,
-                'business_trips' => 2,
                 'num_toddlers' => 0,
             ],
             [
@@ -89,7 +86,6 @@ class PayrollDemoSeeder extends Seeder
                 'bank' => 'BRI',
                 'account' => '0987877734',
                 'wfo_days' => 5,
-                'business_trips' => 0,
                 'num_toddlers' => 0,
             ],
         ];
@@ -186,11 +182,11 @@ class PayrollDemoSeeder extends Seeder
             ],
             'transport_trip' => [
                 'code' => 'transport_trip',
-                'name' => 'Tunjangan Transport Perjalanan',
-                'calculation_type' => 'per_trip',
-                'input_source' => 'business_trips',
+                'name' => 'Tunjangan Transport Luar Kota',
+                'calculation_type' => 'per_mandays',
+                'input_source' => 'out_of_town_days',
                 'display_order' => 2,
-                'description' => 'Dihitung dari jumlah perjalanan dinas.',
+                'description' => 'Dihitung dari jumlah hari luar kota.',
             ],
             'position' => [
                 'code' => 'position',
@@ -376,7 +372,6 @@ class PayrollDemoSeeder extends Seeder
             'wfo_days' => $data['wfo_days'],
             'wfh_days' => 0,
             'out_of_town_days' => 0,
-            'business_trips' => $data['business_trips'],
             'training_days' => 0,
             'overtime_hours' => 0,
             'late_count' => 0,

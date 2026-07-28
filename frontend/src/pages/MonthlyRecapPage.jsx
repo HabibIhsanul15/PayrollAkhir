@@ -13,7 +13,6 @@ function emptyRecap() {
     wfo_days: 0,
     wfh_days: 0,
     out_of_town_days: 0,
-    business_trips: 0,
     training_days: 0,
     overtime_hours: 0,
     late_count: 0,
@@ -78,7 +77,6 @@ export default function MonthlyRecapPage() {
         wfh_days: 0,
         out_of_town_days: 0,
         training_days: 0,
-        business_trips: 0,
         overtime_hours: 0,
         late_count: 0,
         total_mandays: 0,
@@ -91,7 +89,6 @@ export default function MonthlyRecapPage() {
       existing.wfh_days += Number(recap.wfh_days || 0);
       existing.out_of_town_days += Number(recap.out_of_town_days || 0);
       existing.training_days += Number(recap.training_days || 0);
-      existing.business_trips += Number(recap.business_trips || 0);
       existing.overtime_hours += Number(recap.overtime_hours || 0);
       existing.late_count += Number(recap.late_count || 0);
       existing.total_mandays += Number(recap.total_mandays || 0);
@@ -109,7 +106,6 @@ export default function MonthlyRecapPage() {
       employees: acc.employees + 1,
       total_mandays: acc.total_mandays + Number(group.total_mandays || 0),
       total_attendance: acc.total_attendance + Number(group.total_attendance || 0),
-      business_trips: acc.business_trips + Number(group.business_trips || 0),
       overtime_hours: acc.overtime_hours + Number(group.overtime_hours || 0),
       late_count: acc.late_count + Number(group.late_count || 0),
     }),
@@ -117,7 +113,6 @@ export default function MonthlyRecapPage() {
       employees: 0,
       total_mandays: 0,
       total_attendance: 0,
-      business_trips: 0,
       overtime_hours: 0,
       late_count: 0,
     }
@@ -185,16 +180,9 @@ export default function MonthlyRecapPage() {
       const lk = Number(recap.out_of_town_days || 0);
       const training = Number(recap.training_days || 0);
       const lateCount = Number(recap.late_count || 0);
-      const businessTrips = Number(recap.business_trips || 0);
-
       // 1. Keterlambatan hanya dapat terjadi saat bekerja dari kantor.
       if (lateCount > wfo) {
         warnings.push(`Jumlah terlambat (${lateCount}) melebihi Hari WFO (${wfo}). Keterlambatan hanya dihitung pada hari WFO.`);
-      }
-
-      // 2. Perjalanan dinas tidak boleh melebihi hari luar kota
-      if (businessTrips > lk) {
-        warnings.push(`Jumlah perjalanan dinas (${businessTrips}) melebihi hari luar kota (${lk}). Perjalanan dinas hanya terjadi saat berada di luar kota.`);
       }
 
       // 4. Training days seharusnya 0 jika bukan trainer (TODO: kalau ada flag trainer)
@@ -227,7 +215,6 @@ export default function MonthlyRecapPage() {
         wfo_days: wholeInputValue(recap.wfo_days),
         wfh_days: wholeInputValue(recap.wfh_days),
         out_of_town_days: wholeInputValue(recap.out_of_town_days),
-        business_trips: wholeInputValue(recap.business_trips),
         training_days: wholeInputValue(recap.training_days),
         late_count: wholeInputValue(recap.late_count),
       }]);
@@ -409,10 +396,6 @@ export default function MonthlyRecapPage() {
     const newRecaps = [...formRecaps];
     newRecaps[index][field] = value.replace(/\D/g, "");
 
-    if (field === "out_of_town_days") {
-      newRecaps[index]["business_trips"] = value.replace(/\D/g, "");
-    }
-
     setFormRecaps(newRecaps);
   };
   
@@ -433,7 +416,6 @@ export default function MonthlyRecapPage() {
 
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <SummaryBox label="Karyawan Direkap" value={cleanNumber(summary.employees)} />
-        <SummaryBox label="Total Perjalanan" value={`${cleanNumber(summary.business_trips)} kali`} />
         <SummaryBox label="Terlambat" value={`${cleanNumber(summary.late_count)} kali`} />
       </div>
 
@@ -444,7 +426,6 @@ export default function MonthlyRecapPage() {
               <th className="px-4 py-2 text-left">Nama Karyawan</th>
               <th className="px-4 py-2 text-left">Periode</th>
               <th className="px-4 py-2 text-right">Total Kehadiran</th>
-              <th className="px-4 py-2 text-right">Total Perjalanan</th>
               <th className="px-4 py-2 text-right">Terlambat</th>
               <th className="px-4 py-2 text-center">Status</th>
               <th className="px-4 py-2 text-center">Aksi</th>
@@ -457,9 +438,6 @@ export default function MonthlyRecapPage() {
                 <td className="px-4 py-3">{monthLabel(r.period_month)}</td>
                 <td className="px-4 py-3 text-right text-sm text-slate-700">
                   <div className="font-semibold">{cleanNumber(r.total_attendance)} hari</div>
-                </td>
-                <td className="px-4 py-3 text-right text-sm text-slate-700">
-                  <strong>{cleanNumber(r.business_trips)} kali</strong>
                 </td>
                 <td className="px-4 py-3 text-right font-semibold">{cleanNumber(r.late_count)} kali</td>
                 <td className="px-4 py-2 text-center">
@@ -495,7 +473,7 @@ export default function MonthlyRecapPage() {
             ))}
             {groupedRecaps.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
                     Belum ada data rekap untuk periode <PeriodDisplay period={period} />.
                   </td>
                 </tr>
@@ -506,7 +484,6 @@ export default function MonthlyRecapPage() {
               <tr className="border-t bg-slate-50 font-semibold">
                 <td colSpan={2} className="px-4 py-3 text-right">Total Keseluruhan</td>
                 <td className="px-4 py-3 text-right">{cleanNumber(summary.total_attendance)} hari</td>
-                <td className="px-4 py-3 text-right">{cleanNumber(summary.business_trips)} kali</td>
                 <td className="px-4 py-3 text-right">{cleanNumber(summary.late_count)} kali</td>
                 <td colSpan={2}></td>
               </tr>
@@ -705,9 +682,8 @@ function RecapDetailModal({ group, onClose }) {
         </div>
 
         <div className="space-y-4 p-5">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <SummaryBox label="Total Kehadiran" value={`${cleanNumber(group.total_attendance)} hari`} />
-            <SummaryBox label="Perjalanan Dinas" value={`${cleanNumber(group.business_trips)} kali`} />
             <SummaryBox label="Terlambat" value={`${cleanNumber(group.late_count)} kali`} />
           </div>
 
@@ -740,10 +716,6 @@ function RecapDetailModal({ group, onClose }) {
           </div>
 
           <div className="grid gap-3 text-sm md:grid-cols-2">
-            <div className="rounded border border-slate-200 px-3 py-2">
-              <div className="text-xs text-slate-500">Jumlah Perjalanan</div>
-              <div className="font-semibold">{cleanNumber(group.business_trips)} kali</div>
-            </div>
             <div className="rounded border border-slate-200 px-3 py-2">
               <div className="text-xs text-slate-500">Terlambat</div>
               <div className="font-semibold">{cleanNumber(group.late_count)} kali</div>

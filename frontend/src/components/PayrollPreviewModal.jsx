@@ -11,6 +11,31 @@ function finiteAmount(value) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function unitLabel(inputSource, calculationType) {
+  const labels = {
+    total_mandays: "hari dibayar",
+    wfo_days: "hari WFO",
+    wfh_days: "hari WFH",
+    out_of_town_days: "hari luar kota",
+    training_days: "hari training",
+  };
+
+  if (labels[inputSource]) return labels[inputSource];
+  if (calculationType === "per_toddler") return "balita";
+  return "hari";
+}
+
+function formulaText(detail, fallbackRate, fallbackUnits) {
+  const calculationType = detail?.calculation_type;
+  const rate = finiteAmount(detail?.rate_amount ?? fallbackRate);
+  const units = finiteAmount(detail?.units ?? fallbackUnits);
+
+  // Komponen flat/bulanan memang tidak memakai pengali.
+  if (calculationType === "flat" || rate <= 0 || units <= 0) return "";
+
+  return `${formatRupiah(rate)} × ${units.toLocaleString("id-ID")} ${unitLabel(detail?.input_source, calculationType)}`;
+}
+
 export default function PayrollPreviewModal({
   isOpen,
   onClose,
@@ -34,6 +59,7 @@ export default function PayrollPreviewModal({
   const [savingDeduction, setSavingDeduction] = useState(false);
   const totalIncome = finiteAmount(data?.gaji_pokok) + finiteAmount(data?.total_allowances);
   const totalDeductions = finiteAmount(data?.total_deductions);
+  const baseSalaryFormula = formulaText(data?.gaji_pokok_detail, null, null);
 
   const loadPreview = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -221,14 +247,21 @@ export default function PayrollPreviewModal({
                 <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b">Rincian Pendapatan</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between mb-2">
-                    <span className="text-slate-600">Gaji Pokok</span>
+                    <span className="text-slate-600">
+                      Gaji Pokok{baseSalaryFormula ? ` (${baseSalaryFormula})` : ""}
+                    </span>
                     <span className="font-medium">{formatRupiah(data.gaji_pokok)}</span>
                   </div>
 
                   {data.allowances?.map((al, i) => (
                     <div key={i} className="mb-2">
                       <div className="flex min-w-0 justify-between gap-4">
-                        <span className="min-w-0 break-words text-slate-600">{al.allowance_label || al.allowance_type} {al.mandays ? `(${al.mandays} Hari)` : ''}</span>
+                        <span className="min-w-0 break-words text-slate-600">
+                          {al.allowance_label || al.allowance_type}
+                          {formulaText(al.calculation_detail, al.rate_amount, al.mandays)
+                            ? ` (${formulaText(al.calculation_detail, al.rate_amount, al.mandays)})`
+                            : ""}
+                        </span>
                         <span className="shrink-0 font-medium">{formatRupiah(al.amount)}</span>
                       </div>
                     </div>

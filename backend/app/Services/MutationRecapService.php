@@ -44,7 +44,6 @@ class MutationRecapService
             'wfo_days',
             'wfh_days',
             'out_of_town_days',
-            'business_trips',
             'training_days',
             'overtime_hours',
             'late_count',
