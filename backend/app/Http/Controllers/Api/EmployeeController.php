@@ -117,7 +117,7 @@ class EmployeeController extends Controller
         }
 
         $qStatus = $request->query('status'); // active/inactive/null
-        $query = Employee::query()->orderBy('name');
+        $query = Employee::query()->orderBy('employee_code');
 
         if ($qStatus) {
             $query->where('status', $qStatus);
