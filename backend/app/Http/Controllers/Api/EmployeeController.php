@@ -617,27 +617,45 @@ class EmployeeController extends Controller
                 ]
             );
 
-            $previous = $employee->jobHistories()
-                ->whereDate('start_date', '<', $effectiveFrom->toDateString())
-                ->orderByDesc('start_date')
+            $existingOnEffectiveDate = $employee->jobHistories()
+                ->whereDate('start_date', $effectiveFrom->toDateString())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
                 ->first();
 
-            if ($previous) {
-                $previous->update([
-                    'end_date' => $effectiveFrom->copy()->subDay()->toDateString(),
-                    'status' => $effectiveFrom->isFuture() ? 'active' : 'inactive',
-                ]);
-            }
+            // Memperbarui profil untuk jabatan yang sama tidak menciptakan
+            // perjalanan karier baru. Namun bila jabatannya berbeda pada
+            // tanggal yang sama, simpan keduanya sebagai riwayat terpisah.
+            if (! $existingOnEffectiveDate || (int) $existingOnEffectiveDate->position_id !== (int) $Position->id) {
+                $previous = $employee->jobHistories()
+                    ->whereDate('start_date', '<=', $effectiveFrom->toDateString())
+                    ->where(function ($query) use ($effectiveFrom) {
+                        $query->whereNull('end_date')
+                            ->orWhereDate('end_date', '>=', $effectiveFrom->toDateString());
+                    })
+                    ->orderByDesc('start_date')
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->first();
 
-            $employee->jobHistories()->updateOrCreate(
-                ['start_date' => $effectiveFrom->toDateString()],
-                [
+                if ($previous) {
+                    $isSameEffectiveDate = $previous->start_date === $effectiveFrom->toDateString();
+                    $previous->update([
+                        'end_date' => $isSameEffectiveDate
+                            ? $effectiveFrom->toDateString()
+                            : $effectiveFrom->copy()->subDay()->toDateString(),
+                        'status' => $effectiveFrom->isFuture() ? 'active' : 'inactive',
+                    ]);
+                }
+
+                $employee->jobHistories()->create([
                     'position_id' => $Position->id,
+                    'start_date' => $effectiveFrom->toDateString(),
                     'end_date' => null,
                     'status' => $effectiveFrom->isFuture() ? 'inactive' : 'active',
                     'notes' => $effectiveFrom->isFuture() ? 'Perubahan jabatan terjadwal' : 'Perubahan jabatan diterapkan',
-                ]
-            );
+                ]);
+            }
 
             if (! $effectiveFrom->isFuture()) {
                 $employee->update(['position_id' => $Position->id]);
@@ -820,7 +838,14 @@ class EmployeeController extends Controller
             return $this->forbid();
         }
 
-        $histories = $employee->jobHistories()->with('Position')->orderBy('start_date', 'desc')->get();
+        // created_at menjadi penentu kedua ketika penempatan dan mutasi
+        // memiliki tanggal efektif yang sama.
+        $histories = $employee->jobHistories()
+            ->with('Position')
+            ->orderBy('start_date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         return response()->json($histories);
     }

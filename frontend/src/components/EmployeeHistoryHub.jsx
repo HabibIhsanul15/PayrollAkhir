@@ -92,7 +92,14 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
         if (usedProfileIds.has(item.id)) return false;
         const profileDate = String(item.effective_from || "").slice(0, 10);
         return profileDate === startDate
-          || (history.position_id && item.position_id && Number(history.position_id) === Number(item.position_id));
+          && history.position_id
+          && item.position_id
+          && Number(history.position_id) === Number(item.position_id);
+      }) || salaryProfiles.find((item) => {
+        if (usedProfileIds.has(item.id)) return false;
+        return history.position_id
+          && item.position_id
+          && Number(history.position_id) === Number(item.position_id);
       });
 
       if (profile) usedProfileIds.add(profile.id);
@@ -107,6 +114,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
         end_date: history.end_date,
         status: history.status,
         notes: history.notes,
+        history_created_at: history.created_at,
       };
     });
 
@@ -116,17 +124,27 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
       }
     });
 
-    return rows.sort((a, b) => String(b.effective_from || "").localeCompare(String(a.effective_from || "")));
+    return rows.sort((a, b) => {
+      const dateOrder = String(b.effective_from || "").localeCompare(String(a.effective_from || ""));
+      if (dateOrder !== 0) return dateOrder;
+
+      return String(b.history_created_at || b.created_at || "")
+        .localeCompare(String(a.history_created_at || a.created_at || ""));
+    });
   })();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const currentIndex = historyRows.findIndex((row) => {
+  const isActiveAtToday = (row) => {
     const start = parseDate(row.effective_from);
     const end = parseDate(row.end_date);
 
     return start && start <= today && (!end || end >= today);
-  });
+  };
+  const currentIndex = historyRows.findIndex((row) => row.status === "active" && isActiveAtToday(row));
+  const visibleCurrentIndex = currentIndex >= 0
+    ? currentIndex
+    : historyRows.findIndex(isActiveAtToday);
 
   return (
     <div className="space-y-6 mt-6">
@@ -146,7 +164,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
               <div className="relative border-l-2 border-indigo-100 ml-3 md:ml-6 space-y-8">
                 {historyRows.map((sp, index) => {
                   const start = parseDate(sp.effective_from);
-                  const isCurrent = index === currentIndex;
+                  const isCurrent = index === visibleCurrentIndex;
                   const isUpcoming = Boolean(start && start > today);
                   const isExpanded = expandedHistoryIds[sp.id] ?? isCurrent;
                   const statusLabel = isCurrent ? "Posisi Saat Ini" : isUpcoming ? "Akan Berlaku" : "Riwayat";

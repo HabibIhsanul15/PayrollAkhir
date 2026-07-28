@@ -153,7 +153,15 @@ class MutationRequestController extends Controller
                 abort(409, $payrollLockMessage);
             }
 
-            $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString());
+            // Pada mutasi di tanggal yang sama dengan penempatan awal, profil
+            // sebelumnya juga mulai berlaku pada tanggal tersebut. Ambil profil
+            // itu sebagai sumber tunjangan tetap, jangan menganggapnya kosong.
+            $currentProfile = $employee->currentSalaryProfile($effectiveDate->copy()->subDay()->toDateString())
+                ?? $employee->salaryProfiles()
+                    ->whereDate('effective_from', '<=', $effectiveDate->toDateString())
+                    ->orderByDesc('effective_from')
+                    ->orderByDesc('id')
+                    ->first();
 
             $amount = (float) ($targetPosition->default_base_salary_amount ?? 0);
 
@@ -182,25 +190,39 @@ class MutationRequestController extends Controller
 
             $previous = JobHistory::query()
                 ->where('employee_id', $employee->id)
-                ->whereDate('start_date', '<', $effectiveDate->toDateString())
+                ->whereDate('start_date', '<=', $effectiveDate->toDateString())
+                ->where(function ($query) use ($effectiveDate) {
+                    $query->whereNull('end_date')
+                        ->orWhereDate('end_date', '>=', $effectiveDate->toDateString());
+                })
                 ->orderByDesc('start_date')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
                 ->first();
             if ($previous) {
+                $isSameEffectiveDate = $previous->start_date === $effectiveDate->toDateString();
                 $previous->update([
-                    'end_date' => $effectiveDate->copy()->subDay()->toDateString(),
+                    // Riwayat memakai tipe date. Jika penempatan dan mutasi
+                    // terjadi pada hari yang sama, tutup entri awal pada hari
+                    // itu juga agar keduanya tetap tercatat, bukan tertimpa.
+                    'end_date' => $isSameEffectiveDate
+                        ? $effectiveDate->toDateString()
+                        : $effectiveDate->copy()->subDay()->toDateString(),
                     'status' => $effectiveDate->isFuture() ? 'active' : 'inactive',
                 ]);
             }
 
-            JobHistory::updateOrCreate(
-                ['employee_id' => $employee->id, 'start_date' => $effectiveDate->toDateString()],
-                [
-                    'position_id' => $targetPosition->id,
-                    'end_date' => null,
-                    'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
-                    'notes' => ucfirst($mutationRequest->mutation_type).': '.($mutationRequest->reason ?? '-').' (Approved by Dir)',
-                ]
-            );
+            // Tidak gunakan updateOrCreate berdasarkan start_date. Dua
+            // perubahan dapat tercatat pada tanggal yang sama, tetapi tetap
+            // merupakan dua peristiwa jabatan yang berbeda.
+            JobHistory::create([
+                'employee_id' => $employee->id,
+                'position_id' => $targetPosition->id,
+                'start_date' => $effectiveDate->toDateString(),
+                'end_date' => null,
+                'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
+                'notes' => ucfirst($mutationRequest->mutation_type).': '.($mutationRequest->reason ?? '-').' (Approved by Dir)',
+            ]);
 
             if (! $effectiveDate->isFuture()) {
                 $employee->update(['position_id' => $targetPosition->id]);
