@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Position;
+use App\Models\PositionAllowanceRate;
 use App\Models\User;
 use App\Services\AllowanceRateResolver;
 use App\Services\CryptoService;
@@ -522,8 +523,24 @@ class EmployeeController extends Controller
 
         $profiles = $employee->salaryProfiles()->orderBy('effective_from', 'desc')->get();
         $employeePosition = $employee->Position;
+        $ratesByPosition = collect();
 
-        $results = $profiles->map(function (mixed $p) use ($employeePosition, $canSeeNominal, $employee) {
+        // Tarif tunjangan master hanya diberikan kepada pemilik profil atau
+        // Finance, sama seperti nominal profil gaji.
+        if ($canSeeNominal) {
+            $positionIds = $profiles->pluck('position_id')->filter()->unique()->values();
+
+            if ($positionIds->isNotEmpty()) {
+                $ratesByPosition = PositionAllowanceRate::query()
+                    ->with('allowanceType:id,code,name,calculation_type,input_source')
+                    ->whereIn('position_id', $positionIds)
+                    ->where('is_active', true)
+                    ->get()
+                    ->groupBy('position_id');
+            }
+        }
+
+        $results = $profiles->map(function (mixed $p) use ($employeePosition, $canSeeNominal, $employee, $ratesByPosition) {
             $positionVal = $p->position_allowance;
             $allow = (float) ($p->allowance_fixed ?? 0);
             $ded = (float) ($p->deduction_fixed ?? 0);
@@ -551,6 +568,40 @@ class EmployeeController extends Controller
                 $is_using_default_base = false;
             }
 
+            $positionRates = $canSeeNominal && $effectivepositionId
+                ? $ratesByPosition->get($effectivepositionId, collect())
+                    ->map(function (PositionAllowanceRate $rate) use ($base) {
+                        return [
+                            'id' => $rate->id,
+                            'name' => $rate->allowanceType?->name ?? 'Tunjangan',
+                            'code' => $rate->allowanceType?->code,
+                            'calculation_type' => $rate->allowanceType?->calculation_type,
+                            'input_source' => $rate->allowanceType?->input_source,
+                            // Jika ada override profil pegawai untuk tunjangan
+                            // jabatan, gunakan nilai profil itu, bukan tarif
+                            // master saat ini.
+                            'rate_amount' => $rate->allowanceType?->code === 'position'
+                                ? $base
+                                : (float) ($rate->rate_amount ?? 0),
+                        ];
+                    })
+                    ->values()
+                    ->all()
+                : [];
+
+            // Bila tarif master "position" belum dibuat tetapi profil sudah
+            // punya nilai tunjangan jabatan, tetap tampilkan komponen itu.
+            if ($canSeeNominal && $base > 0 && ! collect($positionRates)->contains('code', 'position')) {
+                array_unshift($positionRates, [
+                    'id' => 'profile-position-'.$p->id,
+                    'name' => 'Tunjangan Jabatan',
+                    'code' => 'position',
+                    'calculation_type' => 'flat',
+                    'input_source' => null,
+                    'rate_amount' => $base,
+                ]);
+            }
+
             return [
                 'id' => $p->id,
                 'effective_from' => $p->effective_from->toDateString(),
@@ -563,6 +614,7 @@ class EmployeeController extends Controller
                 'deduction_fixed' => $canSeeNominal ? (string) $ded : null,
                 'is_using_default_base' => $is_using_default_base,
                 'suggested_total' => $canSeeNominal ? (string) ($base + $allow - $ded) : null,
+                'position_allowance_rates' => $positionRates,
                 'masked' => ! $canSeeNominal,
                 'created_at' => $p->created_at->toISOString(),
             ];

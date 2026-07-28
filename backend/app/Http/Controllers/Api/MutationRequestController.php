@@ -215,13 +215,18 @@ class MutationRequestController extends Controller
             // Tidak gunakan updateOrCreate berdasarkan start_date. Dua
             // perubahan dapat tercatat pada tanggal yang sama, tetapi tetap
             // merupakan dua peristiwa jabatan yang berbeda.
+            $mutationType = ucfirst((string) $mutationRequest->mutation_type);
+            $reason = trim((string) $mutationRequest->reason);
+
             JobHistory::create([
                 'employee_id' => $employee->id,
                 'position_id' => $targetPosition->id,
                 'start_date' => $effectiveDate->toDateString(),
                 'end_date' => null,
                 'status' => $effectiveDate->isFuture() ? 'inactive' : 'active',
-                'notes' => ucfirst($mutationRequest->mutation_type).': '.($mutationRequest->reason ?? '-').' (Approved by Dir)',
+                'notes' => $reason !== ''
+                    ? $mutationType.': '.$reason.' (Approved by Dir)'
+                    : $mutationType.' disetujui Direktur',
             ]);
 
             if (! $effectiveDate->isFuture()) {

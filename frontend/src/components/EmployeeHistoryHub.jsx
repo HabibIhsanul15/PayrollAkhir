@@ -1,6 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { api } from "../lib/api";
 import { formatRupiah } from "../lib/utils";
 
@@ -26,45 +36,65 @@ function formatProfileAmount(value, zeroLabel) {
   return Number.isFinite(amount) && amount > 0 ? formatRupiah(amount) : zeroLabel;
 }
 
+function formatHistoryNote(value) {
+  const note = String(value || "").trim();
+
+  // Riwayat lama menyimpan alasan kosong sebagai ": -". Jangan tampilkan
+  // placeholder itu kepada pengguna.
+  return note.replace(/:\s*-\s*\(Approved by Dir\)/i, " disetujui Direktur");
+}
+
+function rateUnitLabel(rate) {
+  if (rate?.code === "position") return "Tetap bulanan";
+
+  return {
+    flat: "Tetap bulanan",
+    per_mandays: "Per total hari dibayar",
+    per_trip: "Per perjalanan dinas",
+    per_toddler: "Per balita",
+  }[rate?.calculation_type] || "Tarif sesuai aturan tunjangan";
+}
+
 export default function EmployeeHistoryHub({ employeeId, role }) {
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [salaryProfiles, setSalaryProfiles] = useState([]);
-  const [jobHistories, setJobHistories] = useState([]);
-  const [payrolls, setPayrolls] = useState([]);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState({});
+  const [positionModal, setPositionModal] = useState({
+    open: false,
+    profile: null,
+  });
 
-  const isHCGA = String(role || "").toLowerCase() === "hcga";
+  const { data, error, isLoading } = useSWR(
+    employeeId ? `employee-history-${employeeId}` : null,
+    async () => {
+      const [salaryProfiles, jobHistories, payrolls] = await Promise.all([
+        api(`/employees/${employeeId}/salary-profiles`),
+        api(`/employees/${employeeId}/job-histories`),
+        api(`/payrolls?employee_id=${employeeId}`),
+      ]);
 
-  useEffect(() => {
-    let active = true;
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setErr("");
+      return {
+        salaryProfiles: salaryProfiles || [],
+        jobHistories: Array.isArray(jobHistories) ? jobHistories : [],
+        payrolls: payrolls?.data || payrolls || [],
+      };
+    },
+  );
 
-        const [dataSp, dataJobs, dataPr] = await Promise.all([
-          api(`/employees/${employeeId}/salary-profiles`),
-          api(`/employees/${employeeId}/job-histories`),
-          api(`/payrolls?employee_id=${employeeId}`)
-        ]);
+  const salaryProfiles = data?.salaryProfiles || [];
+  const jobHistories = data?.jobHistories || [];
+  const payrolls = data?.payrolls || [];
+  const err = error?.message || "";
 
-        if (active) {
-          setSalaryProfiles(dataSp || []);
-          setJobHistories(Array.isArray(dataJobs) ? dataJobs : []);
-          setPayrolls(dataPr?.data || dataPr || []);
-        }
-      } catch (error) {
-        if (active) setErr(error.message);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    fetchData();
-    return () => { active = false; };
-  }, [employeeId]);
+  const isEmployee = ["staff", "employee"].includes(String(role || "").toLowerCase());
 
-  if (loading) {
+  const closePositionModal = () => {
+    setPositionModal({ open: false, profile: null });
+  };
+
+  const openPositionModal = (profile) => {
+    setPositionModal({ open: true, profile });
+  };
+
+  if (isLoading && !data) {
     return (
       <Card className="bg-white border border-border shadow-sm mt-6">
         <CardContent className="p-8 text-center text-slate-500">
@@ -107,6 +137,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
       return {
         ...(profile || {}),
         id: `job-${history.id}`,
+        profile_id: profile?.id ?? null,
         position: typeof history.position === "string"
           ? history.position
           : history.position?.name || profile?.position || "-",
@@ -120,7 +151,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
 
     salaryProfiles.forEach((profile) => {
       if (!usedProfileIds.has(profile.id) && !rows.some((row) => row.effective_from === profile.effective_from)) {
-        rows.push(profile);
+        rows.push({ ...profile, profile_id: profile.id });
       }
     });
 
@@ -209,35 +240,30 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                               Berlaku sejak: {formatDate(sp.effective_from, { day: 'numeric', month: 'long', year: 'numeric' })}
                               {sp.end_date && ` · sampai ${formatDate(sp.end_date, { day: 'numeric', month: 'long', year: 'numeric' })}`}
                             </p>
-                            {sp.notes && <p className="mt-1 text-[11px] text-slate-400">{sp.notes}</p>}
+                            {sp.notes && <p className="mt-1 text-[11px] text-slate-400">{formatHistoryNote(sp.notes)}</p>}
                           </div>
-                          {!isHCGA && (
+                          {isEmployee && (
                             <span className="shrink-0 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
                               {isExpanded ? "Sembunyikan rincian" : "Lihat rincian gaji"}
                             </span>
                           )}
                           </button>
 
-                          {!isHCGA && isExpanded && (
-                            <div className="mt-4 flex flex-wrap gap-3">
-                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gaji Pokok</div>
-                                <div className="text-sm font-mono font-bold text-sky-600">
-                                  {formatProfileAmount(sp.base_salary_amount, "Belum diatur")}
-                                </div>
-                                <div className="mt-1 text-[10px] text-slate-400">
-                                  Per hari
-                                </div>
-                              </div>
-                              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm min-w-[140px]">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tunjangan Jabatan</div>
-                                <div className="text-sm font-mono font-bold text-indigo-600">
-                                  {formatProfileAmount(sp.position_allowance, "Tidak ada")}
-                                </div>
-                                <div className="mt-1 text-[10px] text-slate-400">
-                                  Tarif sesuai jabatan
-                                </div>
-                              </div>
+                          {isEmployee && isExpanded && (
+                            <div className="mt-4">
+                              {sp.profile_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openPositionModal(sp)}
+                                  className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-50"
+                                >
+                                  Lihat komponen gaji jabatan
+                                </button>
+                              ) : (
+                                <p className="text-xs text-slate-500">
+                                  Detail gaji tidak tersedia karena profil gaji untuk riwayat jabatan ini belum tersimpan.
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -259,16 +285,16 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
               <thead className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider font-bold border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Periode</th>
-                  {!isHCGA && <th className="px-4 py-3 text-right">Gaji Pokok</th>}
-                  {!isHCGA && <th className="px-4 py-3 text-right">Take Home Pay</th>}
+                  {isEmployee && <th className="px-4 py-3 text-right">Gaji Pokok</th>}
+                  {isEmployee && <th className="px-4 py-3 text-right">Take Home Pay</th>}
                   <th className="px-4 py-3 text-center">Status</th>
-                  {!isHCGA && <th className="px-4 py-3 text-center">Aksi</th>}
+                  {isEmployee && <th className="px-4 py-3 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {payrolls.length === 0 ? (
                   <tr>
-                    <td colSpan={isHCGA ? "2" : "5"} className="text-center py-8 text-slate-400 font-medium">Belum ada riwayat gaji</td>
+                    <td colSpan={isEmployee ? "5" : "2"} className="text-center py-8 text-slate-400 font-medium">Belum ada riwayat gaji</td>
                   </tr>
                 ) : (
                   payrolls.map((pr) => (
@@ -276,7 +302,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                       <td className="px-4 py-3 font-medium text-slate-800">
                         {formatDate(pr.periode, { month: 'long', year: 'numeric' })}
                       </td>
-                      {!isHCGA && (
+                      {isEmployee && (
                         <>
                           <td className="px-4 py-3 text-right font-mono">
                             {pr.gaji_pokok != null ? formatRupiah(pr.gaji_pokok) : <span className="text-slate-300 italic">-</span>}
@@ -296,7 +322,7 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
                           {pr.status || "DRAFT"}
                         </span>
                       </td>
-                      {!isHCGA && (
+                      {isEmployee && (
                         <td className="px-4 py-3 text-center">
                           <Link to={`/payrolls/${pr.id}`} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded transition-colors border border-sky-100 hover:bg-sky-100">
                             Lihat Detail
@@ -312,6 +338,60 @@ export default function EmployeeHistoryHub({ employeeId, role }) {
         </Card>
 
       </div>
+
+      <Dialog open={positionModal.open} onOpenChange={(open) => !open && closePositionModal()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Komponen Gaji Jabatan</DialogTitle>
+            <DialogDescription>
+              {positionModal.profile
+                ? `${positionModal.profile.position || "Jabatan"} · berlaku sejak ${formatDate(positionModal.profile.effective_from, { day: "numeric", month: "long", year: "numeric" })}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {positionModal.profile && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg border border-sky-100 bg-sky-50/50 p-3 text-sm">
+                <div>
+                  <p className="font-semibold text-slate-800">Gaji Pokok</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Tarif per hari kerja</p>
+                </div>
+                <span className="font-mono font-bold text-sky-700">{formatProfileAmount(positionModal.profile.base_salary_amount, "Belum diatur")}</span>
+              </div>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+                <p className="text-sm font-semibold text-slate-800">Tunjangan Berdasarkan Jabatan</p>
+                {positionModal.profile.position_allowance_rates?.length > 0 ? (
+                  <div className="mt-2 divide-y divide-indigo-100">
+                    {positionModal.profile.position_allowance_rates.map((rate) => (
+                      <div key={rate.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <div>
+                          <p className="font-medium text-slate-700">{rate.name}</p>
+                          <p className="text-xs text-slate-500">{rateUnitLabel(rate)}</p>
+                        </div>
+                        <span className="shrink-0 font-mono font-semibold text-indigo-700">{formatRupiah(rate.rate_amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">Belum ada tarif tunjangan untuk jabatan ini.</p>
+                )}
+              </div>
+              <p className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
+                Tunjangan Makan, Transport, atau Anak baru menghasilkan nominal akhir saat payroll dihitung sesuai hari kerja, perjalanan dinas, atau jumlah balita pegawai.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Tutup
+              </button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

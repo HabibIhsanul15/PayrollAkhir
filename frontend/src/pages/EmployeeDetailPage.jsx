@@ -339,9 +339,11 @@ export default function EmployeeDetailPage() {
             </EmployeeSectionCard>
           </div>
         )
-      ) : (
+      ) : null}
+
+      <div className={activeTab === "history" ? "block" : "hidden"}>
         <EmployeeHistoryHub employeeId={id} employeeName={emp?.name} role={role} />
-      )}
+      </div>
 
       {/* Reset Password Modal */}
       {resetModalOpen && (
