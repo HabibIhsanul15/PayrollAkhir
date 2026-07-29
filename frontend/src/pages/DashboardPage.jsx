@@ -98,7 +98,7 @@ export default function DashboardPage() {
               </h1>
               <p className="text-indigo-200 text-sm font-medium">
                 {isHCGA
-                  ? "Ringkasan HR & onboarding (karyawan & akun)."
+                  ? "Ringkasan HR & onboarding (pegawai & akun)."
                   : role === "staff"
                   ? "Ringkasan payroll dan riwayat jabatan Anda."
                   : "Ringkasan operasional payroll bulan ini."}
@@ -140,8 +140,8 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-6">
               {[
-                { label: "Karyawan Aktif", val: hcgaCards.active, sub: "Status aktif saat ini", icon: Users, gradient: "from-blue-500 to-indigo-600" },
-                { label: "Karyawan Nonaktif", val: hcgaCards.inactive, sub: "Tidak dapat mengakses", icon: UserCheck, gradient: "from-slate-400 to-slate-500" },
+                { label: "Pegawai Aktif", val: hcgaCards.active, sub: "Status aktif saat ini", icon: Users, gradient: "from-blue-500 to-indigo-600" },
+                { label: "Pegawai Nonaktif", val: hcgaCards.inactive, sub: "Tidak dapat mengakses", icon: UserCheck, gradient: "from-slate-400 to-slate-500" },
                 { label: "Belum Punya Akun", val: hcgaCards.no_account, sub: "Kandidat create account", icon: Users, gradient: "from-emerald-400 to-teal-500" },
                 { label: "Menunggu Rekap", val: hcgaCards.pending_recap, sub: "Bulan Ini", icon: ClipboardList, gradient: "from-orange-400 to-amber-500" },
               ].map((c, i) => {
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="p-0">
                   <div className="grid grid-cols-3 gap-4 px-8 py-4 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50">
-                    <div className="col-span-2">Karyawan</div>
+                    <div className="col-span-2">Pegawai</div>
                     <div className="text-right">Aksi</div>
                   </div>
                   {loading ? (
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                       <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center shadow-inner">
                         <UserCheck size={28} className="text-emerald-500" />
                       </div>
-                      <p className="text-sm font-medium text-slate-500">Semua karyawan sudah memiliki akun sistem.</p>
+                      <p className="text-sm font-medium text-slate-500">Semua pegawai sudah memiliki akun sistem.</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
@@ -452,7 +452,7 @@ export default function DashboardPage() {
                   trend: <PeriodDisplay period={month} />,
                 },
                 {
-                  label: "Karyawan Aktif",
+                  label: "Pegawai Aktif",
                   value: loading ? "…" : (kpi.employees_active ?? 0),
                   sub: "Status aktif",
                   icon: Users,
@@ -460,7 +460,7 @@ export default function DashboardPage() {
                   trend: "Bulan ini",
                 },
                 {
-                  label: "Karyawan Nonaktif",
+                  label: "Pegawai Nonaktif",
                   value: loading ? "…" : (kpi.employees_inactive ?? 0),
                   sub: "Tidak akses sistem",
                   icon: UserCheck,

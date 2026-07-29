@@ -20,10 +20,19 @@ const formatDate = (value) => {
     : "-";
 };
 
+const todayYmd = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const emptyForm = () => ({
   employee_id: "",
   mutation_type: "promotion",
   position_id: "",
+  requested_date: todayYmd(),
   period_month: "",
   notes: "",
   document: null,
@@ -42,6 +51,7 @@ const formFromEdit = (editData) => ({
   employee_id: editData?.employee_id ? String(editData.employee_id) : "",
   mutation_type: editData?.mutation_type || "promotion",
   position_id: editData?.target_position_id ? String(editData.target_position_id) : "",
+  requested_date: String(editData?.requested_date || editData?.created_at || todayYmd()).slice(0, 10),
   period_month: getEditPeriodMonth(editData),
   notes: editData?.reason || "",
   document: null,
@@ -148,13 +158,19 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
     setSaving(true);
     
     if (!form.employee_id) {
-      setErr("Karyawan harus dipilih.");
+      setErr("Pegawai harus dipilih.");
       setSaving(false);
       return;
     }
     
     if (!form.position_id) {
       setErr("Jabatan (position) baru harus dipilih.");
+      setSaving(false);
+      return;
+    }
+
+    if (!form.requested_date) {
+      setErr("Tanggal pengajuan harus diisi.");
       setSaving(false);
       return;
     }
@@ -165,6 +181,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       formData.append("employee_id", form.employee_id);
       formData.append("mutation_type", form.mutation_type);
       formData.append("position_id", form.position_id);
+      formData.append("requested_date", form.requested_date);
       if (!form.period_month) {
         setErr("Bulan payroll harus dipilih.");
         setSaving(false);
@@ -245,7 +262,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">{editData ? "Edit Pengajuan Promosi/Demosi" : "Buat Pengajuan Promosi/Demosi"}</h3>
-            <p className="text-sm text-slate-500 mt-1">Pilih karyawan yang ingin diajukan perubahan jabatannya.</p>
+            <p className="text-sm text-slate-500 mt-1">Pilih pegawai yang ingin diajukan perubahan jabatannya.</p>
           </div>
           <button 
             onClick={onClose}
@@ -265,14 +282,14 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
           <form id="mutation-form" onSubmit={submit} className="space-y-6">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Pilih Karyawan</label>
+              <label className="text-xs font-semibold text-slate-700">Pilih Pegawai</label>
               <select
                 value={form.employee_id}
                 onChange={(e) => setForm((current) => ({ ...current, employee_id: e.target.value }))}
                 disabled={loading || !!editData}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
               >
-                <option value="">-- Pilih Karyawan Aktif --</option>
+                <option value="">-- Pilih Pegawai Aktif --</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name} ({emp.employee_code})
@@ -307,7 +324,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid gap-6 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700">Jenis Perubahan Jabatan</label>
                     <select
@@ -318,6 +335,19 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                       <option value="promotion">Promosi (Naik Jabatan)</option>
                       <option value="demotion">Demosi (Turun Jabatan)</option>
                     </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Tanggal Pengajuan</label>
+                    <input
+                      type="date"
+                      value={form.requested_date}
+                      min={String(selectedEmployee?.join_date || "").slice(0, 10) || undefined}
+                      max={todayYmd()}
+                      onChange={(e) => setForm((current) => ({ ...current, requested_date: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+                    />
+                    <p className="text-[10px] text-slate-500">Tanggal dokumen atau pengajuan dibuat.</p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -353,6 +383,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                     <div className="mt-1 text-sm font-semibold text-slate-900">
                       {calculatedEffectiveDate ? formatDate(calculatedEffectiveDate) : "-"}
                     </div>
+                    <div className="mt-1 text-[10px] text-slate-500">Aktif otomatis saat tanggal ini tiba.</div>
                   </div>
                 </div>
 

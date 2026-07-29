@@ -456,7 +456,7 @@ export default function PayrollList() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input
                 type="text"
-                placeholder="Cari karyawan..."
+                placeholder="Cari pegawai..."
                 className="w-full pl-9 pr-4 py-1.5 text-[13px] border border-slate-200 rounded outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -489,7 +489,7 @@ export default function PayrollList() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <th className="px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-1/4">
-                      Karyawan
+                      Pegawai
                     </th>
                     <th className="px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       Kehadiran
@@ -511,7 +511,7 @@ export default function PayrollList() {
                       <td colSpan={7} className="px-4 py-8 text-center text-[13px] text-slate-500">
                         {isDirector
                           ? "Belum ada payroll yang diajukan untuk periode ini."
-                          : "Tidak ada data karyawan."}
+                          : "Tidak ada data pegawai."}
                       </td>
                     </tr>
                   ) : (

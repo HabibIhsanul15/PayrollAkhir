@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { X, Download, AlertCircle, AlertTriangle, FileText, CheckCircle, XCircle } from "lucide-react";
+import { X, Download, AlertCircle, AlertTriangle, FileText, CheckCircle, Clock3, XCircle } from "lucide-react";
 import MutationRequestModal from "./MutationRequestModal";
 import ConfirmModal from "./ConfirmModal";
 
@@ -119,18 +119,23 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                 
                 <div className="flex items-center justify-between">
                   <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                    request.status === 'approved' && request.activation_status === 'scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                     request.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                     request.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
                     request.status === 'cancelled' ? 'bg-slate-100 text-slate-700 border-slate-300' : 
                     'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    {request.status === 'approved' ? <><CheckCircle size={16}/> Disetujui</> : 
+                    {request.status === 'approved'
+                      ? request.activation_status === 'scheduled'
+                        ? <><Clock3 size={16}/> Disetujui · Terjadwal</>
+                        : <><CheckCircle size={16}/> Disetujui · Aktif</>
+                      :
                      request.status === 'rejected' ? <><XCircle size={16}/> Ditolak</> : 
                      request.status === 'cancelled' ? <><AlertCircle size={16}/> Dibatalkan</> : 
                      <><FileText size={16}/> Menunggu Persetujuan</>}
                   </div>
                   <div className="text-sm text-slate-500">
-                    Diajukan pada {new Date(request.created_at).toLocaleDateString('id-ID')}
+                    Diajukan pada {formatDate(request.requested_date || request.created_at)}
                   </div>
                 </div>
 

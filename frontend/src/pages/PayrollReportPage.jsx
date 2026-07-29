@@ -346,7 +346,7 @@ function PayrollReportDetailModal({ row, periodMonth, onClose }) {
         <div className="min-w-0 flex-1 overflow-y-auto p-5 sm:p-7">
           <div className="grid grid-cols-1 gap-4 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <span className="mb-1 block text-slate-500">Karyawan</span>
+              <span className="mb-1 block text-slate-500">Pegawai</span>
               <strong className="text-slate-800">{row.employee_name || "-"}</strong>
               <div className="mt-1 text-xs text-slate-500">{row.employee_code || "-"}</div>
             </div>

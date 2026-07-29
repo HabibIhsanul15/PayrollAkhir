@@ -149,7 +149,7 @@ class Employee extends Model
         $missing = [];
 
         if ($this->status !== 'active') {
-            $missing[] = 'Status karyawan tidak aktif';
+            $missing[] = 'Status pegawai tidak aktif';
         }
         if (! $this->position_id) {
             $missing[] = 'Jabatan belum dipilih';

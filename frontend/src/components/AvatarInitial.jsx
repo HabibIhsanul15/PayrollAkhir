@@ -1,6 +1,6 @@
 /**
  * AvatarInitial – Komponen avatar dengan inisial nama.
- * Reusable di seluruh halaman yang menampilkan daftar karyawan/user.
+ * Reusable di seluruh halaman yang menampilkan daftar pegawai/user.
  */
 export default function AvatarInitial({ letters }) {
   return (

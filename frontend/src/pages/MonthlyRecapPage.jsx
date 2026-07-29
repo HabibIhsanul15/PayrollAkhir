@@ -402,7 +402,7 @@ export default function MonthlyRecapPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Rekap Bulanan Karyawan</h1>
+        <h1 className="text-2xl font-bold">Rekap Bulanan Pegawai</h1>
         <div className="flex gap-4">
           <input
             type="month"
@@ -415,7 +415,7 @@ export default function MonthlyRecapPage() {
       </div>
 
       <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <SummaryBox label="Karyawan Direkap" value={cleanNumber(summary.employees)} />
+        <SummaryBox label="Pegawai Direkap" value={cleanNumber(summary.employees)} />
         <SummaryBox label="Terlambat" value={`${cleanNumber(summary.late_count)} kali`} />
       </div>
 
@@ -423,7 +423,7 @@ export default function MonthlyRecapPage() {
         <Table>
           <thead>
             <tr>
-              <th className="px-4 py-2 text-left">Nama Karyawan</th>
+              <th className="px-4 py-2 text-left">Nama Pegawai</th>
               <th className="px-4 py-2 text-left">Periode</th>
               <th className="px-4 py-2 text-right">Total Kehadiran</th>
               <th className="px-4 py-2 text-right">Terlambat</th>
@@ -498,11 +498,11 @@ export default function MonthlyRecapPage() {
           <div className="bg-white p-6 rounded-lg shadow-xl z-10 w-[600px] max-w-full max-h-[90vh] overflow-y-auto relative">
             <h2 className="text-lg font-semibold mb-1">Input Rekap Bulanan</h2>
             <p className="mb-4 text-xs text-slate-500">
-              Rekap ini mencatat hari kerja dan aktivitas bulanan. Perhitungan gaji tetap mengikuti basis gaji pada profil karyawan.
+              Rekap ini mencatat hari kerja dan aktivitas bulanan. Perhitungan gaji tetap mengikuti basis gaji pada profil pegawai.
             </p>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium mb-1">Karyawan</label>
+                <label className="block text-sm font-medium mb-1">Pegawai</label>
                 <select
                   required
                   disabled={isEditingRecap}
@@ -510,7 +510,7 @@ export default function MonthlyRecapPage() {
                   value={selectedEmployeeId}
                   onChange={(e) => handleEmployeeChange(e.target.value)}
                 >
-                  <option value="">Pilih Karyawan</option>
+                  <option value="">Pilih Pegawai</option>
                   {(isEditingRecap ? employees : employeesAvailableForCreate).map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name}
@@ -519,14 +519,14 @@ export default function MonthlyRecapPage() {
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
                   {isEditingRecap
-                    ? "Karyawan tidak dapat diubah saat mengedit rekap yang sudah dibuat."
-                    : "Karyawan yang sudah memiliki rekap pada periode ini tidak dapat dipilih lagi."}
+                    ? "Pegawai tidak dapat diubah saat mengedit rekap yang sudah dibuat."
+                    : "Pegawai yang sudah memiliki rekap pada periode ini tidak dapat dipilih lagi."}
                 </p>
               </div>
 
               {selectedEmployeeId && (
                 <div className="rounded border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
-                  <div className="font-semibold text-blue-950">{selectedEmployee?.name || "Karyawan terpilih"}</div>
+                  <div className="font-semibold text-blue-950">{selectedEmployee?.name || "Pegawai terpilih"}</div>
                   <div className="mt-1">
                     {selectedEmployee?.join_date && new Date(selectedEmployee.join_date) > new Date(Number(period.split("-")[0]), Number(period.split("-")[1]) - 2, 28)
                       ? <>Periode <PeriodDisplay period={period} /> (masuk {new Date(selectedEmployee.join_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}) memiliki maksimal </> 

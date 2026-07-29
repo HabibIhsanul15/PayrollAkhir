@@ -11,7 +11,7 @@ class SyncEffectiveEmployeeJobs extends Command
 {
     protected $signature = 'employees:sync-effective-jobs {--date=}';
 
-    protected $description = 'Sinkronkan referensi jabatan karyawan dengan salary profile yang sudah efektif.';
+    protected $description = 'Sinkronkan referensi jabatan pegawai dengan salary profile yang sudah efektif.';
 
     public function handle(): int
     {
@@ -45,7 +45,7 @@ class SyncEffectiveEmployeeJobs extends Command
             }
         });
 
-        $this->info("Jabatan efektif tersinkron untuk {$updated} karyawan.");
+        $this->info("Jabatan efektif tersinkron untuk {$updated} pegawai.");
 
         return self::SUCCESS;
     }

@@ -43,7 +43,7 @@ function calculationMeta(allowance) {
       shortLabel: "Per balita",
       inputLabel: "Tarif per balita (Rp)",
       formula: "Tarif × jumlah balita",
-      helper: "Nominal tunjangan anak dihitung sekali untuk periode payroll, berdasarkan jumlah balita pada data karyawan.",
+      helper: "Nominal tunjangan anak dihitung sekali untuk periode payroll, berdasarkan jumlah balita pada data pegawai.",
     };
   }
 

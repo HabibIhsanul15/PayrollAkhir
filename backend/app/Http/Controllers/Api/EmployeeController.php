@@ -112,7 +112,7 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        // Daftar karyawan hanya diperlukan HCGA dan Finance.
+        // Daftar pegawai hanya diperlukan HCGA dan Finance.
         if (! $this->inRoles($user, ['hcga', 'fat'])) {
             return $this->forbid();
         }
@@ -330,7 +330,7 @@ class EmployeeController extends Controller
         }
 
         if (! $employee->user_id) {
-            return response()->json(['message' => 'Karyawan ini tidak memiliki akun login.'], 400);
+            return response()->json(['message' => 'Pegawai ini tidak memiliki akun login.'], 400);
         }
 
         $newPassword = 'Password123!'; 
@@ -495,7 +495,7 @@ class EmployeeController extends Controller
                 'position_id' => $Position->id,
                 'start_date' => $effectiveFrom,
                 'status' => 'active',
-                'notes' => 'Penempatan awal karyawan',
+                'notes' => 'Penempatan awal pegawai',
             ]);
 
             return $employee;
@@ -759,7 +759,7 @@ class EmployeeController extends Controller
         if ($newJoinDate !== $oldJoinDate) {
             if ($employee->payrolls()->exists()) {
                 return response()->json([
-                    'message' => 'Tanggal masuk tidak bisa diubah karena karyawan sudah memiliki riwayat payroll.',
+                    'message' => 'Tanggal masuk tidak bisa diubah karena pegawai sudah memiliki riwayat payroll.',
                 ], 422);
             }
         }

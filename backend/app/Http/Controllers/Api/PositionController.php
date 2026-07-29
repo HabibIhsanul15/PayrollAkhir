@@ -205,7 +205,7 @@ class PositionController extends Controller
 
         if ($Position->employees()->exists() || $Position->salaryProfiles()->exists() || $Position->jobHistories()->exists()) {
             return response()->json([
-                'message' => 'Jabatan sudah dipakai karyawan atau riwayat. Nonaktifkan jabatan tanpa menghapusnya.',
+                'message' => 'Jabatan sudah dipakai pegawai atau riwayat. Nonaktifkan jabatan tanpa menghapusnya.',
             ], 422);
         }
 

@@ -259,7 +259,7 @@ export default function PositionManagementPage() {
           <p className="mt-1 text-sm text-slate-600">
             {isFinance
               ? "Tentukan nominal gaji pokok harian untuk jabatan yang sudah dibuat HCGA."
-              : "Kelola nama jabatan, level, status, dan struktur jabatan karyawan."}
+              : "Kelola nama jabatan, level, status, dan struktur jabatan pegawai."}
           </p>
           <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
             <span>Total: <strong className="text-foreground">{summary.total}</strong></span>

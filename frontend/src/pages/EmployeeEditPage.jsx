@@ -226,7 +226,7 @@ export default function EmployeeEditPage() {
         <form onSubmit={submit} className="space-y-5">
           <EmployeeSectionCard
             title="Informasi Dasar"
-            description="Bagian inti identitas karyawan yang tampil di seluruh modul."
+            description="Bagian inti identitas pegawai yang tampil di seluruh modul."
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Input label="Kode Pegawai" value={form.employee_code} readOnly disabled onChange={() => {}} />
@@ -243,7 +243,7 @@ export default function EmployeeEditPage() {
                 onChange={(value) => setField("join_date", value)}
               />
               <EmployeeNotice tone="info" className="md:col-span-2">
-                Perubahan tanggal masuk memengaruhi titik awal histori jabatan dan profil gaji karyawan.
+                Perubahan tanggal masuk memengaruhi titik awal histori jabatan dan profil gaji pegawai.
               </EmployeeNotice>
             </div>
           </EmployeeSectionCard>
@@ -294,7 +294,7 @@ export default function EmployeeEditPage() {
               <EmployeeNotice>
                 {swrData?.data?.position_id 
                   ? "Jabatan aktif diubah melalui proses promosi atau demosi supaya histori jabatan dan perubahan payroll tetap konsisten."
-                  : "Pilih jabatan awal untuk karyawan ini. Setelah disimpan, perubahan selanjutnya harus melalui proses promosi atau demosi."}
+                  : "Pilih jabatan awal untuk pegawai ini. Setelah disimpan, perubahan selanjutnya harus melalui proses promosi atau demosi."}
               </EmployeeNotice>
 
               {selectedPosition ? (

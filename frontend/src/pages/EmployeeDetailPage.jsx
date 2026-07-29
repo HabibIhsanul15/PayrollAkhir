@@ -295,7 +295,7 @@ export default function EmployeeDetailPage() {
                         onClick={() => nav("/accounts/create")}
                         className="bg-blue-600 hover:bg-blue-700 text-white rounded"
                       >
-                        Buat Akun Login Karyawan
+                        Buat Akun Login Pegawai
                       </Button>
                     </div>
                   </div>

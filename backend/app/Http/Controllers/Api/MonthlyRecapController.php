@@ -106,7 +106,7 @@ class MonthlyRecapController extends Controller
 
         if ($existingRecaps->contains('is_finalized', true)) {
             throw ValidationException::withMessages([
-                'recaps' => 'Rekap untuk karyawan dan periode ini sudah dikirim ke Finance dan tidak dapat dibuat ulang.',
+                'recaps' => 'Rekap untuk pegawai dan periode ini sudah dikirim ke Finance dan tidak dapat dibuat ulang.',
             ]);
         }
 
@@ -195,13 +195,13 @@ class MonthlyRecapController extends Controller
 
         if ($recaps->isEmpty()) {
             throw ValidationException::withMessages([
-                'recaps' => 'Belum ada draft rekap untuk karyawan dan periode ini.',
+                'recaps' => 'Belum ada draft rekap untuk pegawai dan periode ini.',
             ]);
         }
 
         if ($recaps->every(fn (MonthlyRecap $recap) => $recap->is_finalized)) {
             throw ValidationException::withMessages([
-                'recaps' => 'Rekap untuk karyawan dan periode ini sudah dikirim ke Finance.',
+                'recaps' => 'Rekap untuk pegawai dan periode ini sudah dikirim ke Finance.',
             ]);
         }
 

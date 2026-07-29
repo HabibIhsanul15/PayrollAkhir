@@ -65,7 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Seluruh periode payroll, tanggal efektif jabatan, dan scheduler memakai
+    // zona waktu operasional aplikasi.
+    'timezone' => 'Asia/Jakarta',
 
     /*
     |--------------------------------------------------------------------------

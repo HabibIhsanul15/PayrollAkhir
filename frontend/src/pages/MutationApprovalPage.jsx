@@ -38,7 +38,7 @@ export default function MutationApprovalPage() {
           <h1 className="text-lg font-semibold text-foreground">
             {user?.role === 'hcga' ? 'Pengajuan Promosi' : 'Persetujuan Promosi'}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Daftar pengajuan promosi dan demosi karyawan.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Daftar pengajuan promosi dan demosi pegawai.</p>
         </div>
         {user?.role === 'hcga' && (
           <button
@@ -57,7 +57,7 @@ export default function MutationApprovalPage() {
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3">Tanggal Pengajuan</th>
-                <th className="px-4 py-3">Karyawan</th>
+                <th className="px-4 py-3">Pegawai</th>
                 <th className="px-4 py-3">Tipe</th>
                 <th className="px-4 py-3">Jabatan Tujuan</th>
                 <th className="px-4 py-3">Efektif Sejak</th>
@@ -78,7 +78,7 @@ export default function MutationApprovalPage() {
                     className="hover:bg-indigo-50 cursor-pointer transition-colors"
                     onClick={() => setSelectedRequestId(req.id)}
                   >
-                    <td className="px-4 py-3">{new Date(req.created_at).toLocaleDateString("id-ID")}</td>
+                    <td className="px-4 py-3">{new Date(req.requested_date || req.created_at).toLocaleDateString("id-ID")}</td>
                     <td className="px-4 py-3 font-medium text-slate-900">
                       {req.employee?.name}
                       <div className="text-xs text-slate-500">{req.employee?.employee_code}</div>
@@ -97,12 +97,15 @@ export default function MutationApprovalPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        req.status === 'approved' && req.activation_status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
                         req.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 
                         req.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 
                         req.status === 'cancelled' ? 'bg-slate-100 text-slate-700' : 
                         'bg-amber-50 text-amber-700'
                       }`}>
-                        {req.status === 'approved' ? 'Disetujui' : 
+                        {req.status === 'approved'
+                          ? (req.activation_status === 'scheduled' ? 'Disetujui · Terjadwal' : 'Disetujui · Aktif')
+                          :
                          req.status === 'rejected' ? 'Ditolak' : 
                          req.status === 'cancelled' ? 'Dibatalkan' : 'Menunggu'}
                       </span>

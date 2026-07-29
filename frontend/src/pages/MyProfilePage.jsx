@@ -27,6 +27,18 @@ const EMPTY_META = {
   status: "",
 };
 
+function roleLabel(role) {
+  const labels = {
+    staff: "Pegawai",
+    employee: "Pegawai",
+    hcga: "HCGA",
+    fat: "Finance Admin",
+    director: "Director",
+  };
+
+  return labels[String(role || "").toLowerCase()] || "-";
+}
+
 export default function MyProfilePage() {
   const authUser = getUser();
   const role = authUser?.role || "";
@@ -104,7 +116,7 @@ export default function MyProfilePage() {
       setIsEditingEmp(false);
     }
     if (isStaff && errEmp) {
-      setEmpErr(errEmp?.message || "Gagal memuat profil karyawan.");
+      setEmpErr(errEmp?.message || "Gagal memuat profil pegawai.");
     }
   }, [isStaff, rawEmp, errEmp]);
 
@@ -230,7 +242,7 @@ export default function MyProfilePage() {
         <div className="mt-5 grid md:grid-cols-3 gap-5">
           <Input label="Nama" value={account.name} disabled />
           <Input label="Email" value={account.email} disabled />
-          <Input label="Role" value={account.role} disabled />
+          <Input label="Role" value={roleLabel(account.role)} disabled />
         </div>
       </div>
 
@@ -295,7 +307,7 @@ export default function MyProfilePage() {
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              Informasi Karyawan
+              Informasi Pegawai
             </button>
             <button
               type="button"
@@ -315,9 +327,9 @@ export default function MyProfilePage() {
           ) : (
             <>
               <div className="bg-white border border-border rounded shadow-sm p-4">
-                <div className="text-sm font-medium text-foreground">Info Karyawan (read-only)</div>
+                <div className="text-sm font-medium text-foreground">Info Pegawai (read-only)</div>
                 <div className="mt-4 grid md:grid-cols-3 gap-4">
-                  <Field label="Employee Code" value={meta.employee_code} />
+                  <Field label="Kode Pegawai" value={meta.employee_code} />
                   <Field label="Position" value={meta.position} />
                   <Field label="Status" value={meta.status || "-"} />
                 </div>

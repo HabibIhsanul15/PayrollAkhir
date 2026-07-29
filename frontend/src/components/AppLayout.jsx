@@ -49,7 +49,7 @@ function menuByRole(role) {
   if (r === "hcga") {
     return [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/employees", label: "Data Karyawan", icon: Users },
+      { to: "/employees", label: "Data Pegawai", icon: Users },
       { to: "/master/positions", label: "Jabatan", icon: FolderOpen },
       { to: "/master/allowance-types", label: "Jenis Tunjangan", icon: ClipboardList },
       { to: "/master/deduction-types", label: "Jenis Potongan", icon: ClipboardList },
@@ -175,7 +175,7 @@ export default function AppLayout() {
         <div className="mx-3 mb-4 p-3 rounded bg-slate-50 border border-border">
           <div className="text-foreground text-[10px] font-semibold mb-1">Payroll Internal</div>
           <div className="text-muted-foreground text-[10px] leading-relaxed">
-            Modul untuk proses penggajian karyawan dan bersifat internal.
+            Modul untuk proses penggajian pegawai dan bersifat internal.
           </div>
         </div>
       </aside>

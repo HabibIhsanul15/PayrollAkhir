@@ -106,7 +106,7 @@ export default function Login() {
         </div>
 
         <div className="relative z-10 grid grid-cols-2 gap-4 max-w-md">
-          <StatCard title="Karyawan Aktif" value="9" icon={Users} color="#60A5FA" />
+          <StatCard title="Pegawai Aktif" value="9" icon={Users} color="#60A5FA" />
           <StatCard title="Payroll Records" value="35" icon={DollarSign} color="#34D399" />
           <StatCard title="Proyek Berjalan" value="4" icon={FolderOpen} color="#A78BFA" />
           <StatCard title="Periode Aktif" value="2" icon={BarChart3} color="#FBBF24" />
@@ -188,7 +188,7 @@ export default function Login() {
                 <Lock size={14} />
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Sistem ini hanya untuk karyawan internal. Hubungi <strong>HR/GA</strong> jika belum memiliki akun.
+                Sistem ini hanya untuk pegawai internal. Hubungi <strong>HR/GA</strong> jika belum memiliki akun.
               </p>
             </div>
             

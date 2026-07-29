@@ -263,7 +263,7 @@ export default function EmployeeCreatePage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <EmployeeSectionCard
           title="Informasi Dasar"
-          description="Bagian inti identitas karyawan. Field bertanda * wajib diisi."
+          description="Bagian inti identitas pegawai. Field bertanda * wajib diisi."
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field

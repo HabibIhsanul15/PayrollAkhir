@@ -99,7 +99,7 @@ class SpecialDeductionController extends Controller
 
         if ($duplicateQuery->exists()) {
             return response()->json([
-                'message' => 'Jenis potongan tersebut sudah ditambahkan untuk karyawan dan periode ini.',
+                'message' => 'Jenis potongan tersebut sudah ditambahkan untuk pegawai dan periode ini.',
             ], 409);
         }
 

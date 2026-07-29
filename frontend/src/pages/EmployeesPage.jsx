@@ -39,14 +39,14 @@ export default function EmployeesPage() {
   const onDeactivate = async (id) => {
     if (!isHCGA) return;
 
-    const ok = await confirm("Nonaktifkan employee ini? Riwayat payroll dan data pegawai tetap disimpan.");
+    const ok = await confirm("Nonaktifkan pegawai ini? Riwayat payroll dan data pegawai tetap disimpan.");
     if (!ok) return;
 
     try {
       await api(`/employees/${id}`, { method: "DELETE" });
       mutate(undefined, { revalidate: true }); // tell SWR to update in bg
     } catch (e) {
-      alert(e?.message || "Gagal menonaktifkan employee.");
+      alert(e?.message || "Gagal menonaktifkan pegawai.");
     }
   };
 
@@ -98,7 +98,7 @@ export default function EmployeesPage() {
 
   if (!canView) {
     return (
-      <AlertMessage type="error" message="Forbidden: role kamu tidak boleh mengakses halaman Employees." className="px-4 py-3" />
+      <AlertMessage type="error" message="Akses ditolak: role Anda tidak boleh mengakses halaman Data Pegawai." className="px-4 py-3" />
     );
   }
 
@@ -107,9 +107,9 @@ export default function EmployeesPage() {
       {/* Title + actions */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-lg font-semibold text-foreground">Employees</h1>
+          <h1 className="text-lg font-semibold text-foreground">Data Pegawai</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Kelola data karyawan, jabatan aktif, tanggal masuk, dan akun login secara terpusat.
+            Kelola data pegawai, jabatan aktif, tanggal masuk, dan akun login secara terpusat.
           </p>
           <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
             <span>Total: <strong className="text-foreground">{summary.total}</strong></span>
@@ -126,7 +126,7 @@ export default function EmployeesPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded text-xs font-medium text-white hover:bg-blue-700 transition-colors"
             >
               <Plus size={11} />
-              Add Employee
+              Tambah Pegawai
             </button>
           )}
         </div>
@@ -138,7 +138,7 @@ export default function EmployeesPage() {
       <div className="bg-white border border-border rounded p-4 mb-4" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
         <div className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1">
-            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Cari Karyawan / Jabatan</label>
+            <label className="block text-[10px] font-medium text-muted-foreground mb-1.5">Cari Pegawai / Jabatan</label>
             <div>
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -158,7 +158,7 @@ export default function EmployeesPage() {
                 onChange={(e) => setAccountFilter(e.target.value)}
                 className="w-full appearance-none pl-3 pr-7 py-1.5 text-xs border border-border rounded bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
               >
-                <option value="all">Semua Karyawan</option>
+                <option value="all">Semua Pegawai</option>
                 <option value="with_account">Sudah Punya Akun</option>
                 <option value="without_account">Belum Punya Akun</option>
               </select>
@@ -177,7 +177,7 @@ export default function EmployeesPage() {
       {/* Table */}
       <div className="bg-white border border-border rounded overflow-hidden" style={{ boxShadow: "0 1px 4px 0 rgba(0,0,0,0.04)" }}>
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground">Daftar Karyawan</span>
+          <span className="text-sm font-medium text-foreground">Daftar Pegawai</span>
           <span className="text-[10px] text-muted-foreground">
             Menampilkan {paged.length} dari {summary.total} record
           </span>
@@ -187,7 +187,7 @@ export default function EmployeesPage() {
           <table className="w-full border-collapse min-w-[700px]">
             <thead>
               <tr className="border-b border-border bg-slate-50/50">
-                <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Karyawan</th>
+                <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pegawai</th>
                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Jabatan</th>
                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tanggal Masuk</th>
                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Akun Login</th>
@@ -207,7 +207,7 @@ export default function EmployeesPage() {
                   <td colSpan={5} className="py-8 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileText size={14} className="text-slate-300" />
-                      <p className="text-xs text-muted-foreground">Tidak ada data karyawan yang cocok.</p>
+                      <p className="text-xs text-muted-foreground">Tidak ada data pegawai yang cocok.</p>
                     </div>
                   </td>
                 </tr>

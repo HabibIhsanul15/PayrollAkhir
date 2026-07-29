@@ -9,12 +9,24 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 const DEFAULT_FORM = {
   employee_id: "",
-  name: "", // auto dari employee (read-only)
+  name: "", // otomatis dari pegawai (read-only)
   email: "",
   role: "staff", // staff/hcga/fat/director
   password: "",
   password_confirmation: "",
 };
+
+function roleLabel(role) {
+  const labels = {
+    staff: "Pegawai",
+    employee: "Pegawai",
+    hcga: "HCGA",
+    fat: "Finance Admin",
+    director: "Director",
+  };
+
+  return labels[String(role || "").toLowerCase()] || "-";
+}
 
 function randomPassword(len = 12) {
   const chars =
@@ -131,7 +143,7 @@ export default function AccountCreatePage() {
     const empId = String(form.employee_id || "").trim();
     const email = String(form.email || "").trim();
 
-    if (!empId) return setErr("Pilih employee terlebih dahulu.");
+    if (!empId) return setErr("Pilih pegawai terlebih dahulu.");
     if (!email) return setErr("Email wajib diisi.");
     if (form.password.length < 8) return setErr("Password minimal 8 karakter.");
     if (form.password !== form.password_confirmation)
@@ -244,7 +256,7 @@ export default function AccountCreatePage() {
                 <div>
                   <CardTitle className="text-base">Account Form</CardTitle>
                   <div className="mt-1 text-sm text-slate-600">
-                    Pilih employee yang belum punya akun, lalu buat akun login-nya.
+                    Pilih pegawai yang belum punya akun, lalu buat akun login-nya.
                   </div>
                 </div>
 
@@ -301,7 +313,7 @@ export default function AccountCreatePage() {
                       Email: <b>{createdUser.email}</b>
                     </div>
                     <div className="text-sm mt-1">
-                      Role: <b>{createdUser.role}</b>
+                      Role: <b>{roleLabel(createdUser.role)}</b>
                     </div>
 
                     <div className="text-xs text-slate-500 mt-3">
@@ -322,12 +334,12 @@ export default function AccountCreatePage() {
                 <form onSubmit={onSubmit} className="space-y-6">
                   <section className="space-y-4">
                     <div className="text-sm font-bold text-slate-900">
-                      Target Employee
+                      Pegawai Target
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Select
-                        label="Employee *"
+                        label="Pegawai *"
                         value={form.employee_id}
                         onChange={(v) => setField("employee_id", v)}
                         options={[
@@ -336,8 +348,8 @@ export default function AccountCreatePage() {
                             label: loadingEmp
                               ? "Loading..."
                               : selectableEmployees.length
-                              ? "-- pilih employee --"
-                              : "-- tidak ada employee --",
+                              ? "-- pilih pegawai --"
+                              : "-- tidak ada pegawai --",
                           },
                           ...selectableEmployees.map((e) => ({
                             value: String(e.id),
@@ -361,12 +373,12 @@ export default function AccountCreatePage() {
                       />
                     </div>
 
-                    {/* Nama auto dari employee (read-only) */}
+                    {/* Nama otomatis dari pegawai (read-only) */}
                     <Input
-                      label="Nama (auto dari employee)"
+                      label="Nama (otomatis dari pegawai)"
                       value={form.name}
                       disabled
-                      placeholder="Pilih employee dulu"
+                      placeholder="Pilih pegawai terlebih dahulu"
                       full
                     />
                   </section>
@@ -447,7 +459,7 @@ export default function AccountCreatePage() {
                   {/* hint kalau list kosong */}
                   {!loadingEmp && selectableEmployees.length === 0 && (
                     <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                      Semua employee sudah punya akun, atau belum ada employee yang bisa
+                      Semua pegawai sudah punya akun, atau belum ada pegawai yang bisa
                       dipilih.
                     </div>
                   )}

@@ -212,7 +212,7 @@ export default function PayrollPreviewModal({
             <div className="space-y-6 min-w-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
                 <div>
-                  <span className="text-slate-500 block mb-1">Karyawan</span>
+                  <span className="text-slate-500 block mb-1">Pegawai</span>
                   <strong className="text-slate-800">{data.employee_name}</strong>
                 </div>
                 <div>
