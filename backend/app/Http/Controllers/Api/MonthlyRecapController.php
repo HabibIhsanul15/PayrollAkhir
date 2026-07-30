@@ -254,7 +254,7 @@ class MonthlyRecapController extends Controller
     {
         $mutation = $this->mutationRecaps->pendingForPeriod($employeeId, $periodMonth);
         if ($mutation) {
-            abort(409, 'Rekap absensi periode ini dikunci karena pengajuan promosi/demosi masih menunggu persetujuan Direktur.');
+            abort(409, 'Rekap absensi periode ini dikunci karena pengajuan promosi/demosi masih terjadwal atau menunggu persetujuan Direktur.');
         }
     }
 }

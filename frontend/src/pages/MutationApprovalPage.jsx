@@ -56,7 +56,7 @@ export default function MutationApprovalPage() {
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3">Tanggal Pengajuan</th>
+                <th className="px-4 py-3">Jadwal Pengajuan</th>
                 <th className="px-4 py-3">Pegawai</th>
                 <th className="px-4 py-3">Tipe</th>
                 <th className="px-4 py-3">Jabatan Tujuan</th>
@@ -78,7 +78,19 @@ export default function MutationApprovalPage() {
                     className="hover:bg-indigo-50 cursor-pointer transition-colors"
                     onClick={() => setSelectedRequestId(req.id)}
                   >
-                    <td className="px-4 py-3">{new Date(req.requested_date || req.created_at).toLocaleDateString("id-ID")}</td>
+                    <td className="px-4 py-3">
+                      {req.status === 'scheduled' ? (
+                        <>
+                          <div>Terjadwal</div>
+                          <div className="text-xs text-slate-500">{new Date(req.scheduled_submission_date).toLocaleDateString("id-ID")}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div>Diajukan</div>
+                          <div className="text-xs text-slate-500">{new Date(req.requested_date || req.created_at).toLocaleDateString("id-ID")}</div>
+                        </>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-medium text-slate-900">
                       {req.employee?.name}
                       <div className="text-xs text-slate-500">{req.employee?.employee_code}</div>
@@ -97,14 +109,21 @@ export default function MutationApprovalPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        req.status === 'scheduled' ? 'bg-violet-50 text-violet-700' :
                         req.status === 'approved' && req.activation_status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
+                        req.status === 'approved' && req.activation_status === 'superseded' ? 'bg-slate-100 text-slate-700' :
                         req.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 
                         req.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 
                         req.status === 'cancelled' ? 'bg-slate-100 text-slate-700' : 
                         'bg-amber-50 text-amber-700'
                       }`}>
-                        {req.status === 'approved'
-                          ? (req.activation_status === 'scheduled' ? 'Disetujui · Terjadwal' : 'Disetujui · Aktif')
+                        {req.status === 'scheduled' ? 'Terjadwal' :
+                         req.status === 'approved'
+                          ? (req.activation_status === 'scheduled'
+                            ? 'Disetujui · Terjadwal'
+                            : req.activation_status === 'superseded'
+                              ? 'Disetujui · Riwayat'
+                              : 'Disetujui · Aktif')
                           :
                          req.status === 'rejected' ? 'Ditolak' : 
                          req.status === 'cancelled' ? 'Dibatalkan' : 'Menunggu'}

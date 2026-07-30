@@ -32,7 +32,7 @@ const emptyForm = () => ({
   employee_id: "",
   mutation_type: "promotion",
   position_id: "",
-  requested_date: todayYmd(),
+  scheduled_submission_date: todayYmd(),
   period_month: "",
   notes: "",
   document: null,
@@ -51,7 +51,9 @@ const formFromEdit = (editData) => ({
   employee_id: editData?.employee_id ? String(editData.employee_id) : "",
   mutation_type: editData?.mutation_type || "promotion",
   position_id: editData?.target_position_id ? String(editData.target_position_id) : "",
-  requested_date: String(editData?.requested_date || editData?.created_at || todayYmd()).slice(0, 10),
+  scheduled_submission_date: String(
+    editData?.scheduled_submission_date || editData?.requested_date || editData?.created_at || todayYmd()
+  ).slice(0, 10),
   period_month: getEditPeriodMonth(editData),
   notes: editData?.reason || "",
   document: null,
@@ -132,11 +134,13 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
 
   const eligiblePeriods = useMemo(() => {
     const joinDate = parseLocalDate(selectedEmployee?.join_date);
-    if (!joinDate) return periods;
+    const currentPeriodMonth = currentPayrollMonth();
 
     return periods.filter((period) => {
       const periodStart = parseLocalDate(period.start_date);
-      return periodStart && periodStart >= joinDate;
+      const isAfterJoinDate = !joinDate || (periodStart && periodStart >= joinDate);
+
+      return isAfterJoinDate && period.period_month > currentPeriodMonth;
     });
   }, [periods, selectedEmployee]);
 
@@ -169,8 +173,8 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       return;
     }
 
-    if (!form.requested_date) {
-      setErr("Tanggal pengajuan harus diisi.");
+    if (!form.scheduled_submission_date) {
+      setErr("Tanggal rencana pengajuan harus diisi.");
       setSaving(false);
       return;
     }
@@ -181,7 +185,7 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
       formData.append("employee_id", form.employee_id);
       formData.append("mutation_type", form.mutation_type);
       formData.append("position_id", form.position_id);
-      formData.append("requested_date", form.requested_date);
+      formData.append("scheduled_submission_date", form.scheduled_submission_date);
       if (!form.period_month) {
         setErr("Bulan payroll harus dipilih.");
         setSaving(false);
@@ -240,8 +244,10 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
     return mutationRequests.find((item) => {
       if (Number(item.employee_id) !== Number(form.employee_id)) return false;
       if (editData && Number(item.id) === Number(editData.id)) return false;
-      if (item.status === "pending") return true;
-      return item.status === "approved" && Number(item.target_position_id) !== currentPositionId;
+      if (["scheduled", "pending"].includes(item.status)) return true;
+      return item.status === "approved"
+        && item.activation_status === "scheduled"
+        && Number(item.target_position_id) !== currentPositionId;
     }) || null;
   }, [mutationRequests, form.employee_id, editData, currentPositionId]);
 
@@ -318,11 +324,17 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
 
                 {activeMutation && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
-                    {activeMutation.status === "pending"
-                      ? "Pengajuan promosi/demosi masih aktif."
-                      : `Promosi/demosi yang disetujui belum diterapkan ke jabatan target ${formatDate(activeMutation.effective_date)}.`}
+                    {activeMutation.status === "scheduled"
+                      ? `Pengajuan promosi/demosi terjadwal dikirim pada ${formatDate(activeMutation.scheduled_submission_date)}.`
+                      : activeMutation.status === "pending"
+                        ? "Pengajuan promosi/demosi masih menunggu persetujuan Direktur."
+                        : `Promosi/demosi yang disetujui belum diterapkan ke jabatan target ${formatDate(activeMutation.effective_date)}.`}
                   </div>
                 )}
+
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800">
+                  Pengajuan dapat dibuat sekarang. Namun jabatan baru hanya dapat berlaku mulai periode payroll setelah periode yang sedang berjalan, supaya perhitungan payroll periode berjalan tidak berubah.
+                </div>
 
                 <div className="grid gap-6 md:grid-cols-3">
                   <div className="space-y-1.5">
@@ -338,16 +350,20 @@ export default function MutationRequestModal({ isOpen, onClose, onSuccess, editD
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700">Tanggal Pengajuan</label>
+                    <label className="text-xs font-semibold text-slate-700">Tanggal Rencana Pengajuan</label>
                     <input
                       type="date"
-                      value={form.requested_date}
-                      min={String(selectedEmployee?.join_date || "").slice(0, 10) || undefined}
-                      max={todayYmd()}
-                      onChange={(e) => setForm((current) => ({ ...current, requested_date: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40"
+                      value={form.scheduled_submission_date}
+                      min={todayYmd()}
+                      disabled={editData?.status === "pending"}
+                      onChange={(e) => setForm((current) => ({ ...current, scheduled_submission_date: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/40 disabled:cursor-not-allowed disabled:bg-slate-100"
                     />
-                    <p className="text-[10px] text-slate-500">Tanggal dokumen atau pengajuan dibuat.</p>
+                    <p className="text-[10px] text-slate-500">
+                      {editData?.status === "pending"
+                        ? "Pengajuan sudah dikirim, sehingga tanggalnya tidak dapat diubah."
+                        : "Pada tanggal ini sistem mengirim pengajuan ke Direktur."}
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">

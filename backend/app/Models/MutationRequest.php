@@ -14,6 +14,8 @@ class MutationRequest extends Model
 
     protected $casts = [
         'requested_date' => 'date',
+        'scheduled_submission_date' => 'date',
+        'submitted_at' => 'datetime',
         'effective_date' => 'date',
     ];
 
@@ -23,6 +25,8 @@ class MutationRequest extends Model
      * Status penerapan jabatan dibedakan dari status persetujuan.
      * Pengajuan yang sudah disetujui tetapi tanggal efektifnya masih di masa
      * depan tetap berstatus "scheduled" sampai hari efektif tersebut tiba.
+     * Jika kemudian ada profil jabatan yang lebih baru, mutasi lama menjadi
+     * riwayat (superseded) dan tidak lagi dianggap sebagai jabatan aktif.
      */
     public function getActivationStatusAttribute(): ?string
     {
@@ -30,7 +34,18 @@ class MutationRequest extends Model
             return null;
         }
 
-        return $this->effective_date->isFuture() ? 'scheduled' : 'active';
+        if ($this->effective_date->isFuture()) {
+            return 'scheduled';
+        }
+
+        $currentProfile = $this->employee?->currentSalaryProfile();
+        $currentPositionId = $currentProfile?->position_id ?? $this->employee?->position_id;
+
+        if ($currentPositionId !== null && (int) $currentPositionId !== (int) $this->target_position_id) {
+            return 'superseded';
+        }
+
+        return 'active';
     }
 
     public function employee()

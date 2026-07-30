@@ -16,7 +16,7 @@ class MutationRecapService
 
         return MutationRequest::query()
             ->where('employee_id', $employeeId)
-            ->where('status', 'pending')
+            ->whereIn('status', ['scheduled', 'pending'])
             ->whereDate('effective_date', $period->start_date)
             ->latest('id')
             ->first();

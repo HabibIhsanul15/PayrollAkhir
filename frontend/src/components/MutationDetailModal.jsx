@@ -119,15 +119,20 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                 
                 <div className="flex items-center justify-between">
                   <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                    request.status === 'scheduled' ? 'bg-violet-50 text-violet-700 border-violet-200' :
                     request.status === 'approved' && request.activation_status === 'scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    request.status === 'approved' && request.activation_status === 'superseded' ? 'bg-slate-100 text-slate-700 border-slate-300' :
                     request.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                     request.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
                     request.status === 'cancelled' ? 'bg-slate-100 text-slate-700 border-slate-300' : 
                     'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    {request.status === 'approved'
+                    {request.status === 'scheduled' ? <><Clock3 size={16}/> Terjadwal</> :
+                     request.status === 'approved'
                       ? request.activation_status === 'scheduled'
                         ? <><Clock3 size={16}/> Disetujui · Terjadwal</>
+                        : request.activation_status === 'superseded'
+                          ? <><FileText size={16}/> Disetujui · Riwayat</>
                         : <><CheckCircle size={16}/> Disetujui · Aktif</>
                       :
                      request.status === 'rejected' ? <><XCircle size={16}/> Ditolak</> : 
@@ -135,7 +140,9 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                      <><FileText size={16}/> Menunggu Persetujuan</>}
                   </div>
                   <div className="text-sm text-slate-500">
-                    Diajukan pada {formatDate(request.requested_date || request.created_at)}
+                    {request.status === 'scheduled'
+                      ? `Dijadwalkan untuk ${formatDate(request.scheduled_submission_date)}`
+                      : `Diajukan pada ${formatDate(request.requested_date || request.created_at)}`}
                   </div>
                 </div>
 
@@ -155,6 +162,15 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                     <p className="font-semibold text-slate-900">
                       {formatDate(request.effective_date)}
                     </p>
+                  </div>
+                  <div className="col-span-3 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Rencana Pengajuan</p>
+                    <p className="font-semibold text-slate-900">
+                      {formatDate(request.scheduled_submission_date || request.requested_date || request.created_at)}
+                    </p>
+                    {request.status === 'scheduled' && (
+                      <p className="text-xs text-violet-700">Sistem akan mengirim pengajuan ini ke Direktur secara otomatis pada tanggal tersebut.</p>
+                    )}
                   </div>
                   <div className="col-span-3 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Periode Gaji</p>
@@ -210,6 +226,13 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                       <p className="text-sm text-rose-800">{request.rejection_reason}</p>
                     </div>
                   )}
+
+                  {request.status === 'approved' && request.activation_status === 'superseded' && (
+                    <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Riwayat Jabatan</h4>
+                      <p className="text-sm text-slate-700">Mutasi ini telah tergantikan oleh profil jabatan yang lebih baru, sehingga tidak menjadi jabatan aktif saat ini.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Director Reject Input */}
@@ -248,7 +271,7 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
               <div>
                 {/* Actions for HCGA */}
-                {userRole === 'hcga' && request.status === 'pending' && (
+                {userRole === 'hcga' && ['scheduled', 'pending'].includes(request.status) && (
                   <button
                     onClick={() => handleAction('cancel')}
                     disabled={actionLoading}
@@ -289,7 +312,7 @@ export default function MutationDetailModal({ isOpen, onClose, onSuccess, reques
                 )}
 
                 {/* Edit for HCGA */}
-                {userRole === 'hcga' && request.status === 'pending' && (
+                {userRole === 'hcga' && ['scheduled', 'pending'].includes(request.status) && (
                   <button
                     onClick={() => setIsEditModalOpen(true)}
                     disabled={actionLoading}

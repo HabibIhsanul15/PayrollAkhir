@@ -128,7 +128,7 @@ export default function MonthlyRecapPage() {
 
     return new Set(requests
       .filter((request) => {
-        if (request.status !== "pending") return false;
+        if (!["scheduled", "pending"].includes(request.status)) return false;
         const datePart = String(request.effective_date || "").slice(0, 10);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
         return currentPayrollMonth(new Date(`${datePart}T00:00:00`)) === period;
@@ -542,7 +542,7 @@ export default function MonthlyRecapPage() {
 
               {selectedEmployeeHasPendingMutation && (
                 <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                  Rekap dikunci sementara karena pengajuan promosi/demosi untuk periode ini masih menunggu persetujuan Direktur.
+                  Rekap dikunci sementara karena pengajuan promosi/demosi untuk periode ini masih terjadwal atau menunggu persetujuan Direktur.
                 </div>
               )}
 

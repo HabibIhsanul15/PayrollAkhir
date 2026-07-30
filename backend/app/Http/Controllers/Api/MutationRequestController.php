@@ -35,8 +35,14 @@ class MutationRequestController extends Controller
         }
 
         $query = MutationRequest::with(['employee', 'targetPosition', 'requester', 'approver'])
-            ->orderByRaw("FIELD(status, 'pending') DESC")
+            ->orderByRaw("CASE status WHEN 'pending' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END")
             ->latest();
+
+        // Direktur hanya menerima pengajuan yang benar-benar sudah dikirim.
+        // Pengajuan berstatus scheduled masih merupakan rencana milik HCGA.
+        if ($user->role === 'director') {
+            $query->where('status', '<>', 'scheduled');
+        }
 
         return response()->json($query->get());
     }
@@ -53,7 +59,7 @@ class MutationRequestController extends Controller
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'period_month' => ['required', 'date_format:Y-m'],
-            'requested_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'scheduled_submission_date' => ['required', 'date', 'after_or_equal:today'],
             'reason' => ['nullable', 'string', 'max:500'],
             'document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
         ]);
@@ -61,9 +67,10 @@ class MutationRequestController extends Controller
         $employee = Employee::findOrFail($data['employee_id']);
         $period = PayrollPeriodResolver::forMonth($data['period_month']);
         $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
-        $requestedDate = Carbon::parse($data['requested_date'] ?? now())->startOfDay();
-        $this->ensureRequestedDateIsOnOrAfterJoinDate($employee, $requestedDate);
+        $scheduledSubmissionDate = Carbon::parse($data['scheduled_submission_date'])->startOfDay();
+        $this->ensureScheduledSubmissionDateIsOnOrAfterJoinDate($employee, $scheduledSubmissionDate);
         $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
+        $this->ensureTargetPeriodIsAfterCurrentPayrollPeriod($period->period_month);
 
         $currentProfile = $employee->currentSalaryProfile();
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
@@ -98,7 +105,7 @@ class MutationRequestController extends Controller
             $path = $request->file('document')->store('mutations', 'public');
         }
 
-        $mutationRequest = DB::transaction(function () use ($employee, $targetPosition, $data, $path, $effectiveDate, $requestedDate, $user) {
+        $mutationRequest = DB::transaction(function () use ($employee, $targetPosition, $data, $path, $effectiveDate, $scheduledSubmissionDate, $user) {
             $lockedEmployee = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
             $activeMutation = $this->activeMutationQuery($lockedEmployee)->first();
             if ($activeMutation) {
@@ -110,21 +117,30 @@ class MutationRequestController extends Controller
                 abort(409, $payrollLockMessage);
             }
 
+            $isScheduled = $scheduledSubmissionDate->isFuture();
+
             return MutationRequest::create([
                 'employee_id' => $lockedEmployee->id,
                 'target_position_id' => $targetPosition->id,
                 'mutation_type' => $data['mutation_type'],
-                'requested_date' => $requestedDate->toDateString(),
+                'scheduled_submission_date' => $scheduledSubmissionDate->toDateString(),
+                'requested_date' => $isScheduled ? null : now()->toDateString(),
+                'submitted_at' => $isScheduled ? null : now(),
                 'effective_date' => $effectiveDate->toDateString(),
                 'reason' => $data['reason'] ?? null,
                 'document_path' => $path,
-                'status' => 'pending',
+                'status' => $isScheduled ? 'scheduled' : 'pending',
                 'requested_by' => $user->id,
             ]);
         });
 
+        $message = $mutationRequest->status === 'scheduled'
+            ? 'Pengajuan promosi/demosi berhasil dijadwalkan untuk dikirim pada '
+                .$mutationRequest->scheduled_submission_date->translatedFormat('d F Y').'.'
+            : 'Pengajuan promosi/demosi berhasil dikirim dan menunggu persetujuan Direktur.';
+
         return response()->json([
-            'message' => 'Pengajuan promosi/demosi berhasil dikirim dan menunggu persetujuan Direktur.',
+            'message' => $message,
             'data' => $mutationRequest,
         ]);
     }
@@ -152,6 +168,9 @@ class MutationRequestController extends Controller
 
             $effectiveDate = Carbon::parse($mutationRequest->effective_date)->startOfDay();
             $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
+            $this->ensureTargetPeriodIsAfterCurrentPayrollPeriod(
+                PayrollPeriodResolver::forDate($effectiveDate)->period_month,
+            );
             $payrollLockMessage = $this->payrollLockMessage($employee, $effectiveDate);
             if ($payrollLockMessage) {
                 abort(409, $payrollLockMessage);
@@ -263,7 +282,12 @@ class MutationRequestController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $mutationRequest = MutationRequest::with(['employee.position', 'targetPosition', 'requester', 'approver'])->findOrFail($id);
+        $query = MutationRequest::with(['employee.position', 'targetPosition', 'requester', 'approver'])->whereKey($id);
+        if ($user->role === 'director') {
+            $query->where('status', '<>', 'scheduled');
+        }
+
+        $mutationRequest = $query->firstOrFail();
         $period = PayrollPeriodResolver::forDate($mutationRequest->effective_date);
 
         return response()->json(array_merge($mutationRequest->toArray(), [
@@ -304,8 +328,8 @@ class MutationRequestController extends Controller
         }
 
         $mutationRequest = MutationRequest::findOrFail($id);
-        if ($mutationRequest->status !== 'pending') {
-            return response()->json(['message' => 'Hanya pengajuan pending yang dapat dibatalkan.'], 400);
+        if (! in_array($mutationRequest->status, ['scheduled', 'pending'], true)) {
+            return response()->json(['message' => 'Hanya pengajuan terjadwal atau menunggu persetujuan yang dapat dibatalkan.'], 400);
         }
 
         $mutationRequest->update([
@@ -323,15 +347,15 @@ class MutationRequestController extends Controller
         }
 
         $mutationRequest = MutationRequest::findOrFail($id);
-        if ($mutationRequest->status !== 'pending') {
-            return response()->json(['message' => 'Hanya pengajuan pending yang dapat diubah.'], 400);
+        if (! in_array($mutationRequest->status, ['scheduled', 'pending'], true)) {
+            return response()->json(['message' => 'Hanya pengajuan terjadwal atau menunggu persetujuan yang dapat diubah.'], 400);
         }
 
         $data = $request->validate([
             'mutation_type' => ['required', 'in:promotion,demotion'],
             'position_id' => ['required', Rule::exists('positions', 'id')->where('is_active', true)],
             'period_month' => ['required', 'date_format:Y-m'],
-            'requested_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'scheduled_submission_date' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:500'],
             'document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:2048'],
         ]);
@@ -339,9 +363,18 @@ class MutationRequestController extends Controller
         $employee = $mutationRequest->employee;
         $period = PayrollPeriodResolver::forMonth($data['period_month']);
         $effectiveDate = Carbon::parse($period->start_date)->startOfDay();
-        $requestedDate = Carbon::parse($data['requested_date'] ?? $mutationRequest->requested_date ?? now())->startOfDay();
-        $this->ensureRequestedDateIsOnOrAfterJoinDate($employee, $requestedDate);
+        $scheduledSubmissionDate = Carbon::parse($data['scheduled_submission_date'])->startOfDay();
+        if ($mutationRequest->status === 'scheduled') {
+            if ($scheduledSubmissionDate->lt(today())) {
+                throw ValidationException::withMessages([
+                    'scheduled_submission_date' => 'Tanggal rencana pengajuan tidak boleh sebelum hari ini.',
+                ]);
+            }
+
+            $this->ensureScheduledSubmissionDateIsOnOrAfterJoinDate($employee, $scheduledSubmissionDate);
+        }
         $this->ensureEffectiveDateIsOnOrAfterJoinDate($employee, $effectiveDate);
+        $this->ensureTargetPeriodIsAfterCurrentPayrollPeriod($period->period_month);
         $currentProfile = $employee->currentSalaryProfile();
         $currentPosition = Position::find($currentProfile?->position_id ?? $employee->position_id);
         $targetPosition = Position::findOrFail($data['position_id']);
@@ -385,13 +418,25 @@ class MutationRequestController extends Controller
             return response()->json(['message' => $payrollLockMessage], 409);
         }
 
+        $wasScheduled = $mutationRequest->status === 'scheduled';
+        $willStayScheduled = $wasScheduled && $scheduledSubmissionDate->isFuture();
+
         $mutationRequest->update([
             'target_position_id' => $targetPosition->id,
             'mutation_type' => $data['mutation_type'],
-            'requested_date' => $requestedDate->toDateString(),
+            'scheduled_submission_date' => $wasScheduled
+                ? $scheduledSubmissionDate->toDateString()
+                : $mutationRequest->scheduled_submission_date,
+            'requested_date' => $willStayScheduled
+                ? null
+                : ($mutationRequest->requested_date ?? now()->toDateString()),
+            'submitted_at' => $willStayScheduled
+                ? null
+                : ($mutationRequest->submitted_at ?? now()),
             'effective_date' => $effectiveDate->toDateString(),
             'reason' => $data['reason'] ?? null,
             'document_path' => $path,
+            'status' => $willStayScheduled ? 'scheduled' : 'pending',
         ]);
 
         return response()->json([
@@ -409,9 +454,13 @@ class MutationRequestController extends Controller
             ->where('employee_id', $employee->id)
             ->when($excludeId, fn (mixed $query) => $query->where('id', '<>', $excludeId))
             ->where(function (mixed $query) use ($currentPositionId) {
-                $query->where('status', 'pending')
+                $query->whereIn('status', ['scheduled', 'pending'])
                     ->orWhere(function (mixed $approved) use ($currentPositionId) {
-                        $approved->where('status', 'approved');
+                        // Mutasi yang tanggal efektifnya sudah lewat seharusnya
+                        // sudah diterapkan atau telah tergantikan oleh profil
+                        // yang lebih baru. Ia tidak boleh mengunci pengajuan baru.
+                        $approved->where('status', 'approved')
+                            ->whereDate('effective_date', '>=', today());
 
                         if ($currentPositionId === null) {
                             $approved->whereNotNull('target_position_id');
@@ -440,23 +489,44 @@ class MutationRequestController extends Controller
         }
     }
 
-    private function ensureRequestedDateIsOnOrAfterJoinDate(Employee $employee, Carbon $requestedDate): void
+    private function ensureScheduledSubmissionDateIsOnOrAfterJoinDate(Employee $employee, Carbon $scheduledSubmissionDate): void
     {
         if (! $employee->join_date) {
             return;
         }
 
         $joinDate = Carbon::parse($employee->join_date)->startOfDay();
-        if ($requestedDate->lt($joinDate)) {
+        if ($scheduledSubmissionDate->lt($joinDate)) {
             throw ValidationException::withMessages([
-                'requested_date' => 'Tanggal pengajuan tidak boleh sebelum tanggal masuk pegawai ('
+                'scheduled_submission_date' => 'Tanggal rencana pengajuan tidak boleh sebelum tanggal masuk pegawai ('
                     .$joinDate->translatedFormat('d F Y').').',
             ]);
         }
     }
 
+    /**
+     * Pengajuan dapat dibuat kapan pun, tetapi jabatan baru tidak boleh
+     * berlaku mundur atau di periode payroll yang sedang berjalan.
+     */
+    private function ensureTargetPeriodIsAfterCurrentPayrollPeriod(string $targetPeriodMonth): void
+    {
+        $currentPeriodMonth = PayrollPeriodResolver::currentMonth();
+        if ($targetPeriodMonth > $currentPeriodMonth) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'period_month' => "Jabatan baru hanya dapat berlaku mulai periode setelah periode berjalan ({$currentPeriodMonth}). Pilih bulan payroll berikutnya.",
+        ]);
+    }
+
     private function activeMutationMessage(MutationRequest $mutation): string
     {
+        if ($mutation->status === 'scheduled') {
+            return 'Pegawai masih memiliki pengajuan promosi/demosi yang terjadwal pada '
+                .optional($mutation->scheduled_submission_date)->translatedFormat('d F Y').'.';
+        }
+
         if ($mutation->status === 'pending') {
             return 'Pegawai masih memiliki pengajuan promosi/demosi aktif.';
         }
